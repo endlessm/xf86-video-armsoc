@@ -1,0 +1,19 @@
+xf86-video-omap
+Open-source X.org graphics driver for TI OMAP graphics
+
+Currently relies on a closed-source submodule for EXA acceleration on
+the following chipsets:
+  + OMAP3430
+  + OMAP3630
+  + OMAP4430
+  + OMAP4460
+
+
+NOTE: this driver is work in progress..  you probably don't want to try
+and use it yet.  The API/ABI between driver and kernel, and driver and
+acceleration submodules is not stable yet.  This driver requires the
+omapdrm kernel driver w/ GEM support.
+
+EXA vs UXA?  This is an open question..
+
+
