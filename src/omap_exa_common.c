@@ -32,8 +32,6 @@
 
 #include "omap_exa_common.h"
 
-#include "exa.h"
-
 
 #define pix2scrn(pPixmap) \
 		xf86Screens[(pPixmap)->drawable.pScreen->myNum]
@@ -77,7 +75,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	uint32_t size;
+	uint32_t size, flags = 0;
 	Bool ret;
 
 	ret = miModifyPixmapHeader(pPixmap, width, height, depth,
@@ -123,10 +121,14 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	pPixmap->devKind = OMAPCalculateStride(width, bitsPerPixel);
 	size = pPixmap->devKind * height;
 
+	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT) {
+		flags |= OMAP_BO_SCANOUT;
+	}
+
 	if ((!priv->bo) || (omap_bo_size(priv->bo) != size)) {
 		/* re-allocate buffer! */
 		omap_bo_del(priv->bo);
-		priv->bo = omap_bo_new(pOMAP->dev, size, 0);
+		priv->bo = omap_bo_new(pOMAP->dev, size, flags);
 	}
 
 	return TRUE;
@@ -141,6 +143,21 @@ void
 OMAPWaitMarker(ScreenPtr pScreen, int marker)
 {
 	/* no-op */
+}
+
+static inline enum omap_gem_op idx2op(int index)
+{
+	switch (index) {
+	case EXA_PREPARE_SRC:
+	case EXA_PREPARE_MASK:
+	case EXA_PREPARE_AUX_SRC:
+	case EXA_PREPARE_AUX_MASK:
+		return OMAP_GEM_READ;
+	case EXA_PREPARE_AUX_DEST:
+	case EXA_PREPARE_DEST:
+	default:
+		return OMAP_GEM_READ | OMAP_GEM_WRITE;
+	}
 }
 
 /**
@@ -181,9 +198,22 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 {
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 
-	/* TODO: wait for blits complete on priv->bo.. */
-
 	pPixmap->devPrivate.ptr = omap_bo_map(priv->bo);
+	if (!pPixmap->devPrivate.ptr) {
+		return FALSE;
+	}
+
+	/* wait for blits complete.. note we could be a bit more clever here
+	 * for non-DRI2 buffers and use separate OMAP{Prepare,Finish}GPUAccess()
+	 * fxns wrapping accelerated GPU operations.. this way we don't have
+	 * to prep/fini around each CPU operation, but only when there is an
+	 * intervening GPU operation (or if we go to a stronger op mask, ie.
+	 * first CPU access is READ and second is WRITE).
+	 */
+
+	if (omap_bo_cpu_prep(priv->bo, idx2op(index))) {
+		return FALSE;
+	}
 
 	return TRUE;
 }
@@ -201,7 +231,15 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 void
 OMAPFinishAccess(PixmapPtr pPixmap, int index)
 {
+	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+
 	pPixmap->devPrivate.ptr = NULL;
+
+	/* NOTE: can we use EXA migration module to track which parts of the
+	 * buffer was accessed by sw, and pass that info down to kernel to
+	 * do a more precise cache flush..
+	 */
+	omap_bo_cpu_fini(priv->bo, idx2op(index));
 }
 
 /**

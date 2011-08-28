@@ -993,7 +993,6 @@ static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {
 
 Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 {
-    xf86CrtcConfigPtr xf86_config;
     drmmode_ptr drmmode;
     int i;
 
@@ -1004,7 +1003,6 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
     drmmode->fb_id = 0;
 
     xf86CrtcConfigInit(pScrn, &drmmode_xf86crtc_config_funcs);
-    xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
 
     drmmode->cpp = cpp;
@@ -1072,6 +1070,51 @@ drmmode_remove_fb(ScrnInfoPtr pScrn)
 	drmmode->fb_id = 0;
 }
 
+/*
+ * Page Flipping
+ */
+
+static void
+page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
+			  unsigned int tv_usec, void *user_data)
+{
+#ifdef XF86DRI
+	OMAPDRI2SwapComplete(user_data);
+#endif
+}
+
+static drmEventContext event_context = {
+		.version = DRM_EVENT_CONTEXT_VERSION,
+		.page_flip_handler = page_flip_handler,
+};
+
+Bool
+drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
+{
+	ScrnInfoPtr scrn = xf86Screens[draw->pScreen->myNum];
+	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(scrn);
+	drmmode_crtc_private_ptr crtc = config->crtc[0]->driver_private;
+	drmmode_ptr mode = crtc->drmmode;
+	int ret, i;
+
+	/* if we can flip, we must be fullscreen.. so flip all CRTC's.. */
+	for (i = 0; i < config->num_crtc; i++) {
+		crtc = config->crtc[i]->driver_private;
+
+		if (!config->crtc[i]->enabled)
+			continue;
+
+		ret = drmModePageFlip(mode->fd, crtc->mode_crtc->crtc_id,
+				fb_id, DRM_MODE_PAGE_FLIP_EVENT, priv);
+		if (ret) {
+			xf86DrvMsg(scrn->scrnIndex, X_WARNING,
+				   "flip queue failed: %s\n", strerror(errno));
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
 
 /*
  * Hot Plug Event handling:
@@ -1125,7 +1168,7 @@ drmmode_handle_uevents(int fd, void *closure)
     udev_device_unref(dev);
 } /* drmmode_handle_uevents() */
 
-void
+static void
 drmmode_uevent_init(ScrnInfoPtr pScrn)
 {
     drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
@@ -1161,7 +1204,7 @@ drmmode_uevent_init(ScrnInfoPtr pScrn)
     TRACE_EXIT();
 } /* drmmode_uevent_init() */
 
-void
+static void
 drmmode_uevent_fini(ScrnInfoPtr pScrn)
 {
     drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
@@ -1178,3 +1221,37 @@ drmmode_uevent_fini(ScrnInfoPtr pScrn)
 
     TRACE_EXIT();
 } /* drmmode_uevent_fini() */
+
+static void
+drmmode_wakeup_handler(pointer data, int err, pointer p)
+{
+	ScrnInfoPtr scrn = data;
+	drmmode_ptr drmmode = drmmode_from_scrn(scrn);
+	fd_set *read_mask = p;
+
+	if (scrn == NULL || err < 0)
+		return;
+
+	if (FD_ISSET(drmmode->fd, read_mask))
+		drmHandleEvent(drmmode->fd, &event_context);
+}
+
+void
+drmmode_screen_init(ScrnInfoPtr pScrn)
+{
+    drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+
+	drmmode_uevent_init(pScrn);
+
+    AddGeneralSocket(drmmode->fd);
+
+    /* Register a wakeup handler to get informed on DRM events */
+    RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
+                                   drmmode_wakeup_handler, pScrn);
+}
+
+void
+drmmode_screen_fini(ScrnInfoPtr pScrn)
+{
+	drmmode_uevent_fini(pScrn);
+}

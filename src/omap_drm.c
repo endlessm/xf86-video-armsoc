@@ -36,7 +36,11 @@
 #endif
 
 #include <stdlib.h>
+#include <linux/stddef.h>
+#include <errno.h>
 #include <sys/mman.h>
+
+#include <xf86drm.h>
 
 #include "omap_drm.h"
 
@@ -50,6 +54,7 @@ struct omap_bo {
 	void		*map;		/* userspace mmap'ing (if there is one) */
 	uint32_t	size;
 	uint32_t	handle;
+	uint32_t	name;		/* flink global handle (DRI2 name) */
 	uint64_t	offset;		/* offset to mmap() */
 };
 
@@ -97,7 +102,7 @@ struct omap_bo * omap_bo_new(struct omap_device *dev,
 {
 	struct omap_bo *bo = calloc(sizeof(*bo), 1);
 	struct drm_omap_gem_new req = {
-			.size = size,
+			.size = { .bytes = size },
 			.flags = flags,
 	};
 
@@ -118,7 +123,53 @@ struct omap_bo * omap_bo_new(struct omap_device *dev,
 	}
 
 	bo->handle = req.handle;
+
+	return bo;
+
+fail:
+	free(bo);
+	return NULL;
+}
+
+/* get buffer info */
+static int get_buffer_info(struct omap_bo *bo)
+{
+	struct drm_omap_gem_info req = {
+			.handle = bo->handle,
+	};
+	int ret = drmCommandWriteRead(bo->dev->fd, DRM_OMAP_GEM_INFO,
+			&req, sizeof(req));
+	if (ret) {
+		return ret;
+	}
+
+	/* really all we need for now is mmap offset */
 	bo->offset = req.offset;
+
+	return 0;
+}
+
+/* import a buffer object from DRI2 name */
+struct omap_bo * omap_bo_from_name(struct omap_device *dev, uint32_t name)
+{
+	struct omap_bo *bo = calloc(sizeof(*bo), 1);
+	struct drm_gem_open req = {
+			.name = name,
+	};
+
+	if (drmIoctl(dev->fd, DRM_IOCTL_GEM_OPEN, &req)) {
+		goto fail;
+	}
+
+	bo->dev = dev;
+	bo->name = name;
+	bo->size = req.size;
+	bo->handle = req.handle;
+
+	/* get the offset and other info.. */
+	if (get_buffer_info(bo)) {
+		goto fail;
+	}
 
 	return bo;
 
@@ -149,6 +200,28 @@ void omap_bo_del(struct omap_bo *bo)
 	free(bo);
 }
 
+/* get the global flink/DRI2 buffer name */
+int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
+{
+	if (!bo->name) {
+		struct drm_gem_flink req = {
+				.handle = bo->handle,
+		};
+		int ret;
+
+		ret = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_FLINK, &req);
+		if (ret) {
+			return ret;
+		}
+
+		bo->name = req.name;
+	}
+
+	*name = bo->name;
+
+	return 0;
+}
+
 uint32_t omap_bo_handle(struct omap_bo *bo)
 {
 	return bo->handle;
@@ -162,6 +235,10 @@ uint32_t omap_bo_size(struct omap_bo *bo)
 void * omap_bo_map(struct omap_bo *bo)
 {
 	if (!bo->map) {
+		if (!bo->offset) {
+			get_buffer_info(bo);
+		}
+
 		bo->map = mmap(0, bo->size, PROT_READ | PROT_WRITE,
 				 MAP_SHARED, bo->dev->fd, bo->offset);
 		if (bo->map == MAP_FAILED) {
@@ -169,4 +246,33 @@ void * omap_bo_map(struct omap_bo *bo)
 		}
 	}
 	return bo->map;
+}
+
+int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
+{
+	struct drm_omap_gem_cpu_prep req = {
+			.handle = bo->handle,
+			.op = op,
+	};
+	int ret;
+	do {
+		ret = drmCommandWrite(bo->dev->fd,
+				DRM_OMAP_GEM_CPU_PREP, &req, sizeof(req));
+	} while (ret && (ret == EAGAIN));
+	return ret;
+}
+
+int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
+{
+	struct drm_omap_gem_cpu_fini req = {
+			.handle = bo->handle,
+			.op = op,
+			.nregions = 0,
+	};
+	int ret;
+	do {
+		ret = drmCommandWrite(bo->dev->fd,
+				DRM_OMAP_GEM_CPU_FINI, &req, sizeof(req));
+	} while (ret && (ret == EAGAIN));
+	return ret;
 }

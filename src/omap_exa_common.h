@@ -30,6 +30,7 @@
 #define OMAP_EXA_COMMON_H_
 
 #include "omap_driver.h"
+#include "exa.h"
 
 /* Common OMAP EXA functions, mostly related to pixmap/buffer allocation.
  * Individual driver submodules can use these directly, or wrap them with
@@ -42,6 +43,9 @@ typedef struct {
 	struct omap_bo *bo;
 } OMAPPixmapPrivRec, *OMAPPixmapPrivPtr;
 
+#define OMAP_CREATE_PIXMAP_SCANOUT 0x80000000
+
+
 void * OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch);
@@ -50,8 +54,25 @@ Bool OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData);
 void OMAPWaitMarker(ScreenPtr pScreen, int marker);
-Bool OMAPPrepareAccess(PixmapPtr pPix, int index);
-void OMAPFinishAccess(PixmapPtr pPix, int index);
-Bool OMAPPixmapIsOffscreen(PixmapPtr pPix);
+Bool OMAPPrepareAccess(PixmapPtr pPixmap, int index);
+void OMAPFinishAccess(PixmapPtr pPixmap, int index);
+Bool OMAPPixmapIsOffscreen(PixmapPtr pPixmap);
+
+static inline struct omap_bo *
+OMAPPixmapBo(PixmapPtr pPixmap)
+{
+	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	return priv->bo;
+}
+
+/* used by DRI2 code to play buffer switcharoo */
+static inline void
+OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
+{
+	OMAPPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
+	OMAPPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
+	exchange(apriv->priv, bpriv->priv);
+	exchange(apriv->bo, bpriv->bo);
+}
 
 #endif /* OMAP_EXA_COMMON_H_ */

@@ -94,6 +94,7 @@ static SymTabRec OMAPChipsets[] = {
 /** Supported options, as enum values. */
 typedef enum {
 	OPTION_DEBUG,
+	OPTION_DRI,
 	OPTION_NO_ACCEL,
 	/* TODO: probably need to add an option to let user specify bus-id */
 } OMAPOpts;
@@ -101,6 +102,7 @@ typedef enum {
 /** Supported options. */
 static const OptionInfoRec OMAPOptions[] = {
 	{ OPTION_DEBUG,		"Debug",	OPTV_BOOLEAN,	{0},	FALSE },
+	{ OPTION_DRI,		"DRI",		OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_NO_ACCEL,	"NoAccel",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ -1,				NULL,		OPTV_NONE,		{0},	FALSE }
 };
@@ -146,6 +148,8 @@ OMAPOpenDRMMaster(ScrnInfoPtr pScrn, int n)
 		return FALSE;
 	}
 
+	pOMAP->deviceName = drmGetDeviceNameFromFd(pOMAP->drmFD);
+
 	return TRUE;
 }
 
@@ -160,6 +164,7 @@ OMAPCloseDRMMaster(ScrnInfoPtr pScrn)
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 
 	if (pOMAP && (pOMAP->drmFD > 0)) {
+		drmFree(pOMAP->deviceName);
 		drmClose(pOMAP->drmFD);
 		pOMAP->drmFD = -1;
 	}
@@ -515,6 +520,9 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	/* Determine if the user wants debug messages turned on: */
 	omapDebug = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DEBUG, FALSE);
 
+	pOMAP->dri = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DRI, TRUE);
+
+
 	/* Determine if the user wants to disable acceleration: */
 	pOMAP->NoAccel =
 			xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_NO_ACCEL, FALSE);
@@ -608,11 +616,6 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
 	TRACE_ENTER();
 
-#if 0
-	if (!pOMAP->NoAccel)
-		OMAPDRI2Init(pScreen);
-#endif
-
 	/* Allocate and map memory areas we need */
 	if (!OMAPMapMem(pScrn))
 		return FALSE;
@@ -697,6 +700,12 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	/* Cause the cursor position to be updated by the mouse signal handler: */
 	xf86SetSilkenMouse(pScreen);
 
+#ifdef XF86DRI
+	if (pOMAP->dri) {
+		pOMAP->dri = OMAPDRI2ScreenInit(pScreen);
+	}
+#endif
+
 	/* XXX -- Is this the right place for this?  The Intel i830 driver says:
 	 * "Must force it before EnterVT, so we are in control of VT..."
 	 */
@@ -773,7 +782,7 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn);
 	}
 
-	drmmode_uevent_init(pScrn);
+	drmmode_screen_init(pScrn);
 
 	TRACE_EXIT();
 	return TRUE;
@@ -807,7 +816,7 @@ OMAPCloseScreen(int scrnIndex, ScreenPtr pScreen)
 
 	TRACE_ENTER();
 
-	drmmode_uevent_fini(pScrn);
+	drmmode_screen_fini(pScrn);
 
 	if (pScrn->vtSema == TRUE) {
 		OMAPLeaveVT(scrnIndex, 0);
@@ -818,6 +827,12 @@ OMAPCloseScreen(int scrnIndex, ScreenPtr pScreen)
 			pOMAP->pOMAPEXA->CloseScreen(scrnIndex, pScreen);
 		}
 	}
+
+#ifdef XF86DRI
+	if (pOMAP->dri) {
+		OMAPDRI2CloseScreen(pScreen);
+	}
+#endif
 
 	OMAPUnmapMem(pScrn);
 

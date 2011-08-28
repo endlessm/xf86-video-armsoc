@@ -64,15 +64,12 @@
 #include <errno.h>
 
 
-
-
 #define OMAP_VERSION		1000	/* Apparently not used by X server */
 #define OMAP_NAME			"OMAP"	/* Name used to prefix messages */
 #define OMAP_DRIVER_NAME	"omap"	/* Driver name as used in config file */
 #define OMAP_MAJOR_VERSION	0
 #define OMAP_MINOR_VERSION	83
 #define OMAP_PATCHLEVEL		0
-
 
 /**
  * This controls whether debug statements (and function "trace" enter/exit)
@@ -165,10 +162,14 @@ typedef struct _OMAPRec
 	 */
 	OMAPEXAPtr			pOMAPEXA;
 
+	/** various user-configurable options: */
+	Bool				dri;
 	Bool				NoAccel;
 
 	/** File descriptor of the connection with the DRM. */
 	int					drmFD;
+
+	char 				*deviceName;
 
 	/** DRM device instance */
 	struct omap_device	*dev;
@@ -213,6 +214,11 @@ typedef struct _OMAPRec
     real->mem = tmp; \
 }
 
+#define exchange(a, b) {\
+	typeof(a) tmp = a; \
+	a = b; \
+	b = tmp; \
+}
 
 /**
  * Canonical name of an external sub-module providing support for EXA
@@ -231,9 +237,21 @@ OMAPEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn);
  * drmmode functions..
  */
 Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp);
-void drmmode_uevent_init(ScrnInfoPtr pScrn);
-void drmmode_uevent_fini(ScrnInfoPtr pScrn);
+void drmmode_screen_init(ScrnInfoPtr pScrn);
+void drmmode_screen_fini(ScrnInfoPtr pScrn);
 void drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags);
 void drmmode_remove_fb(ScrnInfoPtr pScrn);
+Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
+
+
+/**
+ * DRI2 functions..
+ */
+#ifdef XF86DRI
+typedef struct _OMAPDRISwapCmd OMAPDRISwapCmd;
+Bool OMAPDRI2ScreenInit(ScreenPtr pScreen);
+void OMAPDRI2CloseScreen(ScreenPtr pScreen);
+void OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd);
+#endif
 
 #endif /* OMAP_DRV_H_ */
