@@ -44,6 +44,5 @@ omap_drv_la_SOURCES = \
          drmmode_display.c \
          omap_exa_common.c \
          omap_exa_null.c \
-         omap_drm.c \
          omap_dri2.c \
          omap_driver.c

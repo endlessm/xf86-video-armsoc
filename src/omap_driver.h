@@ -59,7 +59,8 @@
 #include "dri2.h"
 #endif
 
-#include "omap_drm.h"
+#include <omap_drm.h>
+#include <omap_drmif.h>
 
 #include <errno.h>
 
