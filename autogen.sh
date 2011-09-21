@@ -14,7 +14,7 @@ automake=`find_tool automake`
 autoconf=`find_tool autoconf`
 autoheader=`find_tool autoheader`
 
-mkdir -p config && $aclocal && $libtoolize --copy --force && $automake --copy --add-missing --foreign && $autoheader && $autoconf
+mkdir -p config && $aclocal && $autoheader && $libtoolize --copy --force && $automake --copy --add-missing --foreign && $autoconf
 
 test -n "$NOCONFIGURE" && {
   echo "skipping configure stage as requested."

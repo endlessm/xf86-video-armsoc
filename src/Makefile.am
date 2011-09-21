@@ -38,6 +38,7 @@ ERROR_CFLAGS = -Werror -Wall -Wdeclaration-after-statement -Wvla \
 AM_CFLAGS = @XORG_CFLAGS@ $(ERROR_CFLAGS)
 omap_drv_la_LTLIBRARIES = omap_drv.la
 omap_drv_la_LDFLAGS = -module -avoid-version -no-undefined
+omap_drv_la_LIBADD = @XORG_LIBS@
 omap_drv_ladir = @moduledir@/drivers
 
 omap_drv_la_SOURCES = \
