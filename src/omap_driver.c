@@ -182,9 +182,16 @@ unsigned int
 OMAPCalculateStride(unsigned int width, unsigned int bitsPerPixel)
 {
 	unsigned int alignedWidth;
-
 	alignedWidth = (width + (STRIDE_BOUNDARY - 1)) & ~(STRIDE_BOUNDARY - 1);
 	return ((alignedWidth * bitsPerPixel) + 7) / 8;
+}
+#define TILED_STRIDE_BOUNDARY 4096
+unsigned int
+OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel)
+{
+	unsigned int stride = OMAPCalculateStride(width, bitsPerPixel);
+	stride = (stride + (4096 - 1)) & ~(4096 - 1);
+	return stride;
 }
 
 

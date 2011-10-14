@@ -113,6 +113,8 @@ struct _OMAPRec;
 
 extern unsigned int
 OMAPCalculateStride(unsigned int fbWidth, unsigned int bitsPerPixel);
+extern unsigned int
+OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel);
 
 
 /**

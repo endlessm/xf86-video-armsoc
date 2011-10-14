@@ -117,18 +117,39 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	depth	= pPixmap->drawable.depth;
 	bitsPerPixel = pPixmap->drawable.bitsPerPixel;
 
-
-	pPixmap->devKind = OMAPCalculateStride(width, bitsPerPixel);
-	size = pPixmap->devKind * height;
-
 	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT) {
 		flags |= OMAP_BO_SCANOUT;
 	}
 
+	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_TILED) {
+		switch (bitsPerPixel) {
+		case 8:
+			flags |= OMAP_BO_TILED_8;
+			break;
+		case 16:
+			flags |= OMAP_BO_TILED_16;
+			break;
+		case 32:
+			flags |= OMAP_BO_TILED_32;
+			break;
+		default:
+			break;
+		}
+		pPixmap->devKind = OMAPCalculateTiledStride(width, bitsPerPixel);
+	} else {
+		pPixmap->devKind = OMAPCalculateStride(width, bitsPerPixel);
+	}
+
+	size = pPixmap->devKind * height;
+
 	if ((!priv->bo) || (omap_bo_size(priv->bo) != size)) {
 		/* re-allocate buffer! */
 		omap_bo_del(priv->bo);
-		priv->bo = omap_bo_new(pOMAP->dev, size, flags);
+		if (flags & OMAP_BO_TILED) {
+			priv->bo = omap_bo_new_tiled(pOMAP->dev, width, height, flags);
+		} else {
+			priv->bo = omap_bo_new(pOMAP->dev, size, flags);
+		}
 	}
 
 	return TRUE;
