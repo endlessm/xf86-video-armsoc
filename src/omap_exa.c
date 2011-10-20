@@ -30,12 +30,18 @@
 #include "config.h"
 #endif
 
-#include "omap_exa_common.h"
+#include "omap_exa.h"
+#include "omap_driver.h"
 
-
-#define pix2scrn(pPixmap) \
-		xf86Screens[(pPixmap)->drawable.pScreen->myNum]
-
+/* keep this here, instead of static-inline so submodule doesn't
+ * need to know layout of OMAPPtr..
+ */
+_X_EXPORT OMAPEXAPtr
+OMAPEXAPTR(ScrnInfoPtr pScrn)
+{
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	return pOMAP->pOMAPEXA;
+}
 
 /* Common OMAP EXA functions, mostly related to pixmap/buffer allocation.
  * Individual driver submodules can use these directly, or wrap them with
@@ -43,7 +49,17 @@
  * can use OMAPPrixmapPrivPtr#priv for their own private data.
  */
 
-void *
+/* used by DRI2 code to play buffer switcharoo */
+void
+OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
+{
+	OMAPPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
+	OMAPPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
+	exchange(apriv->priv, bpriv->priv);
+	exchange(apriv->bo, bpriv->bo);
+}
+
+_X_EXPORT void *
 OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
@@ -55,19 +71,17 @@ OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
 	return priv;
 }
 
-void
+_X_EXPORT void
 OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
 	OMAPPixmapPrivPtr priv = driverPriv;
 
-	if (priv->bo) {
-		omap_bo_del(priv->bo);
-	}
+	omap_bo_del(priv->bo);
 
 	free(priv);
 }
 
-Bool
+_X_EXPORT Bool
 OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData)
@@ -75,7 +89,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	uint32_t size, flags = 0;
+	uint32_t size, flags = OMAP_BO_WC;
 	Bool ret;
 
 	ret = miModifyPixmapHeader(pPixmap, width, height, depth,
@@ -152,7 +166,12 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		}
 	}
 
-	return TRUE;
+	if (!priv->bo) {
+		DEBUG_MSG("failed to allocate %dx%d bo, size=%d, flags=%08x",
+				width, height, size, flags);
+	}
+
+	return priv->bo != NULL;
 }
 
 /**
@@ -160,7 +179,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
  * performed during OMAPPrepareAccess so this function does not
  * have anything to do at present
  */
-void
+_X_EXPORT void
 OMAPWaitMarker(ScreenPtr pScreen, int marker)
 {
 	/* no-op */
@@ -214,7 +233,7 @@ static inline enum omap_gem_op idx2op(int index)
  * @return FALSE if PrepareAccess() is unsuccessful and EXA should use
  * DownloadFromScreen() to migate the pixmap out.
  */
-Bool
+_X_EXPORT Bool
 OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 {
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
@@ -249,7 +268,7 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
  * pixmap set up by PrepareAccess().  Note that the FinishAccess() will not be
  * called if PrepareAccess() failed and the pixmap was migrated out.
  */
-void
+_X_EXPORT void
 OMAPFinishAccess(PixmapPtr pPixmap, int index)
 {
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
@@ -276,7 +295,7 @@ OMAPFinishAccess(PixmapPtr pPixmap, int index)
  * will need to be wrapped by PrepareAccess()/FinishAccess() when accessing it
  * with the CPU.
  */
-Bool
+_X_EXPORT Bool
 OMAPPixmapIsOffscreen(PixmapPtr pPixmap)
 {
 	/* offscreen means in 'gpu accessible memory', not that it's off the

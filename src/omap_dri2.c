@@ -31,7 +31,7 @@
 #endif
 
 #include "omap_driver.h"
-#include "omap_exa_common.h"
+#include "omap_exa.h"
 
 #include "xf86drmMode.h"
 #include "dri2.h"
@@ -63,16 +63,6 @@ typedef struct {
 #define OMAPBUF(p)	((OMAPDRI2BufferPtr)(p))
 #define DRIBUF(p)	((DRI2BufferPtr)(&(p)->base))
 
-
-static inline PixmapPtr
-draw2pix(DrawablePtr pDraw)
-{
-	if (pDraw->type == DRAWABLE_WINDOW) {
-		return pDraw->pScreen->GetWindowPixmap((WindowPtr)pDraw);
-	} else {
-		return (PixmapPtr)pDraw;
-	}
-}
 
 static inline DrawablePtr
 dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)

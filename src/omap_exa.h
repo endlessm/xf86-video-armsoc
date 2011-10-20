@@ -29,8 +29,80 @@
 #ifndef OMAP_EXA_COMMON_H_
 #define OMAP_EXA_COMMON_H_
 
-#include "omap_driver.h"
+/* note: don't include "omap_driver.h" here.. we want to keep some
+ * isolation between structs shared with submodules and stuff internal
+ * to core driver..
+ */
+#include <omap_drmif.h>
+#include "omap_util.h"
 #include "exa.h"
+
+/**
+ * A per-Screen structure used to communicate and coordinate between the OMAP X
+ * driver and an external EXA sub-module (if loaded).
+ */
+typedef struct _OMAPEXARec
+{
+	union { struct {
+
+	/**
+	 * Called by X driver's CloseScreen() function at the end of each server
+	 * generation to free per-Screen data structures (except those held by
+	 * pScrn).
+	 */
+	Bool (*CloseScreen)(int scrnIndex, ScreenPtr pScreen);
+
+	/**
+	 * Called by X driver's FreeScreen() function at the end of each server
+	 * lifetime to free per-ScrnInfoRec data structures, to close any external
+	 * connections (e.g. with PVR2D, DRM), etc.
+	 */
+	void (*FreeScreen)(int scrnIndex, int flags);
+
+	/* add new fields here at end, to preserve ABI */
+
+
+	/* padding to keep ABI stable, so an existing EXA submodule
+	 * doesn't need to be recompiled when new fields are added
+	 */
+	}; void *pad[64]; };
+
+} OMAPEXARec, *OMAPEXAPtr;
+
+
+/**
+ * Canonical name of an external sub-module providing support for EXA
+ * acceleration, that utiltizes the OMAP's PowerVR accelerator and uses closed
+ * source from Imaginations Technology Limited.
+ */
+#define SUB_MODULE_PVR	"omap_pvr"
+OMAPEXAPtr InitPowerVREXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
+
+/**
+ * Fallback EXA implementation
+ */
+OMAPEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
+
+
+OMAPEXAPtr OMAPEXAPTR(ScrnInfoPtr pScrn);
+
+static inline ScrnInfoPtr
+pix2scrn(PixmapPtr pPixmap)
+{
+	return xf86Screens[(pPixmap)->drawable.pScreen->myNum];
+}
+
+static inline PixmapPtr
+draw2pix(DrawablePtr pDraw)
+{
+	if (!pDraw) {
+		return NULL;
+	} else if (pDraw->type == DRAWABLE_WINDOW) {
+		return pDraw->pScreen->GetWindowPixmap((WindowPtr)pDraw);
+	} else {
+		return (PixmapPtr)pDraw;
+	}
+}
 
 /* Common OMAP EXA functions, mostly related to pixmap/buffer allocation.
  * Individual driver submodules can use these directly, or wrap them with
@@ -66,14 +138,6 @@ OMAPPixmapBo(PixmapPtr pPixmap)
 	return priv->bo;
 }
 
-/* used by DRI2 code to play buffer switcharoo */
-static inline void
-OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
-{
-	OMAPPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
-	OMAPPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
-	exchange(apriv->priv, bpriv->priv);
-	exchange(apriv->bo, bpriv->bo);
-}
+void OMAPPixmapExchange(PixmapPtr a, PixmapPtr b);
 
 #endif /* OMAP_EXA_COMMON_H_ */

@@ -31,7 +31,7 @@
 #endif
 
 #include "omap_driver.h"
-#include "omap_exa_common.h"
+#include "omap_exa.h"
 
 #include "exa.h"
 
@@ -93,7 +93,7 @@ FreeScreen(int scrnIndex, int flags)
 
 
 OMAPEXAPtr
-InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn)
+InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 {
 	OMAPNullEXAPtr null_exa = calloc(sizeof (*null_exa), 1);
 	OMAPEXAPtr omap_exa = (OMAPEXAPtr)null_exa;

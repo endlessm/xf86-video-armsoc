@@ -27,8 +27,8 @@
  *    Rob Clark <rob@ti.com>
  */
 
-#ifndef OMAP_DRV_H_
-#define OMAP_DRV_H_
+#ifndef __OMAP_DRV_H__
+#define __OMAP_DRV_H__
 
 /* All drivers need the following headers: */
 #include "xf86.h"
@@ -60,6 +60,8 @@
 #include <omap_drmif.h>
 
 #include <errno.h>
+
+#include "omap_exa.h"
 
 
 #define OMAP_VERSION		1000	/* Apparently not used by X server */
@@ -112,41 +114,6 @@ extern unsigned int
 OMAPCalculateStride(unsigned int fbWidth, unsigned int bitsPerPixel);
 extern unsigned int
 OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel);
-
-
-/**
- * A per-Screen structure used to communicate and coordinate between the OMAP X
- * driver and an external EXA sub-module (if loaded).
- */
-typedef struct _OMAPEXARec
-{
-	union { struct {
-
-	/**
-	 * Called by X driver's CloseScreen() function at the end of each server
-	 * generation to free per-Screen data structures (except those held by
-	 * pScrn).
-	 */
-	Bool (*CloseScreen)(int scrnIndex, ScreenPtr pScreen);
-
-	/**
-	 * Called by X driver's FreeScreen() function at the end of each server
-	 * lifetime to free per-ScrnInfoRec data structures, to close any external
-	 * connections (e.g. with PVR2D, DRM), etc.
-	 */
-	void (*FreeScreen)(int scrnIndex, int flags);
-
-	/* add new fields here at end, to preserve ABI */
-
-	};
-
-	/* padding to keep ABI stable, so an existing EXA submodule
-	 * doesn't need to be recompiled when new fields are added
-	 */
-	void *pad[64];
-	};
-
-} OMAPEXARec, *OMAPEXAPtr;
 
 
 
@@ -222,19 +189,6 @@ typedef struct _OMAPRec
 }
 
 /**
- * Canonical name of an external sub-module providing support for EXA
- * acceleration, that utiltizes the OMAP's PowerVR accelerator and uses closed
- * source from Imaginations Technology Limited.
- */
-#define SUB_MODULE_PVR	"omap_pvr"
-OMAPEXAPtr InitPowerVREXA(ScreenPtr pScreen, ScrnInfoPtr pScrn);
-
-/**
- * Fallback EXA implementation
- */
-OMAPEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn);
-
-/**
  * drmmode functions..
  */
 Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp);
@@ -254,4 +208,4 @@ Bool OMAPDRI2ScreenInit(ScreenPtr pScreen);
 void OMAPDRI2CloseScreen(ScreenPtr pScreen);
 void OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd);
 
-#endif /* OMAP_DRV_H_ */
+#endif /* __OMAP_DRV_H__ */

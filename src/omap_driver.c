@@ -644,7 +644,7 @@ OMAPAccelInit(ScreenPtr pScreen)
 		case 0x4430:
 		case 0x4460:
 			INFO_MSG("Initializing the \"%s\" sub-module ...", SUB_MODULE_PVR);
-			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn);
+			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn, pOMAP->drmFD);
 			if (pOMAP->pOMAPEXA) {
 				INFO_MSG("Successfully initialized the \"%s\" sub-module",
 						SUB_MODULE_PVR);
@@ -662,7 +662,7 @@ OMAPAccelInit(ScreenPtr pScreen)
 	}
 
 	if (!pOMAP->pOMAPEXA) {
-		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn);
+		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn, pOMAP->drmFD);
 	}
 
 	if (pOMAP->dri && pOMAP->pOMAPEXA) {
