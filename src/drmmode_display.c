@@ -368,8 +368,10 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	// Fixme - Intel puts a call to set GEM sizes here; do we need to do
 	// something like that?
 
-	if (pScrn->pScreen)
-		xf86_reload_cursors(pScrn->pScreen);
+// TODO: only call this if we are not using sw cursor.. ie. bad to call this
+// if we haven't called xf86InitCursor()!!
+//	if (pScrn->pScreen)
+//		xf86_reload_cursors(pScrn->pScreen);
 
 done:
 	if (output_ids) {
