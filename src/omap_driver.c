@@ -352,12 +352,6 @@ OMAPProbe(DriverPtr drv, int flags)
 	int numDevSections;
 	Bool foundScreen = FALSE;
 
-	if (flags & PROBE_DETECT) {
-		EARLY_ERROR_MSG("The %s driver does not support the \"-configure\" or "
-				"\"-probe\" command line arguments.", OMAP_NAME);
-		return FALSE;
-	}
-
 	/* Get the "xorg.conf" file device sections that match this driver, and
 	 * return (error out) if there are none:
 	 */
@@ -365,20 +359,41 @@ OMAPProbe(DriverPtr drv, int flags)
 	if (numDevSections <= 0) {
 		EARLY_ERROR_MSG("Did not find any matching device section in "
 				"configuration file");
-		return FALSE;
+		if (flags & PROBE_DETECT) {
+			/* if we are probing, assume one and lets see if we can
+			 * open the device to confirm it is there:
+			 */
+			numDevSections = 1;
+		} else {
+			return FALSE;
+		}
 	}
 
 	for (i = 0; i < numDevSections; i++) {
 		int fd = OMAPOpenDRM(i);
 		if (fd != -1) {
-			int entity = xf86ClaimNoSlot(drv, 0, devSections[i], TRUE);
+
+			if (flags & PROBE_DETECT) {
+				/* just add the device.. we aren't a PCI device, so
+				 * call xf86AddBusDeviceToConfigure() directly
+				 */
+				xf86AddBusDeviceToConfigure(OMAP_DRIVER_NAME,
+						BUS_NONE, NULL, i);
+				foundScreen = TRUE;
+				continue;
+			}
 
 			pScrn = xf86AllocateScreen(drv, 0);
+
 			if (!pScrn) {
 				EARLY_ERROR_MSG("Cannot allocate a ScrnInfoPtr");
 				return FALSE;
 			}
-			xf86AddEntityToScreen(pScrn, entity);
+
+			if (devSections) {
+				int entity = xf86ClaimNoSlot(drv, 0, devSections[i], TRUE);
+				xf86AddEntityToScreen(pScrn, entity);
+			}
 
 			foundScreen = TRUE;
 
