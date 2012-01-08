@@ -55,12 +55,6 @@
 #define PPC_MMIO_IS_BE
 #include "compiler.h"
 
-/* Drivers for PCI hardware need this */
-#include "xf86PciInfo.h"
-
-/* Drivers that need to access the PCI config space directly need this */
-#include "xf86Pci.h"
-
 /* All drivers initialising the SW cursor need this */
 #include "mipointer.h"
 
@@ -1080,9 +1074,7 @@ static void
 page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 			  unsigned int tv_usec, void *user_data)
 {
-#ifdef XF86DRI
 	OMAPDRI2SwapComplete(user_data);
-#endif
 }
 
 static drmEventContext event_context = {

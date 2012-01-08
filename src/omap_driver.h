@@ -54,10 +54,7 @@
 #include "xf86Crtc.h"
 #include "xf86RandR12.h"
 #include "xf86drm.h"
-#ifdef XF86DRI
-#define _XF86DRI_SERVER_
 #include "dri2.h"
-#endif
 
 #include <omap_drm.h>
 #include <omap_drmif.h>
@@ -250,11 +247,9 @@ Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
 /**
  * DRI2 functions..
  */
-#ifdef XF86DRI
 typedef struct _OMAPDRISwapCmd OMAPDRISwapCmd;
 Bool OMAPDRI2ScreenInit(ScreenPtr pScreen);
 void OMAPDRI2CloseScreen(ScreenPtr pScreen);
 void OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd);
-#endif
 
 #endif /* OMAP_DRV_H_ */

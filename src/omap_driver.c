@@ -860,11 +860,9 @@ OMAPCloseScreen(int scrnIndex, ScreenPtr pScreen)
 		}
 	}
 
-#ifdef XF86DRI
 	if (pOMAP->dri) {
 		OMAPDRI2CloseScreen(pScreen);
 	}
-#endif
 
 	OMAPUnmapMem(pScrn);
 
