@@ -96,6 +96,7 @@ typedef enum {
 	OPTION_DEBUG,
 	OPTION_DRI,
 	OPTION_NO_ACCEL,
+	OPTION_HW_CURSOR,
 	/* TODO: probably need to add an option to let user specify bus-id */
 } OMAPOpts;
 
@@ -104,6 +105,7 @@ static const OptionInfoRec OMAPOptions[] = {
 	{ OPTION_DEBUG,		"Debug",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_DRI,		"DRI",		OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_NO_ACCEL,	"NoAccel",	OPTV_BOOLEAN,	{0},	FALSE },
+	{ OPTION_HW_CURSOR,	"HWcursor",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ -1,				NULL,		OPTV_NONE,		{0},	FALSE }
 };
 
@@ -544,10 +546,14 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 
 	pOMAP->dri = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DRI, TRUE);
 
+	/* Determine if user wants to disable hw mouse cursor: */
+	pOMAP->HWCursor = xf86ReturnOptValBool(pOMAP->pOptionInfo,
+			OPTION_HW_CURSOR, TRUE);
+	INFO_MSG("Using %s cursor", pOMAP->HWCursor ? "HW" : "SW");
 
 	/* Determine if the user wants to disable acceleration: */
-	pOMAP->NoAccel =
-			xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_NO_ACCEL, FALSE);
+	pOMAP->NoAccel = xf86ReturnOptValBool(pOMAP->pOptionInfo,
+			OPTION_NO_ACCEL, FALSE);
 
 	/*
 	 * Select the video modes:
@@ -765,11 +771,18 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	miInitializeBackingStore(pScreen);
 	xf86SetBackingStore(pScreen);
 
+	/* Cause the cursor position to be updated by the mouse signal handler: */
+	xf86SetSilkenMouse(pScreen);
+
 	/* Initialize the cursor: */
 	miDCInitialize(pScreen, xf86GetPointerScreenFuncs());
 
-	/* Cause the cursor position to be updated by the mouse signal handler: */
-	xf86SetSilkenMouse(pScreen);
+	if (pOMAP->HWCursor) {
+		if (!drmmode_cursor_init(pScreen)) {
+			ERROR_MSG("Hardware cursor initialization failed");
+			pOMAP->HWCursor = FALSE;
+		}
+	}
 
 	/* XXX -- Is this the right place for this?  The Intel i830 driver says:
 	 * "Must force it before EnterVT, so we are in control of VT..."

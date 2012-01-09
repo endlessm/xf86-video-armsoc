@@ -164,6 +164,7 @@ typedef struct _OMAPRec
 
 	/** various user-configurable options: */
 	Bool				dri;
+	Bool				HWCursor;
 	Bool				NoAccel;
 
 	/** File descriptor of the connection with the DRM. */
@@ -242,6 +243,7 @@ void drmmode_screen_fini(ScrnInfoPtr pScrn);
 void drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags);
 void drmmode_remove_fb(ScrnInfoPtr pScrn);
 Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
+Bool drmmode_cursor_init(ScreenPtr pScreen);
 
 
 /**

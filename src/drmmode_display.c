@@ -88,10 +88,20 @@
 #include "xf86Crtc.h"
 
 #include "xf86drmMode.h"
+#include "drm_fourcc.h"
 #include "X11/Xatom.h"
 
 #include <sys/ioctl.h>
 #include <libudev.h>
+
+typedef struct {
+	/* hardware cursor: */
+	drmModePlane *ovr;
+	struct omap_bo *bo;
+	uint32_t fb_id;
+	int x, y;
+	int visible;
+} drmmode_cursor_rec, *drmmode_cursor_ptr;
 
 typedef struct {
 	int fd;
@@ -100,6 +110,7 @@ typedef struct {
 	int cpp;
 	struct udev_monitor *uevent_monitor;
 	InputHandlerProc uevent_handler;
+	drmmode_cursor_ptr cursor;
 } drmmode_rec, *drmmode_ptr;
 
 typedef struct {
@@ -128,6 +139,16 @@ typedef struct {
 
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
 void drmmode_remove_fb(ScrnInfoPtr pScrn);
+
+static drmmode_ptr
+drmmode_from_scrn(ScrnInfoPtr pScrn)
+{
+	xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+	drmmode_crtc_private_ptr drmmode_crtc;
+
+	drmmode_crtc = xf86_config->crtc[0]->driver_private;
+	return drmmode_crtc->drmmode;
+}
 
 static void
 drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
@@ -324,49 +345,146 @@ done:
 }
 
 static void
-drmmode_set_cursor_position (xf86CrtcPtr crtc, int x, int y)
-{
-#if 0 // Fixme - address this function when we address HW cursor functionality
-	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
-	drmmode_ptr drmmode = drmmode_crtc->drmmode;
-
-	drmModeMoveCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, x, y);
-#endif
-}
-
-static void
-drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
-{
-#if 0 // Fixme - address this function when we address HW cursor functionality
-#endif
-}
-
-static void
 drmmode_hide_cursor(xf86CrtcPtr crtc)
 {
-#if 0 // Fixme - address this function when we address HW cursor functionality
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
+	drmmode_cursor_ptr cursor = drmmode->cursor;
 
-	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
-			0, 64, 64);
-	drmmode_crtc->cursor_visible = FALSE;
-#endif
+	if (!cursor)
+		return;
+
+	cursor->visible = FALSE;
+
+	/* set plane's fb_id to 0 to disable it */
+	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
+			drmmode_crtc->mode_crtc->crtc_id, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 static void
 drmmode_show_cursor(xf86CrtcPtr crtc)
 {
-#if 0 // Fixme - address this function when we address HW cursor functionality
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
+	drmmode_cursor_ptr cursor = drmmode->cursor;
 
-	// Fixme - Do we may need a different data structure for the cursor handle?:
-	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
-			drmmode_crtc->cursor->handle, 64, 64);
+	if (!cursor)
+		return;
 
-	drmmode_crtc->cursor_visible = TRUE;
-#endif
+	cursor->visible = TRUE;
+
+	/* note src coords (last 4 args) are in Q16 format */
+	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
+			drmmode_crtc->mode_crtc->crtc_id, cursor->fb_id, 0,
+			cursor->x, cursor->y, 64, 64,
+			0, 0, 64<<16, 64<<16);
+}
+
+static void
+drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
+{
+	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+	drmmode_ptr drmmode = drmmode_crtc->drmmode;
+	drmmode_cursor_ptr cursor = drmmode->cursor;
+
+	if (!cursor)
+		return;
+
+	cursor->x = x;
+	cursor->y = y;
+
+	if (cursor->visible)
+		drmmode_show_cursor(crtc);
+}
+
+static void
+drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
+{
+	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+	drmmode_ptr drmmode = drmmode_crtc->drmmode;
+	drmmode_cursor_ptr cursor = drmmode->cursor;
+
+	if (!cursor)
+		return;
+
+	if (cursor->visible)
+		drmmode_hide_cursor(crtc);
+
+	memcpy(omap_bo_map(cursor->bo), image, omap_bo_size(cursor->bo));
+
+	if (cursor->visible)
+		drmmode_show_cursor(crtc);
+}
+
+Bool
+drmmode_cursor_init(ScreenPtr pScreen)
+{
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+	drmmode_cursor_ptr cursor;
+	drmModePlaneRes *plane_resources;
+	drmModePlane *ovr;
+
+	/* technically we probably don't have any size limit.. since we
+	 * are just using an overlay... but xserver will always create
+	 * cursor images in the max size, so don't use width/height values
+	 * that are too big
+	 */
+	int w = 64, h = 64;
+	uint32_t handles[4], pitches[4], offsets[4]; /* we only use [0] */
+
+	if (drmmode->cursor) {
+		INFO_MSG("cursor already initialized");
+		return TRUE;
+	}
+
+	cursor = calloc(1, sizeof(drmmode_cursor_rec));
+
+	/* find an unused plane which can be used as a mouse cursor.  Note
+	 * that we cheat a bit, in order to not burn one overlay per crtc,
+	 * and only show the mouse cursor on one crtc at a time
+	 */
+	plane_resources = drmModeGetPlaneResources(drmmode->fd);
+	if (!plane_resources) {
+		ERROR_MSG("drmModeGetPlaneResources failed: %s", strerror(errno));
+		return FALSE;
+	}
+
+	if (plane_resources->count_planes < 1) {
+		ERROR_MSG("not enough planes for HW cursor");
+		return FALSE;
+	}
+
+	ovr = drmModeGetPlane(drmmode->fd, plane_resources->planes[0]);
+	if (!ovr) {
+		ERROR_MSG("drmModeGetPlane failed: %s\n", strerror(errno));
+		return FALSE;
+	}
+
+	cursor->ovr = ovr;
+	cursor->bo  = omap_bo_new(pOMAP->dev, w*h*4,
+			OMAP_BO_SCANOUT | OMAP_BO_WC);
+
+	handles[0] = omap_bo_handle(cursor->bo);
+	pitches[0] = w*4;
+	offsets[0] = 0;
+
+	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
+			handles, pitches, offsets, &cursor->fb_id, 0)) {
+		ERROR_MSG("drmModeAddFB2 failed: %s", strerror(errno));
+		return FALSE;
+	}
+
+	if (xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB)) {
+		INFO_MSG("HW cursor initialized");
+		drmmode->cursor = cursor;
+		return TRUE;
+	}
+
+	// TODO cleanup when things fail..
+	return FALSE;
 }
 
 static void
@@ -1048,16 +1166,6 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 /*
  * Hot Plug Event handling:
  */
-
-static drmmode_ptr
-drmmode_from_scrn(ScrnInfoPtr pScrn)
-{
-	xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
-	drmmode_crtc_private_ptr drmmode_crtc;
-
-	drmmode_crtc = xf86_config->crtc[0]->driver_private;
-	return drmmode_crtc->drmmode;
-}
 
 static void
 drmmode_handle_uevents(int fd, void *closure)
