@@ -283,6 +283,7 @@ OMAPDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 	pGC->ops->CopyArea(pSrcDraw, pDstDraw, pGC,
 			0, 0, pDraw->width, pDraw->height, 0, 0);
 
+	FreeScratchGC(pGC);
 }
 
 /**
