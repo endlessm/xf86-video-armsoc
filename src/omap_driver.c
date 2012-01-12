@@ -607,6 +607,49 @@ fail:
 }
 
 
+/**
+ * Initialize EXA and DRI2
+ */
+static void
+OMAPAccelInit(ScreenPtr pScreen)
+{
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+
+	if (!pOMAP->NoAccel) {
+		switch (pOMAP->chipset) {
+		case 0x3430:
+		case 0x3630:
+		case 0x4430:
+		case 0x4460:
+			INFO_MSG("Initializing the \"%s\" sub-module ...", SUB_MODULE_PVR);
+			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn);
+			if (pOMAP->pOMAPEXA) {
+				INFO_MSG("Successfully initialized the \"%s\" sub-module",
+						SUB_MODULE_PVR);
+			} else {
+				INFO_MSG("Could not initialize the \"%s\" sub-module",
+						SUB_MODULE_PVR);
+				pOMAP->NoAccel = TRUE;
+			}
+			break;
+		default:
+			ERROR_MSG("Unsupported chipset: %d", pOMAP->chipset);
+			pOMAP->NoAccel = TRUE;
+			break;
+		}
+	}
+
+	if (!pOMAP->pOMAPEXA) {
+		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn);
+	}
+
+	if (pOMAP->dri && pOMAP->pOMAPEXA) {
+		pOMAP->dri = OMAPDRI2ScreenInit(pScreen);
+	} else {
+		pOMAP->dri = FALSE;
+	}
+}
 
 /**
  * The driver's ScreenInit() function.  Fill in pScreen, map the frame buffer,
@@ -697,6 +740,12 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	/* Set the initial black & white colormap indices: */
 	xf86SetBlackWhitePixels(pScreen);
 
+	/* Initialize external sub-modules for EXA now, this has to be before
+	 * miDCInitialize() otherwise stacking order for wrapped ScreenPtr fxns
+	 * ends up in the wrong order.
+	 */
+	OMAPAccelInit(pScreen);
+
 	/* Initialize backing store: */
 	miInitializeBackingStore(pScreen);
 	xf86SetBackingStore(pScreen);
@@ -706,12 +755,6 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
 	/* Cause the cursor position to be updated by the mouse signal handler: */
 	xf86SetSilkenMouse(pScreen);
-
-#ifdef XF86DRI
-	if (pOMAP->dri) {
-		pOMAP->dri = OMAPDRI2ScreenInit(pScreen);
-	}
-#endif
 
 	/* XXX -- Is this the right place for this?  The Intel i830 driver says:
 	 * "Must force it before EnterVT, so we are in control of VT..."
@@ -755,39 +798,6 @@ OMAPScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	wrap(pOMAP, pScreen, CloseScreen, OMAPCloseScreen);
 	wrap(pOMAP, pScreen, CreateScreenResources, OMAPCreateScreenResources);
 	wrap(pOMAP, pScreen, BlockHandler, OMAPBlockHandler);
-
-	/*
-	 * Initialize external sub-modules for EXA now:
-	 */
-
-	if (!pOMAP->NoAccel) {
-		switch (pOMAP->chipset) {
-		case 0x3430:
-		case 0x3630:
-		case 0x4430:
-		case 0x4460:
-			INFO_MSG("Initializing the \"%s\" sub-module ...", SUB_MODULE_PVR);
-			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn);
-			if (pOMAP->pOMAPEXA) {
-				INFO_MSG("Successfully initialized the \"%s\" sub-module",
-						SUB_MODULE_PVR);
-			} else {
-				INFO_MSG("Could not initialize the \"%s\" sub-module",
-						SUB_MODULE_PVR);
-				pOMAP->NoAccel = TRUE;
-			}
-			break;
-			/* case 4470: ..; break; */
-		default:
-			ERROR_MSG("Unsupported chipset: %d", pOMAP->chipset);
-			pOMAP->NoAccel = TRUE;
-			break;
-		}
-	}
-
-	if (!pOMAP->pOMAPEXA) {
-		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn);
-	}
 
 	drmmode_screen_init(pScrn);
 
