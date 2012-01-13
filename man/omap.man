@@ -34,10 +34,20 @@ Enable debug logging.
 .IP
 Default: Disabled
 .TP
+.BI "Option \*qDRI\*q \*q" boolean \*q
+Enable DRI2.
+.IP
+Default: Enabled
+.TP
 .BI "Option \*qNoAccel\*q \*q" boolean \*q
 Disable hw acceleration.
 .IP
 Default: Disabled
+.TP
+.BI "Option \*qHWcursor\*q \*q" boolean \*q
+Enable HW mouse cursor.
+.IP
+Default: Enabled
 
 .SH OUTPUT CONFIGURATION
 The driver supports runtime configuration of detected outputs.  You can use the
