@@ -344,6 +344,9 @@ done:
 	return ret;
 }
 
+#define CURSORW  64
+#define CURSORH  64
+
 static void
 drmmode_hide_cursor(xf86CrtcPtr crtc)
 {
@@ -368,17 +371,44 @@ drmmode_show_cursor(xf86CrtcPtr crtc)
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	drmmode_cursor_ptr cursor = drmmode->cursor;
+	int crtc_x, crtc_y, src_x, src_y, w, h;
 
 	if (!cursor)
 		return;
 
 	cursor->visible = TRUE;
 
+	w = CURSORW;
+	h = CURSORH;
+	crtc_x = cursor->x;
+	crtc_y = cursor->y;
+	src_x = 0;
+	src_y = 0;
+
+	if (crtc_x < 0) {
+		src_x += -crtc_x;
+		w -= -crtc_x;
+		crtc_x = 0;
+	}
+
+	if (crtc_y < 0) {
+		src_y += -crtc_y;
+		h -= -crtc_y;
+		crtc_y = 0;
+	}
+
+	if ((crtc_x + w) > crtc->mode.HDisplay) {
+		w = crtc->mode.HDisplay - crtc_x;
+	}
+
+	if ((crtc_y + h) > crtc->mode.VDisplay) {
+		h = crtc->mode.VDisplay - crtc_y;
+	}
+
 	/* note src coords (last 4 args) are in Q16 format */
 	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
 			drmmode_crtc->mode_crtc->crtc_id, cursor->fb_id, 0,
-			cursor->x, cursor->y, 64, 64,
-			0, 0, 64<<16, 64<<16);
+			crtc_x, crtc_y, w, h, src_x<<16, src_y<<16, w<<16, h<<16);
 }
 
 static void
@@ -432,7 +462,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	 * cursor images in the max size, so don't use width/height values
 	 * that are too big
 	 */
-	int w = 64, h = 64;
+	int w = CURSORW, h = CURSORH;
 	uint32_t handles[4], pitches[4], offsets[4]; /* we only use [0] */
 
 	if (drmmode->cursor) {
