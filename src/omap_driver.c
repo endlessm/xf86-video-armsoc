@@ -670,6 +670,12 @@ OMAPAccelInit(ScreenPtr pScreen)
 	} else {
 		pOMAP->dri = FALSE;
 	}
+
+	if (OMAPVideoScreenInit(pScreen)) {
+		INFO_MSG("Initialized XV");
+	} else {
+		ERROR_MSG("Could not initialize XV");
+	}
 }
 
 /**
@@ -876,6 +882,8 @@ OMAPCloseScreen(int scrnIndex, ScreenPtr pScreen)
 	if (pOMAP->dri) {
 		OMAPDRI2CloseScreen(pScreen);
 	}
+
+	OMAPVideoCloseScreen(pScreen);
 
 	OMAPUnmapMem(pScrn);
 

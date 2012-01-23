@@ -59,6 +59,16 @@ typedef struct _OMAPEXARec
 	 */
 	void (*FreeScreen)(int scrnIndex, int flags);
 
+	/** get formats supported by PutTextureImage() (for dri2 video..) */
+#define MAX_FORMATS 16
+	unsigned int (*GetFormats)(unsigned int *formats);
+
+	Bool (*PutTextureImage)(PixmapPtr pSrcPix, BoxPtr pSrcBox,
+			PixmapPtr pOsdPix, BoxPtr pOsdBox,
+			PixmapPtr pDstPix, BoxPtr pDstBox,
+			unsigned int extraCount, PixmapPtr *extraPix,
+			unsigned int format);
+
 	/* add new fields here at end, to preserve ABI */
 
 

@@ -156,11 +156,21 @@ typedef struct _OMAPRec
 	/** Pointer to the entity structure for this screen. */
 	EntityInfoPtr		pEntityInfo;
 
+	XF86VideoAdaptorPtr textureAdaptor;
+
 } OMAPRec, *OMAPPtr;
 
 /*
  * Misc utility macros:
  */
+
+/* do we support video? */
+static inline Bool has_video(OMAPPtr pOMAP)
+{
+	return pOMAP->pOMAPEXA &&
+			pOMAP->pOMAPEXA->GetFormats &&
+			pOMAP->pOMAPEXA->PutTextureImage;
+}
 
 /** Return a pointer to the driver's private structure. */
 #define OMAPPTR(p) ((OMAPPtr)((p)->driverPrivate))
@@ -188,6 +198,12 @@ typedef struct _OMAPRec
 	b = tmp; \
 }
 
+#ifndef ARRAY_SIZE
+#  define ARRAY_SIZE(a)  (sizeof(a) / sizeof(a[0]))
+#endif
+#define ALIGN(val, align)	(((val) + (align) - 1) & ~((align) - 1))
+
+
 /**
  * drmmode functions..
  */
@@ -207,5 +223,27 @@ typedef struct _OMAPDRISwapCmd OMAPDRISwapCmd;
 Bool OMAPDRI2ScreenInit(ScreenPtr pScreen);
 void OMAPDRI2CloseScreen(ScreenPtr pScreen);
 void OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd);
+
+/**
+ * XV functions..
+ */
+Bool OMAPVideoScreenInit(ScreenPtr pScreen);
+void OMAPVideoCloseScreen(ScreenPtr pScreen);
+
+/**
+ * EXA util functions.. move to EXA core?
+ */
+
+typedef int (*OMAPPutTextureImageProc)(
+		PixmapPtr pSrcPix, BoxPtr pSrcBox,
+		PixmapPtr pOsdPix, BoxPtr pOsdBox,
+		PixmapPtr pDstPix, BoxPtr pDstBox,
+		void *closure);
+
+Bool OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
+		DrawablePtr pOsdDraw, BoxPtr pOsdBox,
+		DrawablePtr pDstDraw, BoxPtr pDstBox,
+		OMAPPutTextureImageProc PutTextureImage, void *closure,
+		RegionPtr clipBoxes);
 
 #endif /* __OMAP_DRV_H__ */
