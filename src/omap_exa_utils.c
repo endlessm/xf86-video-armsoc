@@ -84,8 +84,8 @@ OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
 			(pDstBox->x2 - pDstBox->x1);
 	sy = ((pixman_fixed_48_16_t) (pSrcBox->y2 - pSrcBox->y1) << 16) /
 			(pDstBox->y2 - pDstBox->y1);
-	tx = ((pixman_fixed_48_16_t)(pDstBox->x1 - pSrcBox->x1 - dx) << 16);
-	ty = ((pixman_fixed_48_16_t)(pDstBox->y1 - pSrcBox->y1 - dy) << 16);
+	tx = ((pixman_fixed_48_16_t)(pDstBox->x1 - dx) << 16);
+	ty = ((pixman_fixed_48_16_t)(pDstBox->y1 - dy) << 16);
 
 	pixman_transform_init_scale(&srcxfrm, sx, sy);
 	pixman_transform_translate(NULL, &srcxfrm, tx, ty);
@@ -103,6 +103,12 @@ OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
 
 		pixman_transform_bounds(&srcxfrm, &srcb);
 		//pixman_transform_bounds(&osdxfrm, &osdb);
+
+		/* cropping is done in src coord space, post transform: */
+		srcb.x1 += pSrcBox->x1;
+		srcb.y1 += pSrcBox->y1;
+		srcb.x2 += pSrcBox->x1;
+		srcb.y2 += pSrcBox->y1;
 
 		DEBUG_MSG("%d,%d %d,%d -> %d,%d %d,%d",
 				srcb.x1, srcb.y1, srcb.x2, srcb.y2,
