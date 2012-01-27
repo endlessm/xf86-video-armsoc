@@ -54,6 +54,7 @@
 #include "xf86Crtc.h"
 #include "xf86RandR12.h"
 #include "xf86drm.h"
+#include "drm_fourcc.h"
 #include "dri2.h"
 
 #include <omap_drm.h>

@@ -219,10 +219,10 @@ OMAPVideoPutImage(ScrnInfoPtr pScrn, short src_x, short src_y, short drw_x,
 	int srcpitch1, srcpitch2, bufpitch1, bufpitch2, src_h2, src_w2;
 
 	switch (id) {
-//	case FOURCC('N','V','1','2'):
+//	case fourcc_code('N','V','1','2'):
 //		break;
-	case FOURCC('Y','V','1','2'):
-	case FOURCC('I','4','2','0'):
+	case fourcc_code('Y','V','1','2'):
+	case fourcc_code('I','4','2','0'):
 		nplanes = 3;
 		srcpitch1 = ALIGN(src_w, 4);
 		srcpitch2 = ALIGN(src_w / 2, 4);
@@ -232,9 +232,9 @@ OMAPVideoPutImage(ScrnInfoPtr pScrn, short src_x, short src_y, short drw_x,
 		src_h2 = src_h / 2;
 		src_w2 = src_w / 2;
 		break;
-	case FOURCC('U','Y','V','Y'):
-	case FOURCC('Y','U','Y','V'):
-	case FOURCC('Y','U','Y','2'):
+	case fourcc_code('U','Y','V','Y'):
+	case fourcc_code('Y','U','Y','V'):
+	case fourcc_code('Y','U','Y','2'):
 		nplanes = 1;
 		srcpitch1 = src_w * 2;
 		bufpitch1 = width * 2;
@@ -308,8 +308,8 @@ OMAPVideoQueryImageAttributes(ScrnInfoPtr pScrn, int id,
 		offsets[0] = 0;
 
 	switch (id) {
-	case FOURCC_YV12:
-	case FOURCC_I420:
+	case fourcc_code('Y','V','1','2'):
+	case fourcc_code('I','4','2','0'):
 		*h = (*h + 1) & ~1; // height rounded up to an even number
 		size = (*w + 3) & ~3; // width rounded up to a multiple of 4
 		if (pitches)
@@ -326,8 +326,8 @@ OMAPVideoQueryImageAttributes(ScrnInfoPtr pScrn, int id,
 			offsets[2] = size; // 5/4*number of pixels in "rounded up" image
 		size += tmp; // = 3/2*number of pixels in "rounded up" image
 		break;
-	case FOURCC_UYVY:
-	case FOURCC_YUY2:
+	case fourcc_code('U','Y','V','Y'):
+	case fourcc_code('Y','U','Y','2'):
 		size = *w << 1; // 2*width
 		if (pitches)
 			pitches[0] = size; // 2*width
@@ -384,22 +384,22 @@ OMAPVideoSetupTexturedVideo(ScreenPtr pScreen)
 	nsupported = 0;
 	for (i = 0; i < nformats; i++) {
 		switch (formats[i]) {
-//		case FOURCC('N','V','1','2'):
+//		case fourcc_code('N','V','1','2'):
 //			break;
-		case FOURCC('Y','V','1','2'):
+		case fourcc_code('Y','V','1','2'):
 			OMAPVideoTexturedImages[nsupported++] =
 					(XF86ImageRec)XVIMAGE_YV12;
 			break;
-		case FOURCC('I','4','2','0'):
+		case fourcc_code('I','4','2','0'):
 			OMAPVideoTexturedImages[nsupported++] =
 					(XF86ImageRec)XVIMAGE_I420;
 			break;
-		case FOURCC('U','Y','V','Y'):
+		case fourcc_code('U','Y','V','Y'):
 			OMAPVideoTexturedImages[nsupported++] =
 					(XF86ImageRec)XVIMAGE_UYVY;
 			break;
-		case FOURCC('Y','U','Y','V'):
-		case FOURCC('Y','U','Y','2'):
+		case fourcc_code('Y','U','Y','V'):
+		case fourcc_code('Y','U','Y','2'):
 			OMAPVideoTexturedImages[nsupported++] =
 					(XF86ImageRec)XVIMAGE_YUY2;
 			break;
