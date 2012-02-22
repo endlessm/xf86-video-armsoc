@@ -434,16 +434,19 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	drmmode_cursor_ptr cursor = drmmode->cursor;
+	int visible;
 
 	if (!cursor)
 		return;
 
-	if (cursor->visible)
+	visible = cursor->visible;
+
+	if (visible)
 		drmmode_hide_cursor(crtc);
 
 	memcpy(omap_bo_map(cursor->bo), image, omap_bo_size(cursor->bo));
 
-	if (cursor->visible)
+	if (visible)
 		drmmode_show_cursor(crtc);
 }
 
