@@ -88,6 +88,8 @@ static SymTabRec OMAPChipsets[] = {
 		{ 0x4430, "OMAP4430 with PowerVR SGX540" },
 		{ 0x4460, "OMAP4460 with PowerVR SGX540" },
 		/*    { 4470, "OMAP4470 with <redacted> ;-)" }, */
+		{ 0x5430, "OMAP5430 with PowerVR SGX544 MP" },
+		{ 0x5432, "OMAP5432 with PowerVR SGX544 MP" },
 		{-1, NULL }
 };
 
@@ -602,6 +604,8 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	case 0x3630:
 	case 0x4430:
 	case 0x4460:
+	case 0x5430:
+	case 0x5432:
 		if (xf86LoadSubModule(pScrn, SUB_MODULE_PVR)) {
 			INFO_MSG("Loaded the %s sub-module", SUB_MODULE_PVR);
 		} else {
@@ -643,6 +647,8 @@ OMAPAccelInit(ScreenPtr pScreen)
 		case 0x3630:
 		case 0x4430:
 		case 0x4460:
+		case 0x5430:
+		case 0x5432:
 			INFO_MSG("Initializing the \"%s\" sub-module ...", SUB_MODULE_PVR);
 			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn, pOMAP->drmFD);
 			if (pOMAP->pOMAPEXA) {
