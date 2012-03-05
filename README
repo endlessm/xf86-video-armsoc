@@ -7,6 +7,8 @@ the following chipsets:
   + OMAP3630
   + OMAP4430
   + OMAP4460
+  + OMAP5430
+  + OMAP5432
 
 
 NOTE: this driver is work in progress..  you probably don't want to try
