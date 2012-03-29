@@ -33,7 +33,6 @@
  * isolation between structs shared with submodules and stuff internal
  * to core driver..
  */
-#include <omap_drmif.h>
 #include "omap_util.h"
 #include "exa.h"
 

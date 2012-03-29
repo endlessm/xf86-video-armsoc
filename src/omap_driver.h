@@ -31,6 +31,7 @@
 #define __OMAP_DRV_H__
 
 /* All drivers need the following headers: */
+#include "xorg-server.h"
 #include "xf86.h"
 #include "xf86_OSproc.h"
 
@@ -54,11 +55,7 @@
 #include "xf86Crtc.h"
 #include "xf86RandR12.h"
 #include "xf86drm.h"
-#include "drm_fourcc.h"
 #include "dri2.h"
-
-#include <omap_drm.h>
-#include <omap_drmif.h>
 
 #include <errno.h>
 

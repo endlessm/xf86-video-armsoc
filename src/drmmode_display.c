@@ -34,6 +34,7 @@
 
 /* TODO cleanup #includes, remove unnecessary ones */
 
+#include "xorg-server.h"
 #include "xorgVersion.h"
 
 #include <sys/stat.h>
