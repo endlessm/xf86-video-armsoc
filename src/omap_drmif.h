@@ -29,7 +29,28 @@
 
 #include <xf86drm.h>
 #include <stdint.h>
-#include <omap_drm.h>
+
+
+
+enum omap_gem_op {
+	OMAP_GEM_READ,
+	OMAP_GEM_WRITE
+};
+#define OMAP_BO_TILED_32 0
+#define OMAP_BO_TILED_16 0
+#define OMAP_BO_TILED_8 0
+#define OMAP_BO_WC 0
+#define OMAP_BO_SCANOUT 0
+#define OMAP_BO_TILED 0
+#define OMAP_PARAM_CHIPSET_ID 0
+
+
+
+
+
+
+
+
 
 struct omap_bo;
 struct omap_device;
