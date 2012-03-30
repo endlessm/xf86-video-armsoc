@@ -1,6 +1,9 @@
+#include <stdlib.h>
+#include <sys/mman.h>
+
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <stdlib.h>
+
 #include "omap_drmif.h"
 
 struct omap_device {
@@ -12,6 +15,7 @@ struct omap_bo {
 	uint32_t handle;
 	uint32_t size;
 	int from_name;
+	void *map_addr;
 };
 
 /* device related functions:
@@ -64,6 +68,7 @@ struct omap_bo *omap_bo_new(struct omap_device *dev, uint32_t size, uint32_t fla
 	new_buf->handle = create_dumb.handle;
 	new_buf->size = create_dumb.size;
 	new_buf->from_name = 0;
+	new_buf->map_addr = NULL;
 
 	return new_buf;
 }
@@ -91,8 +96,35 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	new_buf->handle = gem_open.handle;
 	new_buf->size = gem_open.size;
 	new_buf->from_name = 1;
+	new_buf->map_addr = NULL;
 
 	return new_buf;
+}
+
+void omap_bo_del(struct omap_bo *bo)
+{
+	if (bo->map_addr)
+	{
+		munmap(bo->map_addr, bo->size);
+	}
+
+	if (bo->from_name)
+	{
+		struct drm_gem_close gem_close;
+
+		gem_close.handle = bo->handle;
+
+		drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+	}
+	else
+	{
+		struct drm_mode_destroy_dumb destroy_dumb;
+
+		destroy_dumb.handle = bo->handle;
+
+		drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
+	}
+	free(bo);
 }
 
 int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
@@ -108,4 +140,43 @@ int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
 
 	*name = flink.name;
 	return 0;
+}
+
+uint32_t omap_bo_handle(struct omap_bo *bo)
+{
+	return bo->handle;
+}
+
+uint32_t omap_bo_size(struct omap_bo *bo)
+{
+	return bo->size;
+}
+
+void *omap_bo_map(struct omap_bo *bo)
+{
+	if (!bo->map_addr)
+	{
+		struct drm_mode_map_dumb map_dumb;
+		int res;
+
+		map_dumb.handle = bo->handle;
+
+		res = drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_MAP_DUMB, &map_dumb);
+		if (res)
+			return NULL;
+
+		bo->map_addr = mmap(NULL, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED, bo->dev->fd, map_dumb.offset);
+	}
+
+	return bo->map_addr;
+}
+
+int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
+{
+	return 0;
+}
+
+int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
+{
+	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
 }
