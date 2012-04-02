@@ -90,6 +90,7 @@ static SymTabRec OMAPChipsets[] = {
 		/*    { 4470, "OMAP4470 with <redacted> ;-)" }, */
 		{ 0x5430, "OMAP5430 with PowerVR SGX544 MP" },
 		{ 0x5432, "OMAP5432 with PowerVR SGX544 MP" },
+		{ 0x0600, "Mali-T60x" },
 		{-1, NULL }
 };
 
