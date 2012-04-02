@@ -120,7 +120,7 @@ OMAPOpenDRM(int n)
 {
 	char bus_id[32];
 	snprintf(bus_id, sizeof(bus_id), "platform:omapdrm:%02d", n);
-	return drmOpen("omapdrm", bus_id);
+	return drmOpen("mali_drm", bus_id);
 }
 
 static Bool
