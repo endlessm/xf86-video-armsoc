@@ -679,11 +679,13 @@ OMAPAccelInit(ScreenPtr pScreen)
 		pOMAP->dri = FALSE;
 	}
 
+#if 0
 	if (OMAPVideoScreenInit(pScreen)) {
 		INFO_MSG("Initialized XV");
 	} else {
 		ERROR_MSG("Could not initialize XV");
 	}
+#endif
 }
 
 /**
