@@ -52,7 +52,7 @@ struct omap_bo *omap_bo_new(struct omap_device *dev, uint32_t size, uint32_t fla
 	/* The dumb interface requires width, height and bpp but we only have the final size, so fake those to make them
 	 * add up to size. This is OK as we get the real dimensions in drmAddFB.
 	 */
-	create_dumb.height = size / 16;
+	create_dumb.height = size / 2;
 	create_dumb.width = 1;
 	create_dumb.bpp = 16;
 	create_dumb.flags = flags;
