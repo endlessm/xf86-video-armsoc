@@ -103,6 +103,9 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 
 void omap_bo_del(struct omap_bo *bo)
 {
+	if (!bo)
+		return;
+
 	if (bo->map_addr)
 	{
 		munmap(bo->map_addr, bo->size);
