@@ -893,7 +893,9 @@ OMAPCloseScreen(int scrnIndex, ScreenPtr pScreen)
 		OMAPDRI2CloseScreen(pScreen);
 	}
 
+#if 0
 	OMAPVideoCloseScreen(pScreen);
+#endif
 
 	OMAPUnmapMem(pScrn);
 
