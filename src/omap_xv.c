@@ -26,6 +26,7 @@
  *    Rob Clark <rob@ti.com>
  */
 
+#if 0
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -468,3 +469,4 @@ OMAPVideoCloseScreen(ScreenPtr pScreen)
 		freebufs(pScreen, pPriv);
 	}
 }
+#endif
