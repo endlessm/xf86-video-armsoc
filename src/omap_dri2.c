@@ -45,10 +45,13 @@
 typedef struct {
 	DRI2BufferRec base;
 
-	/** Pixmap that is backing the buffer */
-	// XXX note: don't track the pixmap ptr for the front buffer if it is
-	// a window.. this could get reallocated from beneath us, so we should
-	// always use draw2pix to be sure to have the correct one
+	/**
+	 * Pixmap that is backing the buffer
+	 *
+	 * NOTE: don't track the pixmap ptr for the front buffer if it is
+	 * a window.. this could get reallocated from beneath us, so we should
+	 * always use draw2pix to be sure to have the correct one
+	 */
 	PixmapPtr pPixmap;
 
 	/**
@@ -75,35 +78,30 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 }
 
 static inline Bool
-canexchange(DrawablePtr pDraw)
+canexchange(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
-	ScreenPtr pScreen = pDraw->pScreen;
-	return (pScreen->width == pDraw->width) &&
-			(pScreen->height == pDraw->height) &&
-			(pDraw->x == 0) && (pDraw->y == 0);
+	DrawablePtr da = dri2draw(pDraw, a);
+	DrawablePtr db = dri2draw(pDraw, b);
+
+	return DRI2CanFlip(pDraw) &&
+			(da->width == db->width) &&
+			(da->height == db->height) &&
+			(da->depth == db->depth);
 }
 
 static Bool
 canflip(DrawablePtr pDraw)
 {
 	return (pDraw->type == DRAWABLE_WINDOW) &&
-			canexchange(pDraw);
+			DRI2CanFlip(pDraw);
 }
 
 static inline Bool
 exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
-	if (!canexchange(pDraw)) {
-		return FALSE;
-	}
-	if (DRI2CanFlip(pDraw)) {
-		return FALSE;
-	}
 	OMAPPixmapExchange(draw2pix(dri2draw(pDraw, a)),
 			draw2pix(dri2draw(pDraw, b)));
 	exchange(a->name, b->name);
-	exchange(a->attachment, b->attachment);
-	exchange(OMAPBUF(a)->pPixmap, OMAPBUF(b)->pPixmap);
 	return TRUE;
 }
 
@@ -313,7 +311,6 @@ OMAPDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 }
 
 struct _OMAPDRISwapCmd {
-	Bool exchange;
 	ClientPtr client;
 	DrawablePtr pDraw;
 	DRI2BufferPtr pDstBuffer;
@@ -331,9 +328,7 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	DEBUG_MSG("%d -> %d", cmd->pSrcBuffer->attachment,
 			cmd->pDstBuffer->attachment);
 
-	if (cmd->exchange) {
-		exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
-	}
+	exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
 
 	DRI2SwapComplete(cmd->client, cmd->pDraw, 0, 0, 0, 0, cmd->func, cmd->data);
 
@@ -375,10 +370,9 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	if (src->fb_id && dst->fb_id) {
 		DEBUG_MSG("can flip:  %d -> %d", src->fb_id, dst->fb_id);
-		cmd->exchange = TRUE;
 		drmmode_page_flip(pDraw, src->fb_id, cmd);
-	} else if (exchangebufs(pDraw, pSrcBuffer, pDstBuffer)) {
-		/* we could get away w/ pointer swap.. yah! */
+	} else if (canexchange(pDraw, pSrcBuffer, pDstBuffer)) {
+		/* we can get away w/ pointer swap.. yah! */
 		OMAPDRI2SwapComplete(cmd);
 	} else {
 		/* fallback to blit: */
