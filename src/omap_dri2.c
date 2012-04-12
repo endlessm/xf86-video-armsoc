@@ -311,6 +311,7 @@ OMAPDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 }
 
 struct _OMAPDRISwapCmd {
+	int type;
 	ClientPtr client;
 	DrawablePtr pDraw;
 	DRI2BufferPtr pDstBuffer;
@@ -330,7 +331,8 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 
 	exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
 
-	DRI2SwapComplete(cmd->client, cmd->pDraw, 0, 0, 0, 0, cmd->func, cmd->data);
+	DRI2SwapComplete(cmd->client, cmd->pDraw, 0, 0, 0,
+			cmd->type, cmd->func, cmd->data);
 
 	free(cmd);
 }
@@ -370,9 +372,11 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	if (src->fb_id && dst->fb_id) {
 		DEBUG_MSG("can flip:  %d -> %d", src->fb_id, dst->fb_id);
+		cmd->type = DRI2_FLIP_COMPLETE;
 		drmmode_page_flip(pDraw, src->fb_id, cmd);
 	} else if (canexchange(pDraw, pSrcBuffer, pDstBuffer)) {
 		/* we can get away w/ pointer swap.. yah! */
+		cmd->type = DRI2_EXCHANGE_COMPLETE;
 		OMAPDRI2SwapComplete(cmd);
 	} else {
 		/* fallback to blit: */
@@ -385,6 +389,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		RegionRec region;
 		RegionInit(&region, &box, 0);
 		OMAPDRI2CopyRegion(pDraw, &region, pDstBuffer, pSrcBuffer);
+		cmd->type = DRI2_BLIT_COMPLETE;
 		OMAPDRI2SwapComplete(cmd);
 	}
 
