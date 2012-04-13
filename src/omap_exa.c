@@ -100,10 +100,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 
 	if (pPixData == omap_bo_map(pOMAP->scanout)) {
 		DEBUG_MSG("wrapping scanout buffer");
-		if (priv->bo != pOMAP->scanout) {
-			omap_bo_del(priv->bo);
-			priv->bo = pOMAP->scanout;
-		}
+		priv->bo = pOMAP->scanout;
 		return TRUE;
 	} else if (pPixData) {
 		/* we can't accelerate this pixmap, and don't ever want to
