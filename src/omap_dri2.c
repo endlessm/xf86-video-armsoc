@@ -329,7 +329,8 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	DEBUG_MSG("%d -> %d", cmd->pSrcBuffer->attachment,
 			cmd->pDstBuffer->attachment);
 
-	exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+	if (cmd->type != DRI2_BLIT_COMPLETE)
+		exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
 
 	DRI2SwapComplete(cmd->client, cmd->pDraw, 0, 0, 0,
 			cmd->type, cmd->func, cmd->data);
