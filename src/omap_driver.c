@@ -121,7 +121,7 @@ OMAPOpenDRM(int n)
 {
 	char bus_id[32];
 	snprintf(bus_id, sizeof(bus_id), "platform:omapdrm:%02d", n);
-	return drmOpen("mali_drm", bus_id);
+	return open("/dev/dri/card0", O_RDWR, 0);/*drmOpen("mali_drm", bus_id);*/
 }
 
 static Bool
@@ -607,7 +607,6 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	case 0x4460:
 	case 0x5430:
 	case 0x5432:
-	case 0x0600:
 		if (xf86LoadSubModule(pScrn, SUB_MODULE_PVR)) {
 			INFO_MSG("Loaded the %s sub-module", SUB_MODULE_PVR);
 		} else {
@@ -619,6 +618,9 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 		}
 		break;
 		/* case 0x4470: ..; break; */
+	case 0x0600:
+		pOMAP->NoAccel = TRUE;  /* don't call InitPowerVREXA() */
+		break;
 	default:
 		ERROR_MSG("Unsupported chipset: %d", pOMAP->chipset);
 		goto fail;
