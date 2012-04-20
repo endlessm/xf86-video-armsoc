@@ -61,6 +61,13 @@ typedef struct {
 	 */
 	uint32_t fb_id;
 
+	/**
+	 * The DRI2 buffers are reference counted to avoid crashyness when the
+	 * client detaches a dri2 drawable while we are still waiting for a
+	 * page_flip event.
+	 */
+	int refcnt;
+
 } OMAPDRI2BufferRec, *OMAPDRI2BufferPtr;
 
 #define OMAPBUF(p)	((OMAPDRI2BufferPtr)(p))
@@ -162,6 +169,8 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 
 			pScreen->DestroyPixmap(pNewPix);
 		}
+
+		pPixmap->refcnt++;
 	} else {
 		pPixmap = createpix(pDraw);
 	}
@@ -172,16 +181,14 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
 	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
 	DRIBUF(buf)->format = format;
+	buf->refcnt = 1;
+	buf->pPixmap = pPixmap;
 
 	ret = omap_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
 		ERROR_MSG("could not get buffer name: %d", ret);
 		/* TODO cleanup */
 		return NULL;
-	}
-
-	if (attachment != DRI2BufferFrontLeft) {
-		buf->pPixmap = pPixmap;
 	}
 
 	/* Q: how to know across OMAP generations what formats that the display
@@ -213,10 +220,16 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 static void
 OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 {
-	ScreenPtr pScreen = pDraw->pScreen;
+	OMAPDRI2BufferPtr buf = OMAPBUF(buffer);
+	/* Note: pDraw may already be deleted, so use the pPixmap here
+	 * instead (since it is at least refcntd)
+	 */
+	ScreenPtr pScreen = buf->pPixmap->drawable.pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	OMAPDRI2BufferPtr buf = OMAPBUF(buffer);
+
+	if (--buf->refcnt > 0)
+		return;
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
 
@@ -224,13 +237,16 @@ OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 		drmModeRmFB(pOMAP->drmFD, buf->fb_id);
 	}
 
-	if (DRIBUF(buf)->attachment == DRI2BufferFrontLeft) {
-		// XXX don't destroy.. I think..
-	} else {
-		pScreen->DestroyPixmap(buf->pPixmap);
-	}
+	pScreen->DestroyPixmap(buf->pPixmap);
 
 	free(buf);
+}
+
+static void
+OMAPDRI2ReferenceBuffer(DRI2BufferPtr buffer)
+{
+	OMAPDRI2BufferPtr buf = OMAPBUF(buffer);
+	buf->refcnt++;
 }
 
 /**
@@ -313,27 +329,49 @@ OMAPDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 struct _OMAPDRISwapCmd {
 	int type;
 	ClientPtr client;
-	DrawablePtr pDraw;
+	ScreenPtr pScreen;
+	/* Note: store drawable ID, rather than drawable.  It's possible that
+	 * the drawable can be destroyed while we wait for page flip event:
+	 */
+	XID draw_id;
 	DRI2BufferPtr pDstBuffer;
 	DRI2BufferPtr pSrcBuffer;
 	DRI2SwapEventPtr func;
 	void *data;
 };
 
+static const char *swap_names[] = {
+		[DRI2_EXCHANGE_COMPLETE] = "exchange",
+		[DRI2_BLIT_COMPLETE] = "blit",
+		[DRI2_FLIP_COMPLETE] = "flip,"
+};
+
 void
 OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 {
-	ScreenPtr pScreen = cmd->pDraw->pScreen;
+	ScreenPtr pScreen = cmd->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	DrawablePtr pDraw = NULL;
+	int status;
 
-	DEBUG_MSG("%d -> %d", cmd->pSrcBuffer->attachment,
-			cmd->pDstBuffer->attachment);
+	DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
+			cmd->pSrcBuffer->attachment, cmd->pDstBuffer->attachment);
 
-	if (cmd->type != DRI2_BLIT_COMPLETE)
-		exchangebufs(cmd->pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+	status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
+			M_ANY, DixWriteAccess);
 
-	DRI2SwapComplete(cmd->client, cmd->pDraw, 0, 0, 0,
-			cmd->type, cmd->func, cmd->data);
+	if (status == Success) {
+		if (cmd->type != DRI2_BLIT_COMPLETE)
+			exchangebufs(pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+
+		DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
+				cmd->func, cmd->data);
+	}
+
+	/* drop extra refcnt we obtained prior to swap:
+	 */
+	OMAPDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
+	OMAPDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
 
 	free(cmd);
 }
@@ -363,13 +401,20 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	OMAPDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 
 	cmd->client = client;
-	cmd->pDraw = pDraw;
+	cmd->pScreen = pScreen;
+	cmd->draw_id = pDraw->id;
 	cmd->pSrcBuffer = pSrcBuffer;
 	cmd->pDstBuffer = pDstBuffer;
 	cmd->func = func;
 	cmd->data = data;
 
 	DEBUG_MSG("%d -> %d", pSrcBuffer->attachment, pDstBuffer->attachment);
+
+	/* obtain extra ref on buffers to avoid them going away while we await
+	 * the page flip event:
+	 */
+	OMAPDRI2ReferenceBuffer(pSrcBuffer);
+	OMAPDRI2ReferenceBuffer(pDstBuffer);
 
 	if (src->fb_id && dst->fb_id) {
 		DEBUG_MSG("can flip:  %d -> %d", src->fb_id, dst->fb_id);
