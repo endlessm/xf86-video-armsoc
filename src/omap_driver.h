@@ -173,6 +173,11 @@ static inline Bool has_video(OMAPPtr pOMAP)
 			pOMAP->pOMAPEXA->PutTextureImage;
 }
 
+static inline Bool has_dmm(OMAPPtr pOMAP)
+{
+	return pOMAP->chipset >= 0x4430;
+}
+
 /** Return a pointer to the driver's private structure. */
 #define OMAPPTR(p) ((OMAPPtr)((p)->driverPrivate))
 #define OMAPPTR_FROM_SCREEN(pScreen) \

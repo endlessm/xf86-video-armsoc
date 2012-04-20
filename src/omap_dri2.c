@@ -153,13 +153,16 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	if (attachment == DRI2BufferFrontLeft) {
 		pPixmap = draw2pix(pDraw);
 
-		/* to do flipping, we need a scanout capable (physically contiguous)
-		 * buffer.. this bit of gymnastics ensures that.
+		/* to do flipping, if we don't have DMM, then we need a scanout
+		 * capable (physically contiguous) buffer.. this bit of gymnastics
+		 * ensures that.
 		 *
-		 * TODO we may need to re-allocate and switch back to non-scanout
+		 * TODO we may want to re-allocate and switch back to non-scanout
 		 * buffer when client disconnects from drawable..
 		 */
-		if (canflip(pDraw)) {
+		if (canflip(pDraw) && !has_dmm(pOMAP) &&
+				(OMAPPixmapBo(pPixmap) != pOMAP->scanout)) {
+
 			/* need to re-allocate pixmap to get a scanout capable buffer */
 			PixmapPtr pNewPix = createpix(pDraw);
 
