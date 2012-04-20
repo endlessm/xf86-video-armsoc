@@ -75,8 +75,13 @@ _X_EXPORT void
 OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
 	OMAPPixmapPrivPtr priv = driverPriv;
+	OMAPPtr pOMAP = OMAPPTR_FROM_SCREEN(pScreen);
 
-	omap_bo_del(priv->bo);
+	/* scanout buffer is deleted elsewhere..  some refcnt'ing would
+	 * make this a bit cleaner..
+	 */
+	if (priv->bo != pOMAP->scanout)
+		omap_bo_del(priv->bo);
 
 	free(priv);
 }
