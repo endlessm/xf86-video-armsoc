@@ -1295,15 +1295,22 @@ drmmode_uevent_fini(ScrnInfoPtr pScrn)
 static void
 drmmode_wakeup_handler(pointer data, int err, pointer p)
 {
-	ScrnInfoPtr scrn = data;
-	drmmode_ptr drmmode = drmmode_from_scrn(scrn);
+	ScrnInfoPtr pScrn = data;
+	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
 	fd_set *read_mask = p;
 
-	if (scrn == NULL || err < 0)
+	if (pScrn == NULL || err < 0)
 		return;
 
 	if (FD_ISSET(drmmode->fd, read_mask))
 		drmHandleEvent(drmmode->fd, &event_context);
+}
+
+void
+drmmode_wait_for_event(ScrnInfoPtr pScrn)
+{
+	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+	drmHandleEvent(drmmode->fd, &event_context);
 }
 
 void

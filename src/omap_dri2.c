@@ -354,6 +354,7 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 {
 	ScreenPtr pScreen = cmd->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
 
@@ -375,6 +376,7 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	 */
 	OMAPDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
 	OMAPDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
+	pOMAP->pending_flips--;
 
 	free(cmd);
 }
@@ -399,6 +401,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	OMAPDRI2BufferPtr src = OMAPBUF(pSrcBuffer);
 	OMAPDRI2BufferPtr dst = OMAPBUF(pDstBuffer);
 	OMAPDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
@@ -418,6 +421,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	 */
 	OMAPDRI2ReferenceBuffer(pSrcBuffer);
 	OMAPDRI2ReferenceBuffer(pDstBuffer);
+	pOMAP->pending_flips++;
 
 	if (src->fb_id && dst->fb_id) {
 		DEBUG_MSG("can flip:  %d -> %d", src->fb_id, dst->fb_id);
@@ -506,5 +510,11 @@ OMAPDRI2ScreenInit(ScreenPtr pScreen)
 void
 OMAPDRI2CloseScreen(ScreenPtr pScreen)
 {
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	while (pOMAP->pending_flips > 0) {
+		DEBUG_MSG("waiting..");
+		drmmode_wait_for_event(pScrn);
+	}
 	DRI2CloseScreen(pScreen);
 }
