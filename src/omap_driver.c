@@ -27,6 +27,10 @@
  *    Rob Clark <rob@ti.com>
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
