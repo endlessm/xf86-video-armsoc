@@ -160,6 +160,11 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		 * TODO we may want to re-allocate and switch back to non-scanout
 		 * buffer when client disconnects from drawable..
 		 */
+
+/* TODO: We don't have enough memory to allocate three physically contiguous buffers at the same time! Because all our
+ * buffers are scanout-able we'll not bother allocating *another* scanout buffer and just use the one we already have
+ * and save that extra buffer size */
+#if 0
 		if (canflip(pDraw) && !has_dmm(pOMAP) &&
 				(OMAPPixmapBo(pPixmap) != pOMAP->scanout)) {
 
@@ -172,6 +177,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 
 			pScreen->DestroyPixmap(pNewPix);
 		}
+#endif
 
 		pPixmap->refcnt++;
 	} else {
