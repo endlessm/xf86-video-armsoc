@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <assert.h>
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -16,6 +17,7 @@ struct omap_bo {
 	uint32_t size;
 	int from_name;
 	void *map_addr;
+	int fb_id;
 };
 
 /* device related functions:
@@ -69,6 +71,7 @@ struct omap_bo *omap_bo_new(struct omap_device *dev, uint32_t size, uint32_t fla
 	new_buf->size = create_dumb.size;
 	new_buf->from_name = 0;
 	new_buf->map_addr = NULL;
+	new_buf->fb_id = 0;
 
 	return new_buf;
 }
@@ -97,6 +100,7 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	new_buf->size = gem_open.size;
 	new_buf->from_name = 1;
 	new_buf->map_addr = NULL;
+	new_buf->fb_id = 0;
 
 	return new_buf;
 }
@@ -109,6 +113,11 @@ void omap_bo_del(struct omap_bo *bo)
 	if (bo->map_addr)
 	{
 		munmap(bo->map_addr, bo->size);
+	}
+
+	if (bo->fb_id)
+	{
+		drmModeRmFB(bo->dev->fd, bo->fb_id);
 	}
 
 	if (bo->from_name)
@@ -188,4 +197,15 @@ int omap_get_param(struct omap_device *dev, uint64_t param, uint64_t *value)
 {
 	*value = 0x0600;
 	return 0;
+}
+
+void omap_bo_set_fb(struct omap_bo *bo, uint32_t fb_id)
+{
+	assert(bo->fb_id == 0);
+	bo->fb_id = fb_id;
+}
+
+uint32_t omap_bo_get_fb(struct omap_bo *bo)
+{
+	return bo->fb_id;
 }
