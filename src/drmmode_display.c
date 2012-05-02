@@ -1149,6 +1149,10 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 		}
 	}
 
+	/* TODO: This is a hack because the PL111 driver doesn't currently support
+	 * vblank counting, so page_flip_handler will never get called otherwise */
+	page_flip_handler(0, 0, 0, 0, priv);
+
 	return TRUE;
 }
 

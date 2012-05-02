@@ -438,7 +438,6 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		drmmode_page_flip(pDraw, src_fb_id, cmd);
-		OMAPDRI2SwapComplete(cmd);
 	} else if (canexchange(pDraw, pSrcBuffer, pDstBuffer)) {
 		/* we can get away w/ pointer swap.. yah! */
 		cmd->type = DRI2_EXCHANGE_COMPLETE;
