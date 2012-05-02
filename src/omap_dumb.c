@@ -107,6 +107,8 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 
 void omap_bo_del(struct omap_bo *bo)
 {
+	int res;
+
 	if (!bo)
 		return;
 
@@ -117,7 +119,8 @@ void omap_bo_del(struct omap_bo *bo)
 
 	if (bo->fb_id)
 	{
-		drmModeRmFB(bo->dev->fd, bo->fb_id);
+		res = drmModeRmFB(bo->dev->fd, bo->fb_id);
+		assert(res == 0);
 	}
 
 	if (bo->from_name)
@@ -126,7 +129,7 @@ void omap_bo_del(struct omap_bo *bo)
 
 		gem_close.handle = bo->handle;
 
-		drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+		res = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
 	}
 	else
 	{
@@ -134,8 +137,9 @@ void omap_bo_del(struct omap_bo *bo)
 
 		destroy_dumb.handle = bo->handle;
 
-		drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
+		res = drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
 	}
+	assert(res == 0);
 	free(bo);
 }
 
