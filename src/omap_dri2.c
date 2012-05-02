@@ -243,10 +243,6 @@ OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
 
-	if (buf->fb_id) {
-		drmModeRmFB(pOMAP->drmFD, buf->fb_id);
-	}
-
 	pScreen->DestroyPixmap(buf->pPixmap);
 
 	free(buf);
