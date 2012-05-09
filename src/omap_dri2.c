@@ -236,7 +236,6 @@ OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 */
 	ScreenPtr pScreen = buf->pPixmap->drawable.pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
 
 	if (--buf->refcnt > 0)
 		return;

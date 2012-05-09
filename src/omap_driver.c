@@ -232,7 +232,6 @@ OMAPMapMem(ScrnInfoPtr pScrn)
 static Bool
 OMAPUnmapMem(ScrnInfoPtr pScrn)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	return TRUE;
 }
 
