@@ -438,7 +438,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src_fb_id = omap_bo_get_fb(src_priv->bo);
 	dst_fb_id = omap_bo_get_fb(dst_priv->bo);
 
-	if (src_fb_id && dst_fb_id) {
+	if (src_fb_id && dst_fb_id && canflip(pDraw)) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		drmmode_page_flip(pDraw, src_fb_id, cmd);
