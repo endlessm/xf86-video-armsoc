@@ -1144,6 +1144,8 @@ drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags)
  * Page Flipping
  */
 
+#define PAGE_FLIP_EVENTS 0
+
 static void
 page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 		unsigned int tv_usec, void *user_data)
@@ -1164,6 +1166,11 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 	drmmode_crtc_private_ptr crtc = config->crtc[0]->driver_private;
 	drmmode_ptr mode = crtc->drmmode;
 	int ret, i;
+	unsigned int flags = 0;
+
+#if PAGE_FLIP_EVENTS
+	flags |= DRM_MODE_PAGE_FLIP_EVENT;
+#endif
 
 	/* if we can flip, we must be fullscreen.. so flip all CRTC's.. */
 	for (i = 0; i < config->num_crtc; i++) {
@@ -1173,7 +1180,7 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 			continue;
 
 		ret = drmModePageFlip(mode->fd, crtc->mode_crtc->crtc_id,
-				fb_id, DRM_MODE_PAGE_FLIP_EVENT, priv);
+				fb_id, flags, priv);
 		if (ret) {
 			xf86DrvMsg(scrn->scrnIndex, X_WARNING,
 					"flip queue failed: %s\n", strerror(errno));
@@ -1181,9 +1188,9 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 		}
 	}
 
-	/* TODO: This is a hack because the PL111 driver doesn't currently support
-	 * vblank counting, so page_flip_handler will never get called otherwise */
+#if !PAGE_FLIP_EVENTS
 	page_flip_handler(0, 0, 0, 0, priv);
+#endif
 
 	return TRUE;
 }
