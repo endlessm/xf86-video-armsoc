@@ -189,6 +189,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
 	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
 	DRIBUF(buf)->format = format;
+	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
 	buf->pPixmap = pPixmap;
 
