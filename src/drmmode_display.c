@@ -235,9 +235,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	TRACE_ENTER();
 
-	/* remove old fb if it exists */
-	drmmode_remove_fb(pScrn);
-
 	fb_id = omap_bo_get_fb(pOMAP->scanout);
 
 	if (fb_id == 0) {
@@ -1049,10 +1046,6 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	pitch = OMAPCalculateStride(width, pScrn->bitsPerPixel);
 
 	if ((pitch * height) != omap_bo_size(pOMAP->scanout)) {
-		/* hmm, should we remove fb here.. we don't want to keep
-		 * scanning out a deallocated buffer..
-		 */
-		drmmode_remove_fb(pScrn);
 
 		/* delete old scanout buffer */
 		omap_bo_del(pOMAP->scanout);
