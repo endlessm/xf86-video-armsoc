@@ -994,12 +994,26 @@ drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	return;
 }
 
+void set_scanout_bo(ScrnInfoPtr pScrn, struct omap_bo *bo)
+{
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+
+	/* It had better have a framebuffer if we're scanning it out */
+	assert(omap_bo_get_fb(bo));
+
+	pOMAP->scanout = bo;
+}
+
 static Bool
 drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	ScreenPtr pScreen = pScrn->pScreen;
 	unsigned int pitch;
+	struct omap_bo *new_scanout;
+	int res;
+	uint32_t new_fb_id;
+	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
 
 	TRACE_ENTER();
 
@@ -1025,13 +1039,31 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 				width, height, pitch);
 
 		/* allocate new scanout buffer */
-		pOMAP->scanout = omap_bo_new(pOMAP->dev, height * pitch,
+		new_scanout = omap_bo_new(pOMAP->dev, height * pitch,
 				OMAP_BO_SCANOUT | OMAP_BO_WC);
-		if (!pOMAP->scanout) {
+
+		if (!new_scanout) {
 			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 					"Error reallocating scanout buffer\n");
 			return FALSE;
 		}
+
+		res = drmModeAddFB(drmmode->fd,
+				width, height,
+				pScrn->depth, pScrn->bitsPerPixel,
+				pitch, omap_bo_handle(new_scanout),
+				&new_fb_id);
+		if (res < 0) {
+			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+					"Error adding fb for scanout buffer\n");
+			return FALSE;
+		}
+
+		omap_bo_set_fb(new_scanout, new_fb_id);
+
+		set_scanout_bo(pScrn, new_scanout);
+
+		pScrn->displayWidth = pitch / (pScrn->bitsPerPixel / 8);
 	}
 
 	if (pScreen && pScreen->ModifyPixmapHeader) {

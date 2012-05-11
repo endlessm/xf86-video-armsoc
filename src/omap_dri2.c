@@ -360,6 +360,7 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
+	OMAPPixmapPrivPtr dst_priv;
 
 	DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
 			cmd->pSrcBuffer->attachment, cmd->pDstBuffer->attachment);
@@ -374,6 +375,10 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 		DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
 				cmd->func, cmd->data);
 	}
+
+	dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
+
+	set_scanout_bo(pScrn, dst_priv->bo);
 
 	/* drop extra refcnt we obtained prior to swap:
 	 */

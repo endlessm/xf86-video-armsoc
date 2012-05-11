@@ -255,4 +255,6 @@ Bool OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
 		OMAPPutTextureImageProc PutTextureImage, void *closure,
 		RegionPtr clipBoxes);
 
+void set_scanout_bo(ScrnInfoPtr pScrn, struct omap_bo *bo);
+
 #endif /* __OMAP_DRV_H__ */
