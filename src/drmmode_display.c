@@ -230,11 +230,35 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	int output_count = 0;
 	int ret = TRUE;
 	int i;
-	int fb_id;
+	uint32_t fb_id;
 	drmModeModeInfo kmode;
 
 	TRACE_ENTER();
 
+	/* remove old fb if it exists */
+	drmmode_remove_fb(pScrn);
+
+	fb_id = omap_bo_get_fb(pOMAP->scanout);
+
+	if (fb_id == 0) {
+		unsigned int pitch =
+				OMAPCalculateStride(pScrn->virtualX, pScrn->bitsPerPixel);
+
+		DEBUG_MSG("create framebuffer: %dx%d",
+				pScrn->virtualX, pScrn->virtualY);
+
+		ret = drmModeAddFB(drmmode->fd,
+				pScrn->virtualX, pScrn->virtualY,
+				pScrn->depth, pScrn->bitsPerPixel,
+				pitch, omap_bo_handle(pOMAP->scanout),
+				&fb_id);
+		if (ret < 0) {
+			// Fixme - improve this error message:
+			ErrorF("failed to add fb\n");
+			return FALSE;
+		}
+		omap_bo_set_fb(pOMAP->scanout, fb_id);
+	}
 
 	/* Save the current mode in case there's a problem: */
 	saved_mode = crtc->mode;
@@ -277,8 +301,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 			crtc->gamma_blue, crtc->gamma_size);
 
 	drmmode_ConvertToKMode(crtc->scrn, &kmode, mode);
-
-	fb_id = omap_bo_get_fb(pOMAP->scanout);
 
 	ret = drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
 			fb_id, x, y, output_ids, output_count, &kmode);
