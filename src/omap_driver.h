@@ -57,7 +57,7 @@
 #include "xf86drm.h"
 #include "dri2.h"
 
-#include "omap_drmif.h"
+#include "omap_drmif_fb.h"
 
 #include <errno.h>
 

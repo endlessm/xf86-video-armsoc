@@ -28,7 +28,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-#include "omap_drmif.h"
+#include "omap_drmif_fb.h"
 
 struct omap_device {
 	int fd;
