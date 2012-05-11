@@ -26,6 +26,23 @@
 
 #include "omap_drmif.h"
 
+/* Override flags used */
+#undef OMAP_BO_TILED_32
+#undef OMAP_BO_TILED_16
+#undef OMAP_BO_TILED_8
+#undef OMAP_BO_WC
+#undef OMAP_BO_SCANOUT
+#undef OMAP_BO_TILED
+#undef OMAP_PARAM_CHIPSET_ID
+
+#define OMAP_BO_TILED_32 0
+#define OMAP_BO_TILED_16 0
+#define OMAP_BO_TILED_8 0
+#define OMAP_BO_WC 0
+#define OMAP_BO_SCANOUT 0
+#define OMAP_BO_TILED 0
+#define OMAP_PARAM_CHIPSET_ID 0
+
 void omap_bo_set_fb(struct omap_bo *bo, uint32_t fb_id);
 uint32_t omap_bo_get_fb(struct omap_bo *bo);
 
