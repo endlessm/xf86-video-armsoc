@@ -55,13 +55,6 @@ typedef struct {
 	PixmapPtr pPixmap;
 
 	/**
-	 * The drm_framebuffer id for the buffer.. or 0 if the buffer cannot be
-	 * directly scanned out by the hw (in which case we need to fall back to
-	 * blitting)
-	 */
-	uint32_t fb_id;
-
-	/**
 	 * The DRI2 buffers are reference counted to avoid crashyness when the
 	 * client detaches a dri2 drawable while we are still waiting for a
 	 * page_flip event.
@@ -209,16 +202,18 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	/* Q: how to know across OMAP generations what formats that the display
 	 * can support directly?
 	 * A: attempt to create a drm_framebuffer, and if that fails then the
-	 * hw must not support.. if buf->fb_id==0 then fall back to blitting
+	 * hw must not support.. then fall back to blitting
 	 */
-	if (canflip(pDraw)) {
+	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
+		uint32_t new_fb_id;
 		int ret = drmModeAddFB(pOMAP->drmFD, pDraw->width, pDraw->height,
 				pDraw->depth, pDraw->bitsPerPixel, DRIBUF(buf)->pitch,
-				omap_bo_handle(bo), &buf->fb_id);
+				omap_bo_handle(bo), &new_fb_id);
 		if (ret) {
 			/* to-bad, so-sad, we can't flip */
 			WARNING_MSG("could not create fb: %d", ret);
-			buf->fb_id = 0;
+		} else {
+			omap_bo_set_fb(bo, new_fb_id);
 		}
 	}
 
@@ -417,6 +412,8 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	OMAPDRI2BufferPtr src = OMAPBUF(pSrcBuffer);
 	OMAPDRI2BufferPtr dst = OMAPBUF(pDstBuffer);
 	OMAPDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
+	int src_fb_id, dst_fb_id;
+	OMAPPixmapPrivPtr src_priv, dst_priv;
 
 	cmd->client = client;
 	cmd->pScreen = pScreen;
@@ -435,10 +432,16 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	OMAPDRI2ReferenceBuffer(pDstBuffer);
 	pOMAP->pending_flips++;
 
-	if (src->fb_id && dst->fb_id) {
-		DEBUG_MSG("can flip:  %d -> %d", src->fb_id, dst->fb_id);
+	src_priv = exaGetPixmapDriverPrivate(src->pPixmap);
+	dst_priv = exaGetPixmapDriverPrivate(dst->pPixmap);
+
+	src_fb_id = omap_bo_get_fb(src_priv->bo);
+	dst_fb_id = omap_bo_get_fb(dst_priv->bo);
+
+	if (src_fb_id && dst_fb_id) {
+		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
-		drmmode_page_flip(pDraw, src->fb_id, cmd);
+		drmmode_page_flip(pDraw, src_fb_id, cmd);
 		OMAPDRI2SwapComplete(cmd);
 	} else if (canexchange(pDraw, pSrcBuffer, pDstBuffer)) {
 		/* we can get away w/ pointer swap.. yah! */

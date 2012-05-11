@@ -233,7 +233,6 @@ static Bool
 OMAPUnmapMem(ScrnInfoPtr pScrn)
 {
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	drmmode_remove_fb(pScrn);
 	omap_bo_del(pOMAP->scanout);
 	pOMAP->scanout = NULL;
 	return TRUE;

@@ -106,7 +106,6 @@ typedef struct {
 
 typedef struct {
 	int fd;
-	uint32_t fb_id;
 	drmModeResPtr mode_res;
 	int cpp;
 	struct udev_monitor *uevent_monitor;
@@ -139,7 +138,6 @@ typedef struct {
 } drmmode_output_private_rec, *drmmode_output_private_ptr;
 
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
-void drmmode_remove_fb(ScrnInfoPtr pScrn);
 
 static drmmode_ptr
 drmmode_from_scrn(ScrnInfoPtr pScrn)
@@ -237,27 +235,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	TRACE_ENTER();
 
-	/* remove old fb if it exists */
-	drmmode_remove_fb(pScrn);
-
-	if (drmmode->fb_id == 0) {
-		unsigned int pitch =
-				OMAPCalculateStride(pScrn->virtualX, pScrn->bitsPerPixel);
-
-		DEBUG_MSG("create framebuffer: %dx%d",
-				pScrn->virtualX, pScrn->virtualY);
-
-		ret = drmModeAddFB(drmmode->fd,
-				pScrn->virtualX, pScrn->virtualY,
-				pScrn->depth, pScrn->bitsPerPixel,
-				pitch, omap_bo_handle(pOMAP->scanout),
-				&drmmode->fb_id);
-		if (ret < 0) {
-			// Fixme - improve this error message:
-			ErrorF("failed to add fb\n");
-			return FALSE;
-		}
-	}
 
 	/* Save the current mode in case there's a problem: */
 	saved_mode = crtc->mode;
@@ -301,7 +278,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	drmmode_ConvertToKMode(crtc->scrn, &kmode, mode);
 
-	fb_id = drmmode->fb_id;
+	fb_id = omap_bo_get_fb(pOMAP->scanout);
 
 	ret = drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
 			fb_id, x, y, output_ids, output_count, &kmode);
@@ -1083,7 +1060,6 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 
 	drmmode = calloc(1, sizeof *drmmode);
 	drmmode->fd = fd;
-	drmmode->fb_id = 0;
 
 	xf86CrtcConfigInit(pScrn, &drmmode_xf86crtc_config_funcs);
 
@@ -1130,27 +1106,6 @@ drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags)
 		return;
 
 	drmmode_set_mode_major(crtc, &crtc->mode, crtc->rotation, x, y);
-}
-
-void
-drmmode_remove_fb(ScrnInfoPtr pScrn)
-{
-	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
-	xf86CrtcPtr crtc = NULL;
-	drmmode_crtc_private_ptr drmmode_crtc;
-	drmmode_ptr drmmode;
-
-	if (config)
-		crtc = config->crtc[0];
-	if (!crtc)
-		return;
-
-	drmmode_crtc = crtc->driver_private;
-	drmmode = drmmode_crtc->drmmode;
-
-	if (drmmode->fb_id)
-		drmModeRmFB(drmmode->fd, drmmode->fb_id);
-	drmmode->fb_id = 0;
 }
 
 /*
