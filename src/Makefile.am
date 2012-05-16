@@ -48,4 +48,5 @@ omap_drv_la_SOURCES = \
          omap_exa_utils.c \
          omap_xv.c \
          omap_dri2.c \
-         omap_driver.c
+         omap_driver.c \
+         omap_dumb.c
