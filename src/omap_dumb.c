@@ -78,6 +78,10 @@ struct omap_bo *omap_bo_new(struct omap_device *dev, uint32_t size, uint32_t fla
 	 * add up to size. This is OK as we get the real dimensions in drmAddFB.
 	 */
 	create_dumb.height = size / 2;
+	if (create_dumb.height == 0)
+	{
+		create_dumb.height = 1;
+	}
 	create_dumb.width = 1;
 	create_dumb.bpp = 16;
 	create_dumb.flags = flags;
