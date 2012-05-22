@@ -1159,7 +1159,7 @@ drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags)
  * Page Flipping
  */
 
-#define PAGE_FLIP_EVENTS 0
+#define PAGE_FLIP_EVENTS 1
 
 static void
 page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
