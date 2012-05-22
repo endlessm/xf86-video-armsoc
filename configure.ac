@@ -55,9 +55,9 @@ CFLAGS="$XORG_CFLAGS $DRI_CFLAGS $DRM_CFLAGS"
 CPPFLAGS="$XORG_CFLAGS $DRI_CFLAGS $DRM_CFLAGS"
 AC_MSG_CHECKING([whether to include DRI support])
 if test x$DRI != xno; then
-        AC_CHECK_FILE([${sdkdir}/dri.h],
+        AC_CHECK_HEADER([${sdkdir}/dri.h],
                       [have_dri_h="yes"], [have_dri_h="no"])
-        AC_CHECK_FILE([${sdkdir}/dristruct.h],
+        AC_CHECK_HEADER([${sdkdir}/dristruct.h],
                       [have_dristruct_h="yes"], [have_dristruct_h="no"])
 fi
 AC_MSG_CHECKING([whether to include DRI support])
