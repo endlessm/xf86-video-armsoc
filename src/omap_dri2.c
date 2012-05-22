@@ -378,7 +378,8 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 
 	dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
 
-	set_scanout_bo(pScrn, dst_priv->bo);
+	if (cmd->type != DRI2_BLIT_COMPLETE)
+		set_scanout_bo(pScrn, dst_priv->bo);
 
 	/* drop extra refcnt we obtained prior to swap:
 	 */
