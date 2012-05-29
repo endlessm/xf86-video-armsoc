@@ -112,7 +112,7 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	exa->exa_minor = EXA_VERSION_MINOR;
 
 	exa->pixmapOffsetAlign = 0;
-	exa->pixmapPitchAlign = 32 * 4; // see OMAPCalculateStride()
+	exa->pixmapPitchAlign = 32;
 	exa->flags = EXA_OFFSCREEN_PIXMAPS |
 			EXA_HANDLES_PIXMAPS | EXA_SUPPORTS_PREPARE_AUX;
 	exa->maxX = 4096;

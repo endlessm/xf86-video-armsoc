@@ -179,51 +179,23 @@ OMAPCloseDRMMaster(ScrnInfoPtr pScrn)
 	}
 }
 
-
-
-/**
- * Helper function for calculating the stride of pixmaps.
- * TODO get stride requirements from kernel driver, or from EXA module,
- * rather than hard-coding..
- */
-#define STRIDE_BOUNDARY 32
-unsigned int
-OMAPCalculateStride(unsigned int width, unsigned int bitsPerPixel)
-{
-	unsigned int alignedWidth;
-	alignedWidth = (width + (STRIDE_BOUNDARY - 1)) & ~(STRIDE_BOUNDARY - 1);
-	return ((alignedWidth * bitsPerPixel) + 7) / 8;
-}
-#define TILED_STRIDE_BOUNDARY 4096
-unsigned int
-OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel)
-{
-	unsigned int stride = OMAPCalculateStride(width, bitsPerPixel);
-	stride = (stride + (4096 - 1)) & ~(4096 - 1);
-	return stride;
-}
-
-
 static Bool
 OMAPMapMem(ScrnInfoPtr pScrn)
 {
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	int pitch;
 
-	pitch = OMAPCalculateStride(pScrn->virtualX, pScrn->bitsPerPixel);
+	DEBUG_MSG("allocating new scanout buffer: %dx%d",
+			pScrn->virtualX, pScrn->virtualY);
 
-	DEBUG_MSG("allocating new scanout buffer: %dx%d (%d)",
-			pScrn->virtualX, pScrn->virtualY, pitch);
-
-	pOMAP->scanout = omap_bo_new(pOMAP->dev, pScrn->virtualY * pitch,
-			OMAP_BO_SCANOUT | OMAP_BO_WC);
+	pOMAP->scanout = omap_bo_new_with_dim(pOMAP->dev, pScrn->virtualX, pScrn->virtualY,
+			pScrn->bitsPerPixel, OMAP_BO_SCANOUT | OMAP_BO_WC);
 	if (!pOMAP->scanout) {
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 			   "Error allocating scanout buffer\n");
 		return FALSE;
 	}
 
-	pScrn->displayWidth = pitch / (pScrn->bitsPerPixel / 8);
+	pScrn->displayWidth = omap_bo_pitch(pOMAP->scanout) / (pScrn->bitsPerPixel / 8);
 
 	return TRUE;
 }

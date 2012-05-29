@@ -238,8 +238,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	fb_id = omap_bo_get_fb(pOMAP->scanout);
 
 	if (fb_id == 0) {
-		unsigned int pitch =
-				OMAPCalculateStride(pScrn->virtualX, pScrn->bitsPerPixel);
 
 		DEBUG_MSG("create framebuffer: %dx%d",
 				pScrn->virtualX, pScrn->virtualY);
@@ -247,7 +245,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		ret = drmModeAddFB(drmmode->fd,
 				pScrn->virtualX, pScrn->virtualY,
 				pScrn->depth, pScrn->bitsPerPixel,
-				pitch, omap_bo_handle(pOMAP->scanout),
+				omap_bo_pitch(pOMAP->scanout), omap_bo_handle(pOMAP->scanout),
 				&fb_id);
 		if (ret < 0) {
 			// Fixme - improve this error message:
@@ -494,11 +492,11 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	cursor->ovr = ovr;
-	cursor->bo  = omap_bo_new(pOMAP->dev, w*h*4,
+	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 32,
 			OMAP_BO_SCANOUT | OMAP_BO_WC);
 
 	handles[0] = omap_bo_handle(cursor->bo);
-	pitches[0] = w*4;
+	pitches[0] = omap_bo_pitch(cursor->bo);
 	offsets[0] = 0;
 
 	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
@@ -1028,10 +1026,9 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	ScreenPtr pScreen = pScrn->pScreen;
-	unsigned int pitch;
 	struct omap_bo *new_scanout;
 	int res;
-	uint32_t new_fb_id;
+	uint32_t new_fb_id, pitch;
 	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
 
 	TRACE_ENTER();
@@ -1043,18 +1040,18 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
 
-	pitch = OMAPCalculateStride(width, pScrn->bitsPerPixel);
-
-	if ((pitch * height) != omap_bo_size(pOMAP->scanout)) {
+	if (  (width != omap_bo_width(pOMAP->scanout))
+	      || (height != omap_bo_height(pOMAP->scanout))
+	      || (pScrn->bitsPerPixel != omap_bo_bpp(pOMAP->scanout)) ) {
 
 		/* delete old scanout buffer */
 		omap_bo_del(pOMAP->scanout);
 
-		DEBUG_MSG("allocating new scanout buffer: %dx%d (%d)",
-				width, height, pitch);
+		DEBUG_MSG("allocating new scanout buffer: %dx%d",
+				width, height);
 
 		/* allocate new scanout buffer */
-		new_scanout = omap_bo_new(pOMAP->dev, height * pitch,
+		new_scanout = omap_bo_new_with_dim(pOMAP->dev, width, height, pScrn->bitsPerPixel,
 				OMAP_BO_SCANOUT | OMAP_BO_WC);
 
 		if (!new_scanout) {
@@ -1062,6 +1059,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 					"Error reallocating scanout buffer\n");
 			return FALSE;
 		}
+		pitch = omap_bo_pitch(new_scanout);
 
 		res = drmModeAddFB(drmmode->fd,
 				width, height,
@@ -1079,6 +1077,8 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		set_scanout_bo(pScrn, new_scanout);
 
 		pScrn->displayWidth = pitch / (pScrn->bitsPerPixel / 8);
+	}else{
+		pitch = omap_bo_pitch(pOMAP->scanout);
 	}
 
 	if (pScreen && pScreen->ModifyPixmapHeader) {

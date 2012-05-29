@@ -89,7 +89,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	uint32_t size, flags = OMAP_BO_WC;
+	uint32_t flags = OMAP_BO_WC;
 	Bool ret;
 
 	ret = miModifyPixmapHeader(pPixmap, width, height, depth,
@@ -146,26 +146,25 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		default:
 			break;
 		}
-		pPixmap->devKind = OMAPCalculateTiledStride(width, bitsPerPixel);
-	} else {
-		pPixmap->devKind = OMAPCalculateStride(width, bitsPerPixel);
 	}
 
-	size = pPixmap->devKind * height;
-
-	if ((!priv->bo) || (omap_bo_size(priv->bo) != size)) {
+	if ((!priv->bo) || (omap_bo_width(priv->bo) != width)
+	                || (omap_bo_height(priv->bo) != height)
+	                || (omap_bo_bpp(priv->bo) != bitsPerPixel)) {
 		/* re-allocate buffer! */
 		omap_bo_del(priv->bo);
 		if (flags & OMAP_BO_TILED) {
 			priv->bo = omap_bo_new_tiled(pOMAP->dev, width, height, flags);
 		} else {
-			priv->bo = omap_bo_new(pOMAP->dev, size, flags);
+			priv->bo = omap_bo_new_with_dim(pOMAP->dev, width, height, bitsPerPixel, flags);
 		}
 	}
 
-	if (!priv->bo) {
-		DEBUG_MSG("failed to allocate %dx%d bo, size=%d, flags=%08x",
-				width, height, size, flags);
+	if (priv->bo) {
+		pPixmap->devKind = omap_bo_pitch(priv->bo);
+	}else{
+		DEBUG_MSG("failed to allocate %dx%d bo, flags=%08x",
+				width, height, flags);
 	}
 
 	return priv->bo != NULL;

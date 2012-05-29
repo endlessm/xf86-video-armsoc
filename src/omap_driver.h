@@ -107,15 +107,6 @@ extern _X_EXPORT Bool omapDebug;
 				##__VA_ARGS__); } while (0)
 
 
-/* Forward declarations: */
-struct _OMAPRec;
-
-extern unsigned int
-OMAPCalculateStride(unsigned int fbWidth, unsigned int bitsPerPixel);
-extern unsigned int
-OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel);
-
-
 
 /** The driver's Screen-specific, "private" data structure. */
 typedef struct _OMAPRec

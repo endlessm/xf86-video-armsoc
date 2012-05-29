@@ -46,5 +46,12 @@
 void omap_bo_set_fb(struct omap_bo *bo, uint32_t fb_id);
 uint32_t omap_bo_get_fb(struct omap_bo *bo);
 
+struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev, uint32_t width,
+			uint32_t height, uint32_t bpp, uint32_t flags);
+uint32_t omap_bo_width(struct omap_bo *bo);
+uint32_t omap_bo_height(struct omap_bo *bo);
+uint32_t omap_bo_bpp(struct omap_bo *bo);
+uint32_t omap_bo_pitch(struct omap_bo *bo);
+
 #endif /* OMAP_DRMIF_FB_H_ */
 
