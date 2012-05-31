@@ -4,10 +4,10 @@
 AC_PREREQ(2.60)
 # XXX bug URL should be https://bugs.freedesktop.org/enter_bug.cgi?product=xorg
 # but this makes autoheader choke..
-AC_INIT([xf86-video-omap],
+AC_INIT([xf86-video-armsoc],
         [0.4.0],
         [https://bugs.freedesktop.org/enter_bug.cgi],
-        [xf86-video-omap])
+        [xf86-video-armsoc])
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR(.)
@@ -86,7 +86,7 @@ fi
 
 AC_SUBST([DRI_CFLAGS])
 
-DRIVER_NAME=omap
+DRIVER_NAME=armsoc
 AC_SUBST([DRIVER_NAME])
 AC_SUBST([moduledir])
 

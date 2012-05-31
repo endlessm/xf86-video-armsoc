@@ -227,7 +227,7 @@ static XF86ModuleVersionInfo OMAPVersRec =
 };
 
 /** Let the XFree86 code know about the VersRec and Setup() function. */
-_X_EXPORT XF86ModuleData omapModuleData = { &OMAPVersRec, OMAPSetup, NULL };
+_X_EXPORT XF86ModuleData armsocModuleData = { &OMAPVersRec, OMAPSetup, NULL };
 
 
 /**

@@ -65,8 +65,8 @@
 
 
 #define OMAP_VERSION		1000	/* Apparently not used by X server */
-#define OMAP_NAME			"OMAP"	/* Name used to prefix messages */
-#define OMAP_DRIVER_NAME	"omap"	/* Driver name as used in config file */
+#define OMAP_NAME			"ARMSOC"	/* Name used to prefix messages */
+#define OMAP_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
 #define OMAP_MAJOR_VERSION	0
 #define OMAP_MINOR_VERSION	83
 #define OMAP_PATCHLEVEL		0
