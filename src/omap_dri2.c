@@ -544,7 +544,7 @@ OMAPDRI2ScreenInit(ScreenPtr pScreen)
 	DRI2InfoRec info = {
 			.version			= 5,
 			.fd 				= pOMAP->drmFD,
-			.driverName			= "omap",
+			.driverName			= "armsoc",
 			.deviceName			= pOMAP->deviceName,
 			.CreateBuffer		= OMAPDRI2CreateBuffer,
 			.DestroyBuffer		= OMAPDRI2DestroyBuffer,
