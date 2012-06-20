@@ -61,6 +61,21 @@ typedef struct {
 	 */
 	int refcnt;
 
+	/**
+	 * The value of canflip() for the previous frame. Used so that we can tell
+	 * whether the buffer should be re-allocated, e.g into scanout-able
+	 * memory if the buffer can now be flipped.
+	 *
+	 * We don't want to re-allocate every frame because it is unnecessary
+	 * overhead most of the time apart from when we switch from flipping
+	 * to blitting or vice versa.
+	 *
+	 * We should bump the serial number of the drawable if canflip() returns
+	 * something different to what is stored here, so that the DRI2 buffers
+	 * will get re-allocated.
+	 */
+	int previous_canflip;
+
 } OMAPDRI2BufferRec, *OMAPDRI2BufferPtr;
 
 #define OMAPBUF(p)	((OMAPDRI2BufferPtr)(p))
@@ -75,18 +90,6 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 	} else {
 		return &(OMAPBUF(buf)->pPixmap->drawable);
 	}
-}
-
-static inline Bool
-canexchange(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
-{
-	DrawablePtr da = dri2draw(pDraw, a);
-	DrawablePtr db = dri2draw(pDraw, b);
-
-	return DRI2CanFlip(pDraw) &&
-			(da->width == db->width) &&
-			(da->height == db->height) &&
-			(da->depth == db->depth);
 }
 
 static Bool
@@ -192,6 +195,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
 	buf->pPixmap = pPixmap;
+	buf->previous_canflip = -1;
 
 	ret = omap_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
@@ -370,7 +374,10 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 
 	if (status == Success) {
 		if (cmd->type != DRI2_BLIT_COMPLETE)
+		{
+			assert(cmd->type == DRI2_FLIP_COMPLETE);
 			exchangebufs(pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+		}
 
 		DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
 				cmd->func, cmd->data);
@@ -379,7 +386,10 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
 
 	if (cmd->type != DRI2_BLIT_COMPLETE)
+	{
+		assert(cmd->type == DRI2_FLIP_COMPLETE);
 		set_scanout_bo(pScrn, dst_priv->bo);
+	}
 
 	/* drop extra refcnt we obtained prior to swap:
 	 */
@@ -416,6 +426,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	OMAPDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 	int src_fb_id, dst_fb_id;
 	OMAPPixmapPrivPtr src_priv, dst_priv;
+	int new_canflip;
 
 	cmd->client = client;
 	cmd->pScreen = pScreen;
@@ -440,14 +451,29 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src_fb_id = omap_bo_get_fb(src_priv->bo);
 	dst_fb_id = omap_bo_get_fb(dst_priv->bo);
 
+	new_canflip = canflip(pDraw);
+	if ((src->previous_canflip != -1 && src->previous_canflip != new_canflip) ||
+	    (dst->previous_canflip != -1 && dst->previous_canflip != new_canflip))
+	{
+		/* The drawable has transitioned between being flippable and non-flippable
+		 * or vice versa. Bump the serial number to force the DRI2 buffers to be
+		 * re-allocated during the next frame so that:
+		 * - It is able to be scanned out (if drawable is now flippable), or
+		 * - It is not taking up possibly scarce scanout-able memory (if drawable
+		 * is now not flippable)
+		 */
+
+		PixmapPtr pPix = pScreen->GetWindowPixmap((WindowPtr)pDraw);
+		pPix->drawable.serialNumber = NEXT_SERIAL_NUMBER;
+	}
+
+	src->previous_canflip = new_canflip;
+	dst->previous_canflip = new_canflip;
+
 	if (src_fb_id && dst_fb_id && canflip(pDraw)) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		drmmode_page_flip(pDraw, src_fb_id, cmd);
-	} else if (canexchange(pDraw, pSrcBuffer, pDstBuffer) && dst_fb_id) {
-		/* we can get away w/ pointer swap.. yah! */
-		cmd->type = DRI2_EXCHANGE_COMPLETE;
-		OMAPDRI2SwapComplete(cmd);
 	} else {
 		/* fallback to blit: */
 		BoxRec box = {
