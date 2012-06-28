@@ -59,7 +59,6 @@
 
 #include "xf86DDC.h"
 
-#include "vbe.h"
 #include "xf86RandR12.h"
 #include "dixstruct.h"
 #include "scrnintstr.h"
