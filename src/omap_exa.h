@@ -36,6 +36,7 @@
 #include "omap_drmif_fb.h"
 #include "omap_util.h"
 #include "exa.h"
+#include "compat-api.h"
 
 /**
  * A per-Screen structure used to communicate and coordinate between the OMAP X
@@ -50,14 +51,14 @@ typedef struct _OMAPEXARec
 	 * generation to free per-Screen data structures (except those held by
 	 * pScrn).
 	 */
-	Bool (*CloseScreen)(int scrnIndex, ScreenPtr pScreen);
+	Bool (*CloseScreen)(CLOSE_SCREEN_ARGS_DECL);
 
 	/**
 	 * Called by X driver's FreeScreen() function at the end of each server
 	 * lifetime to free per-ScrnInfoRec data structures, to close any external
 	 * connections (e.g. with PVR2D, DRM), etc.
 	 */
-	void (*FreeScreen)(int scrnIndex, int flags);
+	void (*FreeScreen)(FREE_SCREEN_ARGS_DECL);
 
 	/** get formats supported by PutTextureImage() (for dri2 video..) */
 #define MAX_FORMATS 16

@@ -1143,7 +1143,7 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 }
 
 void
-drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y, int flags)
+drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y)
 {
 	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
 	xf86OutputPtr output = config->output[config->compat_output];
