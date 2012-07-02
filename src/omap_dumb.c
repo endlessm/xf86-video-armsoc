@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <xf86.h>
 #include <xf86drm.h>
@@ -49,6 +50,7 @@ struct omap_bo {
 	uint8_t bpp;
 	uint32_t pitch;
 	int refcnt;
+	int dmabuf;
 };
 
 /* device related functions:
@@ -71,6 +73,41 @@ void omap_device_del(struct omap_device *dev)
 
 /* buffer-object related functions:
  */
+
+int omap_bo_set_dmabuf(struct omap_bo *bo)
+{
+	int res;
+	struct drm_prime_handle prime_handle;
+
+	assert(!omap_bo_has_dmabuf(bo));
+
+	/* Try to get dma_buf fd */
+	prime_handle.handle = bo->handle;
+	prime_handle.flags  = 0;
+	res  = drmIoctl(bo->dev->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime_handle);
+	if (res)
+	{
+		res = errno;
+	}
+	else
+	{
+		bo->dmabuf = prime_handle.fd;
+	}
+	return res;
+}
+
+void omap_bo_clear_dmabuf(struct omap_bo *bo)
+{
+	assert(omap_bo_has_dmabuf(bo));
+
+	close(bo->dmabuf);
+	bo->dmabuf = -1;
+}
+
+int omap_bo_has_dmabuf(struct omap_bo *bo)
+{
+	return bo->dmabuf >= 0;
+}
 
 struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 			uint32_t width, uint32_t height, uint8_t depth,
@@ -111,6 +148,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	new_buf->depth = depth;
 	new_buf->bpp = create_dumb.bpp;
 	new_buf->refcnt = 1;
+	new_buf->dmabuf = -1;
 
 	return new_buf;
 }
@@ -141,6 +179,7 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	new_buf->map_addr = NULL;
 	new_buf->fb_id = 0;
 	new_buf->refcnt = 1;
+	new_buf->dmabuf = -1;
 
 	return new_buf;
 }
@@ -152,6 +191,8 @@ void omap_bo_del(struct omap_bo *bo)
 
 	if (!bo)
 		return;
+
+	assert(!omap_bo_has_dmabuf(bo));
 
 	if (bo->map_addr)
 	{
@@ -253,7 +294,30 @@ void *omap_bo_map(struct omap_bo *bo)
 
 int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
 {
-	return 0;
+	int ret = 0;
+
+	if(omap_bo_has_dmabuf(bo))
+	{
+		fd_set fds;
+		const struct timeval timeout = {10,0}; /* 10s before printing a msg */
+		struct timeval t;
+		FD_ZERO(&fds);
+		FD_SET(bo->dmabuf, &fds);
+
+		do
+		{
+			t = timeout;
+			ret = select(bo->dmabuf+1, &fds, NULL, NULL, &t);
+			if (ret == 0)
+			{
+				xf86DrvMsg(-1, X_ERROR, "select() on dma_buf fd has timed-out");
+			}
+		}while ( (ret == -1 && errno == EINTR) || ret == 0 );
+
+		if (ret > 0)
+			ret = 0;
+	}
+	return ret;
 }
 
 int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)

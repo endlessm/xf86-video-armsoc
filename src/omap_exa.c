@@ -57,6 +57,23 @@ OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
 	OMAPPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
 	exchange(apriv->priv, bpriv->priv);
 	exchange(apriv->bo, bpriv->bo);
+
+	/* Ensure neither pixmap has a dmabuf fd attached to the bo if the
+	 * ext_access_cnt refcount is 0, as it will never be cleared. */
+	if (omap_bo_has_dmabuf(apriv->bo) && !apriv->ext_access_cnt)
+	{
+		omap_bo_clear_dmabuf(apriv->bo);
+
+		/* Should only have to clear one dmabuf fd, otherwise the
+		 * refcount is broken */
+		assert(!omap_bo_has_dmabuf(bpriv->bo));
+	}
+	else if (omap_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt)
+	{
+		omap_bo_clear_dmabuf(bpriv->bo);
+
+		assert(!omap_bo_has_dmabuf(apriv->bo));
+	}
 }
 
 _X_EXPORT void *
@@ -75,6 +92,9 @@ _X_EXPORT void
 OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
 	OMAPPixmapPrivPtr priv = driverPriv;
+
+	assert(!priv->ext_access_cnt);
+	assert(!omap_bo_has_dmabuf(priv->bo));
 
 	omap_bo_unreference(priv->bo);
 
@@ -229,7 +249,18 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 
 	pPixmap->devPrivate.ptr = omap_bo_map(priv->bo);
 	if (!pPixmap->devPrivate.ptr) {
+		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __FUNCTION__);
 		return FALSE;
+	}
+
+	/* Attach dmabuf fd to bo to synchronise access if pixmap wrapped by DRI2 */
+	if (priv->ext_access_cnt && !omap_bo_has_dmabuf(priv->bo))
+	{
+		if(omap_bo_set_dmabuf(priv->bo)) {
+			xf86DrvMsg(-1, X_ERROR, "%s: Unable to get dma_buf fd for bo, "
+					"to enable synchronised CPU access.\n", __FUNCTION__);
+			return FALSE;
+		}
 	}
 
 	/* wait for blits complete.. note we could be a bit more clever here
@@ -241,6 +272,8 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 	 */
 
 	if (omap_bo_cpu_prep(priv->bo, idx2op(index))) {
+		xf86DrvMsg(-1, X_ERROR, "%s: omap_bo_cpu_prep failed - "
+				"unable to synchronise access.\n", __FUNCTION__);
 		return FALSE;
 	}
 
@@ -295,4 +328,29 @@ OMAPPixmapIsOffscreen(PixmapPtr pPixmap)
 	 */
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	return priv && priv->bo;
+}
+
+void OMAPRegisterExternalAccess(PixmapPtr pPixmap)
+{
+	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+
+	priv->ext_access_cnt++;
+}
+
+void OMAPDeregisterExternalAccess(PixmapPtr pPixmap)
+{
+	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+
+	assert(priv->ext_access_cnt > 0);
+	priv->ext_access_cnt--;
+
+	if (priv->ext_access_cnt == 0)
+	{
+		/* No DRI2 buffers wrapping the pixmap, so no need for synchronisation
+		 * with dma_buf */
+		if(omap_bo_has_dmabuf(priv->bo))
+		{
+			omap_bo_clear_dmabuf(priv->bo);
+		}
+	}
 }

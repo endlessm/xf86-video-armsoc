@@ -123,6 +123,9 @@ draw2pix(DrawablePtr pDraw)
 
 typedef struct {
 	void *priv;			/* EXA submodule private data */
+	int ext_access_cnt; /* Ref-count of DRI2Buffers that wrap the Pixmap,
+	                       that allow external access to the underlying
+	                       buffer. When >0 CPU access must be synchronised. */
 	struct omap_bo *bo;
 } OMAPPixmapPrivRec, *OMAPPixmapPrivPtr;
 
@@ -150,5 +153,11 @@ OMAPPixmapBo(PixmapPtr pPixmap)
 }
 
 void OMAPPixmapExchange(PixmapPtr a, PixmapPtr b);
+
+/* Register that the pixmap can be accessed externally, so
+ * CPU access must be synchronised. */
+void OMAPRegisterExternalAccess(PixmapPtr pPixmap);
+void OMAPDeregisterExternalAccess(PixmapPtr pPixmap);
+
 
 #endif /* OMAP_EXA_COMMON_H_ */

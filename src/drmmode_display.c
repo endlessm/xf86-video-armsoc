@@ -1041,8 +1041,6 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	      || (height != omap_bo_height(pOMAP->scanout))
 	      || (pScrn->bitsPerPixel != omap_bo_bpp(pOMAP->scanout)) ) {
 
-		/* delete old scanout buffer */
-		omap_bo_unreference(pOMAP->scanout);
 		pOMAP->has_resized = TRUE;
 		DEBUG_MSG("allocating new scanout buffer: %dx%d",
 				width, height);
@@ -1059,8 +1057,27 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		}
 		pitch = omap_bo_pitch(new_scanout);
 
-		if (omap_bo_add_fb(new_scanout))
+		if (omap_bo_add_fb(new_scanout)) {
+			omap_bo_unreference(new_scanout);
 			return FALSE;
+		}
+
+		/* Handle dma_buf fd that may be attached to bo */
+		if(omap_bo_has_dmabuf(pOMAP->scanout))
+		{
+			omap_bo_clear_dmabuf(pOMAP->scanout);
+			res = omap_bo_set_dmabuf(new_scanout);
+			if(res) {
+				xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+						"Unable to attach dma_buf fd to new scanout buffer. "
+						"Error: %d (%s)\n", res, strerror(res));
+				omap_bo_unreference(new_scanout);
+				return FALSE;
+			}
+		}
+
+		/* delete old scanout buffer */
+		omap_bo_unreference(pOMAP->scanout);
 
 		set_scanout_bo(pScrn, new_scanout);
 

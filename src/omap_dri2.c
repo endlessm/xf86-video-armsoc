@@ -101,8 +101,10 @@ canflip(DrawablePtr pDraw)
 static inline Bool
 exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
-	OMAPPixmapExchange(draw2pix(dri2draw(pDraw, a)),
-			draw2pix(dri2draw(pDraw, b)));
+	PixmapPtr aPix = draw2pix(dri2draw(pDraw, a));
+	PixmapPtr bPix = draw2pix(dri2draw(pDraw, b));
+
+	OMAPPixmapExchange(aPix,bPix);
 	exchange(a->name, b->name);
 	return TRUE;
 }
@@ -215,6 +217,10 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		}
 	}
 
+	/* Register Pixmap as having a buffer that can be accessed externally,
+	 * so needs synchronised access */
+	OMAPRegisterExternalAccess(pPixmap);
+
 	return DRIBUF(buf);
 }
 
@@ -239,6 +245,8 @@ OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 		return;
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
+
+	OMAPDeregisterExternalAccess(buf->pPixmap);
 
 	pScreen->DestroyPixmap(buf->pPixmap);
 
