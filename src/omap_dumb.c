@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <xf86.h>
 #include <xf86drm.h>
@@ -47,6 +48,8 @@ struct omap_bo {
 	uint32_t height;
 	uint32_t bpp;
 	uint32_t pitch;
+	int dmabuf;
+	int dmabuf_cnt;
 };
 
 /* device related functions:
@@ -69,6 +72,47 @@ void omap_device_del(struct omap_device *dev)
 
 /* buffer-object related functions:
  */
+
+int omap_bo_set_dmabuf(struct omap_bo *bo)
+{
+	int res;
+	struct drm_prime_handle prime_handle;
+
+	if(!omap_bo_has_dmabuf(bo)){
+		/* Try to get dma_buf fd */
+		prime_handle.handle = bo->handle;
+		prime_handle.flags  = 0;
+		res  = drmIoctl(bo->dev->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime_handle);
+		if (res)
+		{
+			res = errno;
+		}
+		else
+		{
+			bo->dmabuf = prime_handle.fd;
+			bo->dmabuf_cnt = 1;
+		}
+	}else{
+		bo->dmabuf_cnt++;
+		res = 0;
+	}
+	return res;
+}
+
+void omap_bo_clear_dmabuf(struct omap_bo *bo)
+{
+	assert(omap_bo_has_dmabuf(bo));
+	bo->dmabuf_cnt--;
+	if (bo->dmabuf_cnt == 0) {
+		close(bo->dmabuf);
+		bo->dmabuf = -1;
+	}
+}
+
+int omap_bo_has_dmabuf(struct omap_bo *bo)
+{
+	return bo->dmabuf >= 0;
+}
 
 struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 			uint32_t width, uint32_t height, uint32_t bpp, uint32_t flags)
@@ -107,6 +151,8 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	new_buf->width = create_dumb.width;
 	new_buf->height = create_dumb.height;
 	new_buf->bpp = create_dumb.bpp;
+	new_buf->dmabuf = -1;
+	new_buf->dmabuf_cnt = 0;
 
 	return new_buf;
 }
@@ -136,6 +182,8 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	new_buf->from_name = 1;
 	new_buf->map_addr = NULL;
 	new_buf->fb_id = 0;
+	new_buf->dmabuf = -1;
+	new_buf->dmabuf_cnt = 0;
 
 	return new_buf;
 }
@@ -146,6 +194,8 @@ void omap_bo_del(struct omap_bo *bo)
 
 	if (!bo)
 		return;
+
+	assert(!omap_bo_has_dmabuf(bo));
 
 	if (bo->map_addr)
 	{
@@ -244,7 +294,23 @@ void *omap_bo_map(struct omap_bo *bo)
 
 int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
 {
-	return 0;
+	int ret = 0;
+
+	if(omap_bo_has_dmabuf(bo))
+	{
+		fd_set fds;
+		FD_ZERO(&fds);
+		FD_SET(bo->dmabuf, &fds);
+
+		do
+		{
+			ret = select(bo->dmabuf+1, &fds, NULL, NULL, NULL);
+		}while (ret == -1 && errno == EINTR);
+
+		if (ret > 0)
+			ret = 0;
+	}
+	return ret;
 }
 
 int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
