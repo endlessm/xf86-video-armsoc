@@ -672,7 +672,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	VisualPtr visual;
 	xf86CrtcConfigPtr xf86_config;
-	int i;
+	int j;
 
 	TRACE_ENTER();
 
@@ -683,10 +683,10 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
 	/* need to point to new screen on server regeneration */
-	for (i = 0; i < xf86_config->num_crtc; i++)
-		xf86_config->crtc[i]->scrn = pScrn;
-	for (i = 0; i < xf86_config->num_output; i++)
-		xf86_config->output[i]->scrn = pScrn;
+	for (j = 0; j < xf86_config->num_crtc; j++)
+		xf86_config->crtc[j]->scrn = pScrn;
+	for (j = 0; j < xf86_config->num_output; j++)
+		xf86_config->output[j]->scrn = pScrn;
 
 	/*
 	 * The next step is to setup the screen's visuals, and initialize the
