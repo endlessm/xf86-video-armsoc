@@ -474,7 +474,8 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	new_canflip = canflip(pDraw);
 	if ((src->previous_canflip != -1 && src->previous_canflip != new_canflip) ||
-	    (dst->previous_canflip != -1 && dst->previous_canflip != new_canflip))
+	    (dst->previous_canflip != -1 && dst->previous_canflip != new_canflip) ||
+	    (pOMAP->has_resized))
 	{
 		/* The drawable has transitioned between being flippable and non-flippable
 		 * or vice versa. Bump the serial number to force the DRI2 buffers to be
@@ -482,6 +483,9 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		 * - It is able to be scanned out (if drawable is now flippable), or
 		 * - It is not taking up possibly scarce scanout-able memory (if drawable
 		 * is now not flippable)
+		 *
+		 * has_resized: On hotplugging back buffer needs to be invalidates as well
+		 * as Xsever invalidates only the front buffer.
 		 */
 
 		PixmapPtr pPix = pScreen->GetWindowPixmap((WindowPtr)pDraw);
@@ -491,7 +495,11 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src->previous_canflip = new_canflip;
 	dst->previous_canflip = new_canflip;
 
-	if (src_fb_id && dst_fb_id && canflip(pDraw)) {
+	if (src_fb_id && dst_fb_id && canflip(pDraw) && !(pOMAP->has_resized)) {
+		/* has_resized: On hotplug the fb size and crtc sizes arent updated
+		* hence on this event we do a copyb but flip from the next frame
+		* when the sizes are updated.
+		*/
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		drmmode_page_flip(pDraw, src_fb_id, cmd);
@@ -508,6 +516,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		OMAPDRI2CopyRegion(pDraw, &region, pDstBuffer, pSrcBuffer);
 		cmd->type = DRI2_BLIT_COMPLETE;
 		OMAPDRI2SwapComplete(cmd);
+		pOMAP->has_resized = FALSE;
 	}
 
 	return TRUE;

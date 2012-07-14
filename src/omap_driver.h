@@ -151,7 +151,8 @@ typedef struct _OMAPRec
 
 	/** Flips we are waiting for: */
 	int					pending_flips;
-
+       /* For invalidating backbuffers on Hotplug */
+	Bool			has_resized;
 } OMAPRec, *OMAPPtr;
 
 /*
