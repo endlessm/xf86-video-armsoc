@@ -1208,9 +1208,6 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 	for (i = 0; i < config->num_crtc; i++) {
 		crtc = config->crtc[i]->driver_private;
 
-		if (!config->crtc[i]->enabled)
-			continue;
-
 		ret = drmModePageFlip(mode->fd, crtc->mode_crtc->crtc_id,
 				fb_id, flags, priv);
 		if (ret) {
