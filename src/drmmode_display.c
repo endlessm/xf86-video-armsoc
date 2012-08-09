@@ -1057,7 +1057,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		}
 		pitch = omap_bo_pitch(new_scanout);
 
-		if (omap_bo_add_fb(new_scanout)) {
+		if (omap_bo_clear(new_scanout) || omap_bo_add_fb(new_scanout)) {
 			omap_bo_unreference(new_scanout);
 			return FALSE;
 		}

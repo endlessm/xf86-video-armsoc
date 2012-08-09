@@ -53,6 +53,7 @@ void omap_bo_unreference(struct omap_bo *bo);
 int omap_bo_set_dmabuf(struct omap_bo *bo);
 void omap_bo_clear_dmabuf(struct omap_bo *bo);
 int omap_bo_has_dmabuf(struct omap_bo *bo);
+int omap_bo_clear(struct omap_bo *bo);
 
 #endif /* OMAP_DRMIF_FB_H_ */
 

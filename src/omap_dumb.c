@@ -351,3 +351,16 @@ uint32_t omap_bo_get_fb(struct omap_bo *bo)
 {
 	return bo->fb_id;
 }
+
+int omap_bo_clear(struct omap_bo *bo)
+{
+	unsigned char *dst;
+
+	if (!(dst = omap_bo_map(bo))) {
+		xf86DrvMsg(-1, X_ERROR,
+				"Couldn't map scanout bo\n");
+		return -1;
+	}
+	memset(dst, 0x0, bo->pitch * bo->height);
+	return 0;
+}
