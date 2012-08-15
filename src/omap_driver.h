@@ -71,6 +71,8 @@
 #define OMAP_MINOR_VERSION	83
 #define OMAP_PATCHLEVEL		0
 
+#define OMAP_USE_PAGE_FLIP_EVENTS 1
+
 /**
  * This controls whether debug statements (and function "trace" enter/exit)
  * messages are sent to the log file (TRUE) or are ignored (FALSE).

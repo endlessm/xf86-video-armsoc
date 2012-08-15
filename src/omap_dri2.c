@@ -41,7 +41,6 @@
 #	error "Requires newer DRI2"
 #endif
 
-
 typedef struct {
 	DRI2BufferRec base;
 
@@ -336,6 +335,9 @@ OMAPDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 	return TRUE;
 }
 
+#define OMAP_SWAP_FAKE_FLIP (1 << 0)
+#define OMAP_SWAP_FAIL      (1 << 1)
+
 struct _OMAPDRISwapCmd {
 	int type;
 	ClientPtr client;
@@ -347,6 +349,8 @@ struct _OMAPDRISwapCmd {
 	DRI2BufferPtr pDstBuffer;
 	DRI2BufferPtr pSrcBuffer;
 	DRI2SwapEventPtr func;
+	int swapCount;
+	int flags;
 	void *data;
 };
 
@@ -366,29 +370,31 @@ OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd)
 	int status;
 	OMAPPixmapPrivPtr dst_priv;
 
-	DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
-			cmd->pSrcBuffer->attachment, cmd->pDstBuffer->attachment);
+	if (--cmd->swapCount > 0)
+		return;
 
-	status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
-			M_ANY, DixWriteAccess);
+	if ((cmd->flags & OMAP_SWAP_FAIL) == 0) {
+		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
+				cmd->pSrcBuffer->attachment, cmd->pDstBuffer->attachment);
 
-	if (status == Success) {
-		if (cmd->type != DRI2_BLIT_COMPLETE)
-		{
-			assert(cmd->type == DRI2_FLIP_COMPLETE);
-			exchangebufs(pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+		status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
+				M_ANY, DixWriteAccess);
+
+		if (status == Success) {
+			if (cmd->type != DRI2_BLIT_COMPLETE && (cmd->flags & OMAP_SWAP_FAKE_FLIP) == 0) {
+				assert(cmd->type == DRI2_FLIP_COMPLETE);
+				exchangebufs(pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+			}
+
+			DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
+					cmd->func, cmd->data);
+
+			if (cmd->type != DRI2_BLIT_COMPLETE && (cmd->flags & OMAP_SWAP_FAKE_FLIP) == 0) {
+				dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
+				assert(cmd->type == DRI2_FLIP_COMPLETE);
+				set_scanout_bo(pScrn, dst_priv->bo);
+			}
 		}
-
-		DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
-				cmd->func, cmd->data);
-	}
-
-	dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
-
-	if (cmd->type != DRI2_BLIT_COMPLETE)
-	{
-		assert(cmd->type == DRI2_FLIP_COMPLETE);
-		set_scanout_bo(pScrn, dst_priv->bo);
 	}
 
 	/* drop extra refcnt we obtained prior to swap:
@@ -426,13 +432,15 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	OMAPDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 	int src_fb_id, dst_fb_id;
 	OMAPPixmapPrivPtr src_priv, dst_priv;
-	int new_canflip;
+	int new_canflip, ret;
 
 	cmd->client = client;
 	cmd->pScreen = pScreen;
 	cmd->draw_id = pDraw->id;
 	cmd->pSrcBuffer = pSrcBuffer;
 	cmd->pDstBuffer = pDstBuffer;
+	cmd->swapCount = 0;
+	cmd->flags = 0;
 	cmd->func = func;
 	cmd->data = data;
 
@@ -481,7 +489,42 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		*/
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
-		drmmode_page_flip(pDraw, src_fb_id, cmd);
+		/* TODO: handle rollback if only multiple CRTC flip is only partially successful
+		 */
+		ret = drmmode_page_flip(pDraw, src_fb_id, cmd);
+
+		/* If using page flip events, we'll trigger an immediate completion in
+		 * the case that no CRTCs were enabled to be flipped.  If not using page
+		 * flip events, trigger immediate completion unconditionally.
+		 */
+		if (ret < 0) {
+			/*
+			 * Error while flipping; bail.
+			 */
+			cmd->flags |= OMAP_SWAP_FAIL;
+#if !OMAP_USE_PAGE_FLIP_EVENTS
+			cmd->swapCount = 0;
+#else
+			cmd->swapCount = -(ret + 1);
+			if (cmd->swapCount == 0)
+#endif
+			{
+				OMAPDRI2SwapComplete(cmd);
+			}
+			return FALSE;
+		} else {
+			if (ret == 0)
+				cmd->flags |= OMAP_SWAP_FAKE_FLIP;
+#if !OMAP_USE_PAGE_FLIP_EVENTS
+			cmd->swapCount = 0;
+#else
+			cmd->swapCount = ret;
+			if (cmd->swapCount == 0)
+#endif
+			{
+				OMAPDRI2SwapComplete(cmd);
+			}
+		}
 	} else {
 		/* fallback to blit: */
 		BoxRec box = {

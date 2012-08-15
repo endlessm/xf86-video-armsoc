@@ -1158,8 +1158,6 @@ drmmode_adjust_frame(ScrnInfoPtr pScrn, int x, int y)
  * Page Flipping
  */
 
-#define PAGE_FLIP_EVENTS 1
-
 static void
 page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 		unsigned int tv_usec, void *user_data)
@@ -1172,17 +1170,17 @@ static drmEventContext event_context = {
 		.page_flip_handler = page_flip_handler,
 };
 
-Bool
+int
 drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 {
 	ScrnInfoPtr scrn = xf86Screens[draw->pScreen->myNum];
 	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(scrn);
 	drmmode_crtc_private_ptr crtc = config->crtc[0]->driver_private;
 	drmmode_ptr mode = crtc->drmmode;
-	int ret, i;
+	int ret, i, failed = 0, num_flipped = 0;
 	unsigned int flags = 0;
 
-#if PAGE_FLIP_EVENTS
+#if OMAP_USE_PAGE_FLIP_EVENTS
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
 #endif
 
@@ -1198,15 +1196,17 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 		if (ret) {
 			xf86DrvMsg(scrn->scrnIndex, X_WARNING,
 					"flip queue failed: %s\n", strerror(errno));
-			return FALSE;
+			failed = 1;
+		}
+		else {
+			num_flipped += 1;
 		}
 	}
 
-#if !PAGE_FLIP_EVENTS
-	page_flip_handler(0, 0, 0, 0, priv);
-#endif
-
-	return TRUE;
+	if (failed)
+		return -(num_flipped + 1);
+	else
+		return num_flipped;
 }
 
 /*
