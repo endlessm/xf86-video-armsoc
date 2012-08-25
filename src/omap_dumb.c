@@ -92,7 +92,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 		free(new_buf);
 		xf86DrvMsg(-1, X_ERROR, "_CREATE_DUMB("
 				"{height: 0x%X, width: 0x%X, bpp: 0x%X, flags: 0x%X}) "
-				"failed. errno:0x%X",height,width,bpp,flags,errno);
+				"failed. errno:0x%X\n",height,width,bpp,flags,errno);
 		return NULL;
 	}
 
