@@ -156,7 +156,8 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		if (flags & OMAP_BO_TILED) {
 			priv->bo = omap_bo_new_tiled(pOMAP->dev, width, height, flags);
 		} else {
-			priv->bo = omap_bo_new_with_dim(pOMAP->dev, width, height, bitsPerPixel, flags);
+			priv->bo = omap_bo_new_with_dim(pOMAP->dev, width,
+					height, depth, bitsPerPixel, flags);
 		}
 	}
 

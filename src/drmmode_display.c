@@ -241,17 +241,9 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		DEBUG_MSG("create framebuffer: %dx%d",
 				pScrn->virtualX, pScrn->virtualY);
 
-		ret = drmModeAddFB(drmmode->fd,
-				pScrn->virtualX, pScrn->virtualY,
-				pScrn->depth, pScrn->bitsPerPixel,
-				omap_bo_pitch(pOMAP->scanout), omap_bo_handle(pOMAP->scanout),
-				&fb_id);
-		if (ret < 0) {
-			// Fixme - improve this error message:
-			ErrorF("failed to add fb\n");
+		ret = omap_bo_add_fb(pOMAP->scanout);
+		if (ret)
 			return FALSE;
-		}
-		omap_bo_set_fb(pOMAP->scanout, fb_id);
 	}
 
 	/* Save the current mode in case there's a problem: */
@@ -491,7 +483,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	cursor->ovr = ovr;
-	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 32,
+	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 0, 32,
 			OMAP_BO_SCANOUT | OMAP_BO_WC);
 
 	handles[0] = omap_bo_handle(cursor->bo);
@@ -1027,8 +1019,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	ScreenPtr pScreen = pScrn->pScreen;
 	struct omap_bo *new_scanout;
 	int res;
-	uint32_t new_fb_id, pitch;
-	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+	uint32_t pitch;
 
 	TRACE_ENTER();
 
@@ -1050,7 +1041,8 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 				width, height);
 
 		/* allocate new scanout buffer */
-		new_scanout = omap_bo_new_with_dim(pOMAP->dev, width, height, pScrn->bitsPerPixel,
+		new_scanout = omap_bo_new_with_dim(pOMAP->dev, width, height,
+				pScrn->depth, pScrn->bitsPerPixel,
 				OMAP_BO_SCANOUT | OMAP_BO_WC);
 
 		if (!new_scanout) {
@@ -1060,18 +1052,8 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		}
 		pitch = omap_bo_pitch(new_scanout);
 
-		res = drmModeAddFB(drmmode->fd,
-				width, height,
-				pScrn->depth, pScrn->bitsPerPixel,
-				pitch, omap_bo_handle(new_scanout),
-				&new_fb_id);
-		if (res < 0) {
-			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-					"Error adding fb for scanout buffer\n");
+		if (omap_bo_add_fb(new_scanout))
 			return FALSE;
-		}
-
-		omap_bo_set_fb(new_scanout, new_fb_id);
 
 		set_scanout_bo(pScrn, new_scanout);
 

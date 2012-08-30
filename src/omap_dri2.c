@@ -132,7 +132,6 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	OMAPDRI2BufferPtr buf = calloc(1, sizeof(*buf));
 	PixmapPtr pPixmap;
 	struct omap_bo *bo;
@@ -209,15 +208,10 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	 * hw must not support.. then fall back to blitting
 	 */
 	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
-		uint32_t new_fb_id;
-		int ret = drmModeAddFB(pOMAP->drmFD, pDraw->width, pDraw->height,
-				pDraw->depth, pDraw->bitsPerPixel, DRIBUF(buf)->pitch,
-				omap_bo_handle(bo), &new_fb_id);
+		int ret = omap_bo_add_fb(bo);
 		if (ret) {
 			/* to-bad, so-sad, we can't flip */
 			WARNING_MSG("could not create fb: %d", ret);
-		} else {
-			omap_bo_set_fb(bo, new_fb_id);
 		}
 	}
 
