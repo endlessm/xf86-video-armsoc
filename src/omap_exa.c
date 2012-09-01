@@ -132,33 +132,13 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		flags |= OMAP_BO_SCANOUT;
 	}
 
-	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_TILED) {
-		switch (bitsPerPixel) {
-		case 8:
-			flags |= OMAP_BO_TILED_8;
-			break;
-		case 16:
-			flags |= OMAP_BO_TILED_16;
-			break;
-		case 32:
-			flags |= OMAP_BO_TILED_32;
-			break;
-		default:
-			break;
-		}
-	}
-
 	if ((!priv->bo) || (omap_bo_width(priv->bo) != width)
 	                || (omap_bo_height(priv->bo) != height)
 	                || (omap_bo_bpp(priv->bo) != bitsPerPixel)) {
 		/* re-allocate buffer! */
 		omap_bo_del(priv->bo);
-		if (flags & OMAP_BO_TILED) {
-			priv->bo = omap_bo_new_tiled(pOMAP->dev, width, height, flags);
-		} else {
-			priv->bo = omap_bo_new_with_dim(pOMAP->dev, width,
-					height, depth, bitsPerPixel, flags);
-		}
+		priv->bo = omap_bo_new_with_dim(pOMAP->dev, width, height,
+				depth, bitsPerPixel, flags);
 	}
 
 	if (priv->bo) {
