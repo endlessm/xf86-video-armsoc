@@ -90,65 +90,77 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	uint32_t flags = OMAP_BO_WC;
-	Bool ret;
 
-	ret = miModifyPixmapHeader(pPixmap, width, height, depth,
-			bitsPerPixel, devKind, pPixData);
-	if (!ret) {
-		return ret;
-	}
-
-	if (pPixData == omap_bo_map(pOMAP->scanout)) {
-		DEBUG_MSG("wrapping scanout buffer");
-		priv->bo = pOMAP->scanout;
-		return TRUE;
-	} else if (pPixData) {
-		/* we can't accelerate this pixmap, and don't ever want to
-		 * see it again..
-		 */
+	if (pPixData)
 		pPixmap->devPrivate.ptr = pPixData;
+
+	if (devKind > 0)
 		pPixmap->devKind = devKind;
 
+	/*
+	 * We can't accelerate this pixmap, and don't ever want to
+	 * see it again..
+	 */
+	if (pPixData && pPixData != omap_bo_map(pOMAP->scanout)) {
 		/* scratch-pixmap (see GetScratchPixmapHeader()) gets recycled,
 		 * so could have a previous bo!
 		 */
 		omap_bo_del(priv->bo);
 		priv->bo = NULL;
 
+		/* Returning FALSE calls miModifyPixmapHeader */
 		return FALSE;
 	}
 
-	/* passed in values could be zero, indicating that existing values
-	 * should be kept.. miModifyPixmapHeader() will deal with that, but
-	 * we need to resync to ensure we have the right values in the rest
-	 * of this function
-	 */
-	width	= pPixmap->drawable.width;
-	height	= pPixmap->drawable.height;
-	depth	= pPixmap->drawable.depth;
-	bitsPerPixel = pPixmap->drawable.bitsPerPixel;
+	if (pPixData == omap_bo_map(pOMAP->scanout))
+		priv->bo = pOMAP->scanout;
 
-	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT) {
+	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
 		flags |= OMAP_BO_SCANOUT;
-	}
 
-	if ((!priv->bo) || (omap_bo_width(priv->bo) != width)
-	                || (omap_bo_height(priv->bo) != height)
-	                || (omap_bo_bpp(priv->bo) != bitsPerPixel)) {
+	if (depth > 0)
+		pPixmap->drawable.depth = depth;
+
+	if (bitsPerPixel > 0)
+		pPixmap->drawable.bitsPerPixel = bitsPerPixel;
+
+	if (width > 0)
+		pPixmap->drawable.width = width;
+
+	if (height > 0)
+		pPixmap->drawable.height = height;
+
+	/*
+	 * X will sometimes create an empty pixmap (width/height == 0) and then
+	 * use ModifyPixmapHeader to point it at PixData. We'll hit this path
+	 * during the CreatePixmap call. Just return true and skip the allocate
+	 * in this case.
+	 */
+	if (!pPixmap->drawable.width || !pPixmap->drawable.height)
+		return TRUE;
+
+	if (!priv->bo ||
+	    omap_bo_width(priv->bo) != pPixmap->drawable.width ||
+	    omap_bo_height(priv->bo) != pPixmap->drawable.height ||
+	    omap_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
 		/* re-allocate buffer! */
 		omap_bo_del(priv->bo);
-		priv->bo = omap_bo_new_with_dim(pOMAP->dev, width, height,
-				depth, bitsPerPixel, flags);
-	}
+		priv->bo = omap_bo_new_with_dim(pOMAP->dev,
+				pPixmap->drawable.width,
+				pPixmap->drawable.height,
+				pPixmap->drawable.depth,
+				pPixmap->drawable.bitsPerPixel, flags);
 
-	if (priv->bo) {
+		if (!priv->bo) {
+			ERROR_MSG("failed to allocate %dx%d bo, flags=%08x",
+					pPixmap->drawable.width,
+					pPixmap->drawable.height, flags);
+			return FALSE;
+		}
 		pPixmap->devKind = omap_bo_pitch(priv->bo);
-	}else{
-		DEBUG_MSG("failed to allocate %dx%d bo, flags=%08x",
-				width, height, flags);
 	}
 
-	return priv->bo != NULL;
+	return TRUE;
 }
 
 /**
