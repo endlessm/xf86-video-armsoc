@@ -48,6 +48,7 @@ struct omap_bo {
 	uint8_t depth;
 	uint8_t bpp;
 	uint32_t pitch;
+	int refcnt;
 };
 
 /* device related functions:
@@ -109,6 +110,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	new_buf->height = create_dumb.height;
 	new_buf->depth = depth;
 	new_buf->bpp = create_dumb.bpp;
+	new_buf->refcnt = 1;
 
 	return new_buf;
 }
@@ -138,6 +140,7 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	new_buf->from_name = 1;
 	new_buf->map_addr = NULL;
 	new_buf->fb_id = 0;
+	new_buf->refcnt = 1;
 
 	return new_buf;
 }
@@ -166,6 +169,22 @@ void omap_bo_del(struct omap_bo *bo)
 	res = drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
 	assert(res == 0);
 	free(bo);
+}
+
+void omap_bo_unreference(struct omap_bo *bo)
+{
+	if (!bo)
+		return;
+
+	assert(bo->refcnt > 0);
+	if (--bo->refcnt == 0)
+		omap_bo_del(bo);
+}
+
+void omap_bo_reference(struct omap_bo *bo)
+{
+	assert(bo->refcnt > 0);
+	bo->refcnt++;
 }
 
 int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)

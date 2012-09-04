@@ -1035,7 +1035,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	      || (pScrn->bitsPerPixel != omap_bo_bpp(pOMAP->scanout)) ) {
 
 		/* delete old scanout buffer */
-		omap_bo_del(pOMAP->scanout);
+		omap_bo_unreference(pOMAP->scanout);
 		pOMAP->has_resized = TRUE;
 		DEBUG_MSG("allocating new scanout buffer: %dx%d",
 				width, height);

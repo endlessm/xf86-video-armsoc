@@ -76,7 +76,7 @@ OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
 	OMAPPixmapPrivPtr priv = driverPriv;
 
-	omap_bo_del(priv->bo);
+	omap_bo_unreference(priv->bo);
 
 	free(priv);
 }
@@ -105,7 +105,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		/* scratch-pixmap (see GetScratchPixmapHeader()) gets recycled,
 		 * so could have a previous bo!
 		 */
-		omap_bo_del(priv->bo);
+		omap_bo_unreference(priv->bo);
 		priv->bo = NULL;
 
 		/* Returning FALSE calls miModifyPixmapHeader */
@@ -144,7 +144,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	    omap_bo_height(priv->bo) != pPixmap->drawable.height ||
 	    omap_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
 		/* re-allocate buffer! */
-		omap_bo_del(priv->bo);
+		omap_bo_unreference(priv->bo);
 		priv->bo = omap_bo_new_with_dim(pOMAP->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
