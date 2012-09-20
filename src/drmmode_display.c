@@ -1025,6 +1025,8 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	struct omap_bo *new_scanout;
 	int res;
 	uint32_t pitch;
+	int i;
+	xf86CrtcConfigPtr xf86_config;
 
 	TRACE_ENTER();
 
@@ -1074,6 +1076,20 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 				pScrn->depth, pScrn->bitsPerPixel, pitch,
 				omap_bo_map(pOMAP->scanout));
 	}
+
+	/* Framebuffer needs to be reset on all CRTCs, not just
+	 * those that have repositioned */
+	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+	for (i = 0; i < xf86_config->num_crtc; i++) {
+		xf86CrtcPtr crtc = xf86_config->crtc[i];
+
+		if (!crtc->enabled)
+			continue;
+
+		drmmode_set_mode_major(crtc, &crtc->mode,
+				crtc->rotation, crtc->x, crtc->y);
+	}
+
 
 	TRACE_EXIT();
 	return TRUE;
