@@ -5,7 +5,7 @@ AC_PREREQ(2.60)
 # XXX bug URL should be https://bugs.freedesktop.org/enter_bug.cgi?product=xorg
 # but this makes autoheader choke..
 AC_INIT([xf86-video-omap],
-        [0.0.1],
+        [0.4.0],
         [https://bugs.freedesktop.org/enter_bug.cgi],
         [xf86-video-omap])
 AC_CONFIG_SRCDIR([Makefile.am])
