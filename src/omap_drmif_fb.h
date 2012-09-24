@@ -53,10 +53,5 @@ uint32_t omap_bo_height(struct omap_bo *bo);
 uint32_t omap_bo_bpp(struct omap_bo *bo);
 uint32_t omap_bo_pitch(struct omap_bo *bo);
 
-/* When dmabuf is set on a bo, omap_bo_cpu_prep() waits for KDS shared access */
-int omap_bo_set_dmabuf(struct omap_bo *bo);
-void omap_bo_clear_dmabuf(struct omap_bo *bo);
-int omap_bo_has_dmabuf(struct omap_bo *bo);
-
 #endif /* OMAP_DRMIF_FB_H_ */
 

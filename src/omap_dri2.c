@@ -102,17 +102,8 @@ canflip(DrawablePtr pDraw)
 static inline Bool
 exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
-	PixmapPtr aPix = draw2pix(dri2draw(pDraw, a));
-	PixmapPtr bPix = draw2pix(dri2draw(pDraw, b));
-	OMAPPixmapPrivPtr aPriv = exaGetPixmapDriverPrivate(aPix);
-	OMAPPixmapPrivPtr bPriv = exaGetPixmapDriverPrivate(bPix);
-
-	/* Ensure both backing bo have attached dma_buf, so we don't leak file
-	 * descriptors */
-	assert(omap_bo_has_dmabuf(aPriv->bo));
-	assert(omap_bo_has_dmabuf(bPriv->bo));
-
-	OMAPPixmapExchange(aPix,bPix);
+	OMAPPixmapExchange(draw2pix(dri2draw(pDraw, a)),
+			draw2pix(dri2draw(pDraw, b)));
 	exchange(a->name, b->name);
 	return TRUE;
 }
@@ -213,14 +204,6 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		return NULL;
 	}
 
-	/* Attach dmabuf fd to bo to wait for KDS during PrepareAccess */
-	ret = omap_bo_set_dmabuf(bo);
-	if (ret){
-		ERROR_MSG("Could not attach dma_buf fd to bo: %d", ret);
-		/* TODO cleanup */
-		return NULL;
-	}
-
 	/* Q: how to know across OMAP generations what formats that the display
 	 * can support directly?
 	 * A: attempt to create a drm_framebuffer, and if that fails then the
@@ -259,12 +242,8 @@ OMAPDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	ScreenPtr pScreen = buf->pPixmap->drawable.pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(buf->pPixmap);
-
 	if (--buf->refcnt > 0)
 		return;
-
-	omap_bo_clear_dmabuf(priv->bo);
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
 
