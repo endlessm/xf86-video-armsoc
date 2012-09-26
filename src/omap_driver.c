@@ -713,6 +713,16 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 		goto fail;
 	}
 
+	if(pScrn->bitsPerPixel == 32 && pScrn->depth == 24) {
+		/* Also add a 24 bit depth visual */
+		if (!miSetVisualTypes(24, miGetDefaultVisualMask(pScrn->depth),
+				pScrn->rgbBits, pScrn->defaultVisual)) {
+			WARNING_MSG("Cannot initialize a 24 depth visual for 32bpp");
+		}else{
+			INFO_MSG("Initialized a 24 depth visual for 32bpp");
+		}
+	}
+
 	if (!miSetPixmapDepths()) {
 		ERROR_MSG("Cannot initialize the pixmap depth!");
 		goto fail;
