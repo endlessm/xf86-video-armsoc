@@ -706,7 +706,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	 */
 
 	miClearVisualTypes();
-	if (!miSetVisualTypes(pScrn->depth, miGetDefaultVisualMask(pScrn->depth),
+	if (!miSetVisualTypes(pScrn->bitsPerPixel, miGetDefaultVisualMask(pScrn->depth),
 			pScrn->rgbBits, pScrn->defaultVisual)) {
 		ERROR_MSG("Cannot initialize the visual type for %d bits per pixel!",
 				pScrn->bitsPerPixel);
