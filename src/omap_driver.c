@@ -801,11 +801,8 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Take over the virtual terminal from the console, set the desired mode,
 	 * etc.:
 	 */
-	OMAPEnterVT(VT_FUNC_ARGS(0));
-
-	/* Set the desired mode(s): */
-	if (!xf86SetDesiredModes(pScrn)) {
-		ERROR_MSG("xf86SetDesiredModes() failed!");
+	if (!OMAPEnterVT(VT_FUNC_ARGS(0))) {
+		ERROR_MSG("OMAPEnterVT() failed!");
 		goto fail;
 	}
 
