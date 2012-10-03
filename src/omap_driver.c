@@ -737,6 +737,8 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 			visual->redMask = pScrn->mask.red;
 			visual->greenMask = pScrn->mask.green;
 			visual->blueMask = pScrn->mask.blue;
+			visual->bitsPerRGBValue = pScrn->rgbBits;
+			visual->ColormapEntries = 1 << pScrn->rgbBits;
 		}
 	}
 
@@ -801,8 +803,8 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 		goto fail;
 	}
 
-	if (!xf86HandleColormaps(pScreen, 256, 8, OMAPLoadPalette, NULL,
-			CMAP_PALETTED_TRUECOLOR)) {
+	if (!xf86HandleColormaps(pScreen, 1 << pScrn->rgbBits, pScrn->rgbBits,
+			OMAPLoadPalette, NULL, CMAP_PALETTED_TRUECOLOR)) {
 		ERROR_MSG("xf86HandleColormaps() failed!");
 		goto fail;
 	}
