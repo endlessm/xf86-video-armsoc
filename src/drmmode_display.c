@@ -100,7 +100,6 @@ typedef struct {
 	struct omap_bo *bo;
 	uint32_t fb_id;
 	int x, y;
-	int visible;
 } drmmode_cursor_rec, *drmmode_cursor_ptr;
 
 typedef struct {
@@ -115,6 +114,7 @@ typedef struct {
 typedef struct {
 	drmmode_ptr drmmode;
 	drmModeCrtcPtr mode_crtc;
+	int cursor_visible;
 } drmmode_crtc_private_rec, *drmmode_crtc_private_ptr;
 
 typedef struct {
@@ -344,7 +344,7 @@ drmmode_hide_cursor(xf86CrtcPtr crtc)
 	if (!cursor)
 		return;
 
-	cursor->visible = FALSE;
+	drmmode_crtc->cursor_visible = FALSE;
 
 	/* set plane's fb_id to 0 to disable it */
 	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
@@ -363,7 +363,7 @@ drmmode_show_cursor(xf86CrtcPtr crtc)
 	if (!cursor)
 		return;
 
-	cursor->visible = TRUE;
+	drmmode_crtc->cursor_visible = TRUE;
 
 	w = CURSORW;
 	h = CURSORH;
@@ -411,7 +411,7 @@ drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
 	cursor->x = x;
 	cursor->y = y;
 
-	if (cursor->visible)
+	if (drmmode_crtc->cursor_visible)
 		drmmode_show_cursor(crtc);
 }
 
@@ -426,7 +426,7 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	if (!cursor)
 		return;
 
-	visible = cursor->visible;
+	visible = drmmode_crtc->cursor_visible;
 
 	if (visible)
 		drmmode_hide_cursor(crtc);
