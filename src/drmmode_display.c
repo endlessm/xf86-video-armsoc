@@ -666,6 +666,7 @@ drmmode_output_destroy(xf86OutputPtr output)
 		drmModeFreeProperty(drmmode_output->props[i].mode_prop);
 		free(drmmode_output->props[i].atoms);
 	}
+	free(drmmode_output->props);
 	drmModeFreeConnector(drmmode_output->mode_output);
 	free(drmmode_output);
 	output->driver_private = NULL;
