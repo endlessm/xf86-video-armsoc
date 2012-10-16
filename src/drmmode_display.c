@@ -608,24 +608,25 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmModeConnectorPtr koutput = drmmode_output->mode_output;
 	drmmode_ptr drmmode = drmmode_output->drmmode;
 	DisplayModePtr Modes = NULL, Mode;
-	drmModePropertyPtr props;
+	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
 
 	/* look for an EDID property */
 	for (i = 0; i < koutput->count_props; i++) {
-		props = drmModeGetProperty(drmmode->fd, koutput->props[i]);
-		if (!props || !(props->flags & DRM_MODE_PROP_BLOB))
+		prop = drmModeGetProperty(drmmode->fd, koutput->props[i]);
+		if (!prop)
 			continue;
 
-		if (!strcmp(props->name, "EDID")) {
+		if ((prop->flags & DRM_MODE_PROP_BLOB) &&
+		    !strcmp(prop->name, "EDID")) {
 			if (drmmode_output->edid_blob)
 				drmModeFreePropertyBlob(drmmode_output->edid_blob);
 			drmmode_output->edid_blob =
 					drmModeGetPropertyBlob(drmmode->fd,
 							koutput->prop_values[i]);
 		}
-		drmModeFreeProperty(props);
+		drmModeFreeProperty(prop);
 	}
 
 	if (drmmode_output->edid_blob)
@@ -675,20 +676,21 @@ drmmode_output_dpms(xf86OutputPtr output, int mode)
 {
 	drmmode_output_private_ptr drmmode_output = output->driver_private;
 	drmModeConnectorPtr koutput = drmmode_output->mode_output;
-	drmModePropertyPtr props;
+	drmModePropertyPtr prop;
 	drmmode_ptr drmmode = drmmode_output->drmmode;
 	int mode_id = -1, i;
 
 	for (i = 0; i < koutput->count_props; i++) {
-		props = drmModeGetProperty(drmmode->fd, koutput->props[i]);
-		if (props && (props->flags & DRM_MODE_PROP_ENUM)) {
-			if (!strcmp(props->name, "DPMS")) {
-				mode_id = koutput->props[i];
-				drmModeFreeProperty(props);
-				break;
-			}
-			drmModeFreeProperty(props);
+		prop = drmModeGetProperty(drmmode->fd, koutput->props[i]);
+		if (!prop)
+			continue;
+		if ((prop->flags & DRM_MODE_PROP_ENUM) &&
+		    !strcmp(prop->name, "DPMS")) {
+			mode_id = koutput->props[i];
+			drmModeFreeProperty(prop);
+			break;
 		}
+		drmModeFreeProperty(prop);
 	}
 
 	if (mode_id < 0)
