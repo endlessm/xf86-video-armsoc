@@ -268,6 +268,12 @@ uint32_t omap_bo_bpp(struct omap_bo *bo)
 	return bo->bpp;
 }
 
+/* Bytes per pixel */
+uint32_t omap_bo_Bpp(struct omap_bo *bo)
+{
+	return (bo->bpp + 7) / 8;
+}
+
 uint32_t omap_bo_pitch(struct omap_bo *bo)
 {
 	return bo->pitch;

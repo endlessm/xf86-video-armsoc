@@ -1084,7 +1084,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 
 		set_scanout_bo(pScrn, new_scanout);
 
-		pScrn->displayWidth = pitch / (pScrn->bitsPerPixel / 8);
+		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
 	}else{
 		pitch = omap_bo_pitch(pOMAP->scanout);
 	}

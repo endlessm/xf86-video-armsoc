@@ -44,6 +44,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev, uint32_t width,
 uint32_t omap_bo_width(struct omap_bo *bo);
 uint32_t omap_bo_height(struct omap_bo *bo);
 uint32_t omap_bo_bpp(struct omap_bo *bo);
+uint32_t omap_bo_Bpp(struct omap_bo *bo);
 uint32_t omap_bo_pitch(struct omap_bo *bo);
 
 void omap_bo_reference(struct omap_bo *bo);
