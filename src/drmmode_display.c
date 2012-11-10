@@ -1262,7 +1262,7 @@ drmmode_handle_uevents(int fd, void *closure)
 	hotplug = udev_device_get_property_value(dev, "HOTPLUG");
 
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "hotplug=%s, match=%d\n", hotplug,
-			memcmp(&s.st_rdev, &udev_devnum, sizeof (dev_t)));
+			!memcmp(&s.st_rdev, &udev_devnum, sizeof (dev_t)));
 
 	if (memcmp(&s.st_rdev, &udev_devnum, sizeof (dev_t)) == 0 &&
 			hotplug && atoi(hotplug) == 1) {
