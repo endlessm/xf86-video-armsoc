@@ -184,7 +184,7 @@ struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
 	return new_buf;
 }
 
-void omap_bo_del(struct omap_bo *bo)
+static void omap_bo_del(struct omap_bo *bo)
 {
 	int res;
 	struct drm_mode_destroy_dumb destroy_dumb;
@@ -246,11 +246,6 @@ int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
 uint32_t omap_bo_handle(struct omap_bo *bo)
 {
 	return bo->handle;
-}
-
-uint32_t omap_bo_size(struct omap_bo *bo)
-{
-	return bo->size;
 }
 
 uint32_t omap_bo_width(struct omap_bo *bo)
@@ -328,7 +323,7 @@ int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
 
 int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
 {
-	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
+	return 0;
 }
 
 int omap_get_param(struct omap_device *dev, uint64_t param, uint64_t *value)

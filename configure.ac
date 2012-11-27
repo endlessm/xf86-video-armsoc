@@ -28,6 +28,7 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 
 AC_CHECK_HEADERS([sys/ioctl.h])
+AC_CHECK_HEADERS([stdint.h])
 
 AH_TOP([#include "xorg-server.h"])
 
@@ -44,7 +45,7 @@ XORG_DRIVER_CHECK_EXT(XV, videoproto)
 XORG_DRIVER_CHECK_EXT(DPMSExtension, xextproto)
 
 # Checks for pkg-config packages
-PKG_CHECK_MODULES(XORG, [xorg-server >= 1.3] xproto fontsproto libdrm libdrm_omap xf86driproto $REQUIRED_MODULES)
+PKG_CHECK_MODULES(XORG, [xorg-server >= 1.3] xproto fontsproto libdrm xf86driproto $REQUIRED_MODULES)
 sdkdir=$(pkg-config --variable=sdkdir xorg-server)
 
 # Checks for header files.

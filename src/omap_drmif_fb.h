@@ -22,21 +22,32 @@
  */
 
 #ifndef OMAP_DRMIF_FB_H_
-#define OMAP_DRMIF_FB_ H_
+#define OMAP_DRMIF_FB_H_
 
-#include "omap_drmif.h"
-
-/* Override flags used */
-#undef OMAP_BO_WC
-#undef OMAP_BO_SCANOUT
-#undef OMAP_PARAM_CHIPSET_ID
+#include <stdint.h>
 
 #define OMAP_BO_WC 0
 #define OMAP_BO_SCANOUT 0
 #define OMAP_PARAM_CHIPSET_ID 0
 
+struct omap_bo;
+struct omap_device;
+
+enum omap_gem_op {
+	OMAP_GEM_READ = 0x01,
+	OMAP_GEM_WRITE = 0x02,
+};
+
+struct omap_device *omap_device_new(int fd);
+void omap_device_del(struct omap_device *dev);
+int omap_bo_get_name(struct omap_bo *bo, uint32_t *name);
+uint32_t omap_bo_handle(struct omap_bo *bo);
+void *omap_bo_map(struct omap_bo *bo);
+int omap_get_param(struct omap_device *dev, uint64_t param, uint64_t *value);
 int omap_bo_add_fb(struct omap_bo *bo);
 uint32_t omap_bo_get_fb(struct omap_bo *bo);
+int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op);
+int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op);
 
 struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev, uint32_t width,
 			uint32_t height, uint8_t depth, uint8_t bpp,
@@ -46,7 +57,6 @@ uint32_t omap_bo_height(struct omap_bo *bo);
 uint32_t omap_bo_bpp(struct omap_bo *bo);
 uint32_t omap_bo_Bpp(struct omap_bo *bo);
 uint32_t omap_bo_pitch(struct omap_bo *bo);
-
 void omap_bo_reference(struct omap_bo *bo);
 void omap_bo_unreference(struct omap_bo *bo);
 
