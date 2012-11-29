@@ -94,8 +94,17 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 static Bool
 canflip(DrawablePtr pDraw)
 {
-	return (pDraw->type == DRAWABLE_WINDOW) &&
-			DRI2CanFlip(pDraw);
+	ScreenPtr pScreen = pDraw->pScreen;
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+
+	if( pOMAP->NoFlip )	{
+		/* flipping is disabled by user option */
+		return FALSE;
+	} else 	{
+		return (pDraw->type == DRAWABLE_WINDOW) &&
+				DRI2CanFlip(pDraw);
+	}
 }
 
 static inline Bool

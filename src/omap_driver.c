@@ -103,6 +103,7 @@ typedef enum {
 	OPTION_DRI,
 	OPTION_NO_ACCEL,
 	OPTION_HW_CURSOR,
+	OPTION_NO_FLIP,
 	/* TODO: probably need to add an option to let user specify bus-id */
 } OMAPOpts;
 
@@ -112,6 +113,7 @@ static const OptionInfoRec OMAPOptions[] = {
 	{ OPTION_DRI,		"DRI",		OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_NO_ACCEL,	"NoAccel",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_HW_CURSOR,	"HWcursor",	OPTV_BOOLEAN,	{0},	FALSE },
+	{ OPTION_NO_FLIP,	"NoFlip",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ -1,				NULL,		OPTV_NONE,		{0},	FALSE }
 };
 
@@ -525,6 +527,11 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	pOMAP->HWCursor = xf86ReturnOptValBool(pOMAP->pOptionInfo,
 			OPTION_HW_CURSOR, TRUE);
 	INFO_MSG("Using %s cursor", pOMAP->HWCursor ? "HW" : "SW");
+
+	/* Determine if user wants to disable buffer flipping: */
+	pOMAP->NoFlip = xf86ReturnOptValBool(pOMAP->pOptionInfo,
+			OPTION_NO_FLIP, FALSE);
+	INFO_MSG("Buffer Flipping is %s", pOMAP->NoFlip ? "Disabled" : "Enabled");
 
 	/* Determine if the user wants to disable acceleration: */
 	pOMAP->NoAccel = xf86ReturnOptValBool(pOMAP->pOptionInfo,
