@@ -1,29 +1,27 @@
 .\" shorthand for double quote that works everywhere.
 .ds q \N'34'
-.TH omap  __drivermansuffix__ __vendorversion__
+.TH armsoc  __drivermansuffix__ __vendorversion__
 .SH NAME
-omap \- OMAP SoC graphics
+armsoc \- Arm SoC graphics
 .SH SYNOPSIS
 .nf
 .B "Section \*qDevice\*q"
 .BI "  Identifier \*q"  devname \*q
-.B  "  Driver \*qomap\*q"
+.B  "  Driver \*qarmsoc\*q"
 \ \ ...
 .B EndSection
 .fi
 .SH DESCRIPTION
-.B omap
-is an __xservername__ driver for OMAP SoCs.
+.B armsoc
+is an __xservername__ driver for Arm Mali & TI OMAP SoCs.
 .SH SUPPORTED HARDWARE
-.B omap
-supports the OMAP3430, OMAP3630, OMAP4430, OMAP4460
+.B armsoc
+supports the OMAP3430, OMAP3630, OMAP4430, OMAP4460, OMAP5430, OMAP5432, Mali-T400 & Mali-T60x
 
 .SH CONFIGURATION DETAILS
 Please refer to __xconfigfile__(__filemansuffix__) for general configuration
 details.  This section only covers configuration details specific to this
 driver.
-.PP
-TODO
 .PP
 The following driver
 .B Options
@@ -32,22 +30,27 @@ are supported
 .BI "Option \*qDebug\*q \*q" boolean \*q
 Enable debug logging.
 .IP
-Default: Disabled
+Default: Debug logging is Disabled
 .TP
 .BI "Option \*qDRI\*q \*q" boolean \*q
 Enable DRI2.
 .IP
-Default: Enabled
+Default: DRI2 is Enabled
 .TP
 .BI "Option \*qNoAccel\*q \*q" boolean \*q
 Disable hw acceleration.
 .IP
-Default: Disabled
+Default: HW acceleration is Enabled
 .TP
 .BI "Option \*qHWcursor\*q \*q" boolean \*q
 Enable HW mouse cursor.
 .IP
-Default: Enabled
+Default: HW cursor is Enabled
+.TP
+.BI "Option \*qNoFlip\*q \*q" boolean \*q
+Disable buffer flipping.
+.IP
+Default: Flipping is Enabled
 
 .SH OUTPUT CONFIGURATION
 The driver supports runtime configuration of detected outputs.  You can use the
@@ -103,14 +106,14 @@ builtin laptop screen, both running at 1024x768.
 .B "EndSection"
 
 .B "Section \*qDevice\*q"
-.BI "  Driver \*qomap\*q"
+.BI "  Driver \*qarmsoc\*q"
 .BI "  Option \*qmonitor-LVDS\*q \*qLaptop FooBar Internal Display\*q"
 .BI "  Option \*qmonitor-VGA\*q \*qSome Random CRT\*q"
 .B "EndSection"
         
 .SH REPORTING BUGS
 
-The xf86-video-omap driver is part of the X.Org and Freedesktop.org
+The xf86-video-armsoc driver is part of the X.Org and Freedesktop.org
 umbrella projects.  Report bugs at
 https://bugs.freedesktop.org/enter_bug.cgi?product=xorg.  Mailing
 lists are also commonly used to report experiences and ask questions
