@@ -634,8 +634,6 @@ drmmode_output_get_modes(xf86OutputPtr output)
 				drmmode_output->edid_blob->data);
 
 	if (ddc_mon) {
-		XF86_CRTC_CONFIG_PTR(pScrn)->debug_modes = TRUE;
-		xf86PrintEDID(ddc_mon);
 		xf86OutputSetEDID(output, ddc_mon);
 		xf86SetDDCproperties(pScrn, ddc_mon);
 	}
