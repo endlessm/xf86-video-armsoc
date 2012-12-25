@@ -1319,7 +1319,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 }
 
 static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {
-		drmmode_xf86crtc_resize
+		.resize = drmmode_xf86crtc_resize
 };
 
 
