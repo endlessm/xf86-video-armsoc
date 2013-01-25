@@ -328,7 +328,7 @@ int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
 
 int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
 {
-	return 0;
+	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
 }
 
 int omap_get_param(struct omap_device *dev, uint64_t param, uint64_t *value)
