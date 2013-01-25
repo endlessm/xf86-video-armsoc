@@ -980,6 +980,12 @@ OMAPEnterVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
 	int i;
+
+	for (i = 1; i < currentMaxClients; i++) {
+		if (clients[i])
+			AttendClient(clients[i]);
+	}
+
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	int ret;
 
@@ -1016,6 +1022,12 @@ OMAPLeaveVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
 	int i;
+
+	for (i = 1; i < currentMaxClients; i++) {
+		if (clients[i])
+			IgnoreClient(clients[i]);
+	}
+
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	int ret;
 
