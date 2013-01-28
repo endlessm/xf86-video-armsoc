@@ -48,6 +48,7 @@ int omap_bo_add_fb(struct omap_bo *bo);
 uint32_t omap_bo_get_fb(struct omap_bo *bo);
 int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op);
 int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op);
+uint32_t omap_bo_size(struct omap_bo *bo);
 
 struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev, uint32_t width,
 			uint32_t height, uint8_t depth, uint8_t bpp,

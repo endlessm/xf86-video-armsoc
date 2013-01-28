@@ -248,6 +248,11 @@ uint32_t omap_bo_handle(struct omap_bo *bo)
 	return bo->handle;
 }
 
+uint32_t omap_bo_size(struct omap_bo *bo)
+{
+	return bo->size;
+}
+
 uint32_t omap_bo_width(struct omap_bo *bo)
 {
 	return bo->width;
