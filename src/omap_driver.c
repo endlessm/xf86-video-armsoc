@@ -995,7 +995,7 @@ OMAPEnterVT(VT_FUNC_ARGS_DECL)
 
 	ret = drmSetMaster(pOMAP->drmFD);
 	if (ret) {
-		ERROR_MSG("Cannot get DRM master: %s\n", strerror(ret));
+		ERROR_MSG("Cannot get DRM master: %s\n", strerror(errno));
 	}
 
 	if (!xf86SetDesiredModes(pScrn)) {
