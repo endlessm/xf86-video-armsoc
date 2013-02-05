@@ -479,7 +479,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	ovr = drmModeGetPlane(drmmode->fd, plane_resources->planes[0]);
 	if (!ovr) {
-		ERROR_MSG("drmModeGetPlane failed: %s\n", strerror(errno));
+		ERROR_MSG("drmModeGetPlane failed: %s", strerror(errno));
 		return FALSE;
 	}
 
