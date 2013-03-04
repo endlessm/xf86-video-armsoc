@@ -367,6 +367,6 @@ int omap_bo_clear(struct omap_bo *bo)
 				"Couldn't map scanout bo\n");
 		return -1;
 	}
-	memset(dst, 0x0, bo->pitch * bo->height);
+	memset(dst, 0x0, bo->size);
 	return 0;
 }
