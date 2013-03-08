@@ -85,6 +85,14 @@ OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
 
 	/* actual allocation of buffer is in OMAPModifyPixmapHeader */
 
+	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is not
+	 * set to the usage_hint parameter passed to CreatePixmap.
+	 * It does appear to be set here so we stash it in the private structure.
+	 * However as we do not fully understand the uses of this parameter
+	 * beware of any unexpected values!
+	 */
+	priv->usage_hint = usage_hint;
+
 	return priv;
 }
 
@@ -109,7 +117,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	uint32_t flags = OMAP_BO_WC;
+	enum omap_buf_type buf_type = OMAP_BO_NON_SCANOUT;
 
 	if (pPixData)
 		pPixmap->devPrivate.ptr = pPixData;
@@ -135,8 +143,10 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	if (pPixData == omap_bo_map(pOMAP->scanout))
 		priv->bo = pOMAP->scanout;
 
-	if (pPixmap->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
-		flags |= OMAP_BO_SCANOUT;
+	if (priv->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
+	{
+		buf_type = OMAP_BO_SCANOUT;
+	}
 
 	if (depth > 0)
 		pPixmap->drawable.depth = depth;
@@ -169,12 +179,12 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
 				pPixmap->drawable.depth,
-				pPixmap->drawable.bitsPerPixel, flags);
+				pPixmap->drawable.bitsPerPixel, buf_type);
 
 		if (!priv->bo) {
-			ERROR_MSG("failed to allocate %dx%d bo, flags=%08x",
+			ERROR_MSG("failed to allocate %dx%d bo, buf_type = %d",
 					pPixmap->drawable.width,
-					pPixmap->drawable.height, flags);
+					pPixmap->drawable.height, buf_type);
 			return FALSE;
 		}
 		pPixmap->devKind = omap_bo_pitch(priv->bo);

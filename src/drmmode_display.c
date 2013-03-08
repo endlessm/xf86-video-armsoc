@@ -484,8 +484,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	cursor->ovr = ovr;
-	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 0, 32,
-			OMAP_BO_SCANOUT | OMAP_BO_WC);
+	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 0, 32, OMAP_BO_SCANOUT );
 
 	handles[0] = omap_bo_handle(cursor->bo);
 	pitches[0] = omap_bo_pitch(cursor->bo);
@@ -1049,7 +1048,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		/* allocate new scanout buffer */
 		new_scanout = omap_bo_new_with_dim(pOMAP->dev, width, height,
 				pScrn->depth, pScrn->bitsPerPixel,
-				OMAP_BO_SCANOUT | OMAP_BO_WC);
+				OMAP_BO_SCANOUT );
 
 		if (!new_scanout) {
 			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,

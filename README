@@ -1,21 +1,35 @@
-xf86-video-omap
-Open-source X.org graphics driver for TI OMAP graphics
+xf86-video-armsoc
+Open-source X.org graphics driver for ARM graphics
 
-Currently relies on a closed-source submodule for EXA acceleration on
-the following chipsets:
-  + OMAP3430
-  + OMAP3630
-  + OMAP4430
-  + OMAP4460
-  + OMAP5430
-  + OMAP5432
+Platform specific values
+------------------------
+The meaning of the bits in the 'flags' element in the drm_mode_create_dumb struct
+used by DRM_IOCTL_MODE_CREATE_DUMB is platform dependent.  
+Defines for the flag values should be added to omap_drmif_fb.h for the target platform in use. 
+The code which uses these defines in omap_dumb.c function omap_bo_new_with_dim() to select either a
+scanout or non-scanout buffer should be suitably modified.
 
+The example given is for a DRM driver which uses bit 0 of flags to select the buffer type. 
+In this case a value of 1 for bit 0 selects a buffer with a scanoutable allocation.
 
-NOTE: this driver is work in progress..  you probably don't want to try
-and use it yet.  The API/ABI between driver and kernel, and driver and
-acceleration submodules is not stable yet.  This driver requires the
-omapdrm kernel driver w/ GEM support.
+The platform specific defines are :
 
-EXA vs UXA?  This is an open question..
+	/* Platform specific values for the flags element of the drm_mode_create_dumb struct
+ 	* used by DRM_IOCTL_MODE_CREATE_DUMB. Substitute appropriate values for the target drm driver.
+ 	*/
+	#define DRM_BO_SCANOUT				0x00000001			/* request scanout compatible buffer */
+	#define DRM_BO_NON_SCANOUT			0x00000000			/* request non-scanout compatible buffer */
 
+And the code which sets the flags according to the requested buffer type is : 
 
+	assert((OMAP_BO_SCANOUT == buf_type) || (OMAP_BO_NON_SCANOUT == buf_type));
+	if (OMAP_BO_SCANOUT == buf_type)
+	{
+		create_dumb.flags = DRM_BO_SCANOUT;
+	}
+	else
+	{
+		create_dumb.flags = DRM_BO_NON_SCANOUT;
+	}
+
+ 

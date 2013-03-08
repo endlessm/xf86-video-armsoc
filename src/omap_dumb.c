@@ -111,7 +111,7 @@ int omap_bo_has_dmabuf(struct omap_bo *bo)
 
 struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 			uint32_t width, uint32_t height, uint8_t depth,
-			uint8_t bpp, uint32_t flags)
+			uint8_t bpp, enum omap_buf_type buf_type)
 {
 	struct drm_mode_create_dumb create_dumb;
 	struct omap_bo *new_buf;
@@ -124,7 +124,15 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	create_dumb.height = height;
 	create_dumb.width = width;
 	create_dumb.bpp = bpp;
-	create_dumb.flags = flags;
+	assert((OMAP_BO_SCANOUT == buf_type) || (OMAP_BO_NON_SCANOUT == buf_type));
+	if (OMAP_BO_SCANOUT == buf_type)
+	{
+		create_dumb.flags = DRM_BO_SCANOUT;
+	}
+	else
+	{
+		create_dumb.flags = DRM_BO_NON_SCANOUT;
+	}
 
 	res = drmIoctl(dev->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
 	if (res)
@@ -132,7 +140,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 		free(new_buf);
 		xf86DrvMsg(-1, X_ERROR, "_CREATE_DUMB("
 				"{height: 0x%X, width: 0x%X, bpp: 0x%X, flags: 0x%X}) "
-				"failed. errno:0x%X\n",height,width,bpp,flags,errno);
+				"failed. errno:0x%X\n",height,width,bpp,create_dumb.flags,errno);
 		return NULL;
 	}
 

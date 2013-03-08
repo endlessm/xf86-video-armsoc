@@ -127,6 +127,7 @@ typedef struct {
 	                       that allow external access to the underlying
 	                       buffer. When >0 CPU access must be synchronised. */
 	struct omap_bo *bo;
+	int usage_hint;
 } OMAPPixmapPrivRec, *OMAPPixmapPrivPtr;
 
 #define OMAP_CREATE_PIXMAP_SCANOUT 0x80000000
