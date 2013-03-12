@@ -244,6 +244,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		ret = omap_bo_add_fb(pOMAP->scanout);
 		if (ret)
 			return FALSE;
+
+		fb_id = omap_bo_get_fb(pOMAP->scanout);
 	}
 
 	/* Save the current mode in case there's a problem: */
@@ -260,7 +262,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	output_ids = calloc(sizeof(uint32_t), xf86_config->num_output);
 	if (!output_ids) {
-		// Fixme - have an error message?
+		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
+				"memory allocation failed in drmmode_set_mode_major()\n");
 		ret = FALSE;
 		goto done;
 	}
@@ -278,8 +281,12 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		output_count++;
 	}
 
-	if (!xf86CrtcRotate(crtc))
+	if (!xf86CrtcRotate(crtc)){
+		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
+				"failed to assign rotation in drmmode_set_mode_major()\n");
+		ret = FALSE;
 		goto done;
+	}
 
 	// Fixme - Intel puts this function here, and Nouveau puts it at the end
 	// of this function -> determine what's best for TI'S OMAP4:
@@ -294,6 +301,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	if (ret) {
 		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
 				"failed to set mode: %s\n", strerror(-ret));
+		ret = FALSE;
+		goto done;
 	} else {
 		ret = TRUE;
 	}
@@ -320,7 +329,7 @@ done:
 		free(output_ids);
 	}
 	if (!ret) {
-		/* If there was a problem, resture the old mode: */
+		/* If there was a problem, restore the old mode: */
 		crtc->x = saved_x;
 		crtc->y = saved_y;
 		crtc->rotation = saved_rotation;
