@@ -350,7 +350,6 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->depth,
 			bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
 	if (ret < 0) {
-		xf86DrvMsg(-1, X_ERROR, "Could not add fb to bo %d\n", ret);
 		bo->fb_id = 0;
 		return ret;
 	}

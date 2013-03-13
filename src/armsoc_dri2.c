@@ -229,16 +229,16 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
-	/* Q: how to know across ARMSOC generations what formats the display
-	 *    can support directly?
-	 * A: attempt to create a drm_framebuffer, and if that fails then the
-	 * hw must not support.. then fall back to blitting
-	 */
 	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
+		/* Create an fb around this buffer. This will fail and we will
+		 * fall back to blitting if the display controller hardware
+		 * cannot scan out this buffer (for example, if it doesn't
+		 * support the format or there was insufficient scanout memory
+		 * at buffer creation time). */
 		int ret = armsoc_bo_add_fb(bo);
 		if (ret) {
-			/* to-bad, so-sad, we can't flip */
-			WARNING_MSG("could not create fb: %d", ret);
+			WARNING_MSG(
+					"Falling back to blitting a flippable window");
 		}
 	}
 

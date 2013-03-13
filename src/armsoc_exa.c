@@ -96,6 +96,21 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 				height,
 				depth,
 				bitsPerPixel, buf_type);
+
+		if ((!priv->bo) && ARMSOC_BO_SCANOUT == buf_type) {
+			/* Tried to create a scanout but failed. Attempt to
+			 * fall back to non-scanout instead.
+			 */
+			WARNING_MSG(
+					"Scanout buffer allocation failed, falling back to non-scanout");
+			buf_type = ARMSOC_BO_NON_SCANOUT;
+			priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+					width,
+					height,
+					depth,
+					bitsPerPixel, buf_type);
+		}
+
 		if (!priv->bo) {
 			ERROR_MSG("failed to allocate %dx%d bo, buf_type = %d",
 					width, height, buf_type);
@@ -204,6 +219,20 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 				pPixmap->drawable.depth,
 				pPixmap->drawable.bitsPerPixel, buf_type);
 
+		if ((!priv->bo) && ARMSOC_BO_SCANOUT == buf_type) {
+			/* Tried to create a scanout but failed. Attempt to
+			 * fall back to non-scanout instead.
+			 */
+			WARNING_MSG(
+					"Scanout buffer allocation failed, falling back to non-scanout");
+			buf_type = ARMSOC_BO_NON_SCANOUT;
+			priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+					pPixmap->drawable.width,
+					pPixmap->drawable.height,
+					pPixmap->drawable.depth,
+					pPixmap->drawable.bitsPerPixel,
+					buf_type);
+		}
 		if (!priv->bo) {
 			ERROR_MSG("failed to allocate %dx%d bo, buf_type = %d",
 					pPixmap->drawable.width,

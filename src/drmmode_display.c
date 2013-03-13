@@ -200,8 +200,11 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 				pScrn->virtualX, pScrn->virtualY);
 
 		ret = armsoc_bo_add_fb(pARMSOC->scanout);
-		if (ret)
+		if (ret) {
+			ERROR_MSG(
+					"Failed to add framebuffer to the scanout buffer");
 			return FALSE;
+		}
 
 		fb_id = armsoc_bo_get_fb(pARMSOC->scanout);
 		if (0 == fb_id)
@@ -1144,24 +1147,39 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 			/* Resize the bo */
 			if (armsoc_bo_resize(pARMSOC->scanout, width, height)) {
 				armsoc_bo_clear(pARMSOC->scanout);
-				armsoc_bo_add_fb(pARMSOC->scanout);
+				if (armsoc_bo_add_fb(pARMSOC->scanout))
+					ERROR_MSG(
+							"Failed to add framebuffer to the existing scanout buffer");
 				return FALSE;
 			}
+
 			/* Add new fb to the bo */
-			if (armsoc_bo_clear(pARMSOC->scanout) ||
-					armsoc_bo_add_fb(pARMSOC->scanout))
+			if (armsoc_bo_clear(pARMSOC->scanout))
 				return FALSE;
+
+			if (armsoc_bo_add_fb(pARMSOC->scanout)) {
+				ERROR_MSG(
+						"Failed to add framebuffer to the existing scanout buffer");
+				return FALSE;
+			}
 
 			pitch = armsoc_bo_pitch(pARMSOC->scanout);
 		} else {
 			DEBUG_MSG("allocated new scanout buffer okay");
 			pitch = armsoc_bo_pitch(new_scanout);
 			/* clear new BO and add FB */
-			if (armsoc_bo_clear(new_scanout) ||
-					armsoc_bo_add_fb(new_scanout)) {
+			if (armsoc_bo_clear(new_scanout)) {
 				armsoc_bo_unreference(new_scanout);
 				return FALSE;
 			}
+
+			if (armsoc_bo_add_fb(new_scanout)) {
+				ERROR_MSG(
+						"Failed to add framebuffer to the new scanout buffer");
+				armsoc_bo_unreference(new_scanout);
+				return FALSE;
+			}
+
 			/* Handle dma_buf fd that may be attached to old bo */
 			if (armsoc_bo_has_dmabuf(pARMSOC->scanout)) {
 				int res;
