@@ -65,7 +65,7 @@ OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
 		omap_bo_clear_dmabuf(apriv->bo);
 
 		/* Should only have to clear one dmabuf fd, otherwise the
-		 * refcount is broken */
+		 * refcount is wrong */
 		assert(!omap_bo_has_dmabuf(bpriv->bo));
 	}
 	else if (omap_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt)

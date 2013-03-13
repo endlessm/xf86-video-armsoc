@@ -32,7 +32,7 @@
 #include "config.h"
 #endif
 
-/* TODO cleanup #includes, remove unnecessary ones */
+/* TODO: MIDEGL-1430: cleanup #includes, remove unnecessary ones */
 
 #include "xorg-server.h"
 #include "xorgVersion.h"
@@ -210,7 +210,7 @@ drmmode_ConvertToKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 static void
 drmmode_crtc_dpms(xf86CrtcPtr drmmode_crtc, int mode)
 {
-	// FIXME - Implement this function
+	// TODO: MIDEGL-1431: Implement this function
 }
 
 static Bool
@@ -288,8 +288,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		goto done;
 	}
 
-	// Fixme - Intel puts this function here, and Nouveau puts it at the end
-	// of this function -> determine what's best for TI'S OMAP4:
+	// TODO: MIDEGL-1432: Intel puts this function here, and Nouveau puts it at the end
+	// of this function -> determine what's best for Armsoc
 	if (crtc->funcs->gamma_set)
 		crtc->funcs->gamma_set(crtc, crtc->gamma_red, crtc->gamma_green,
 				       crtc->gamma_blue, crtc->gamma_size);
@@ -307,8 +307,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		ret = TRUE;
 	}
 
-	// FIXME - DO WE NEED TO CALL TO THE PVR EXA/DRI2 CODE TO UPDATE THEM???
-
 	/* Turn on any outputs on this crtc that may have been disabled: */
 	for (i = 0; i < xf86_config->num_output; i++) {
 		xf86OutputPtr output = xf86_config->output[i];
@@ -319,7 +317,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		drmmode_output_dpms(output, DPMSModeOn);
 	}
 
-	// TODO: only call this if we are not using sw cursor.. ie. bad to call this
+	// TODO: MIDEGL-1436: Only call this if we are not using sw cursor.. ie. bad to call this
 	// if we haven't called xf86InitCursor()!!
 	//	if (pScrn->pScreen)
 	//		xf86_reload_cursors(pScrn->pScreen);
@@ -511,7 +509,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return TRUE;
 	}
 
-	// TODO cleanup when things fail..
+	// TODO: MIDEGL-1276: Clean up on failures
 	return FALSE;
 }
 
@@ -563,7 +561,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 			drmmode->mode_res->crtcs[num]);
 	drmmode_crtc->drmmode = drmmode;
 
-	// FIXME - potentially add code to allocate a HW cursor here.
+	// TODO: MIDEGL-1438: Potentially add code to allocate a HW cursor here.
 
 	crtc->driver_private = drmmode_crtc;
 
@@ -935,7 +933,6 @@ static const xf86OutputFuncsRec drmmode_output_funcs = {
 		.destroy = drmmode_output_destroy
 };
 
-// FIXME - Eliminate the following values that aren't accurate for OMAP4:
 const char *output_names[] = { "None",
 		"VGA",
 		"DVI-I",
@@ -1254,7 +1251,7 @@ drmmode_handle_uevents(int fd, void *closure)
 	if (!dev)
 		return;
 
-	// FIXME - Do we need to keep this code, which Rob originally wrote
+	// TODO: MIDEGL-1441: Do we need to keep this code, which Rob originally wrote
 	// (i.e. up thru the "if" statement)?:
 
 	/*

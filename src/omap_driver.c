@@ -104,7 +104,7 @@ typedef enum {
 	OPTION_NO_ACCEL,
 	OPTION_HW_CURSOR,
 	OPTION_NO_FLIP,
-	/* TODO: probably need to add an option to let user specify bus-id */
+	/* TODO: MIDEGL-1453: probably need to add an option to let user specify bus-id */
 } OMAPOpts;
 
 /** Supported options. */
@@ -439,8 +439,8 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	pScrn->monitor = pScrn->confScreen->monitor;
 
 	/* Get the current depth, and set it for XFree86: */
-	default_depth = 24;  /* TODO: get from kernel */
-	fbbpp = 32;  /* TODO: get from kernel */
+	default_depth = 24;  /* TODO: MIDEGL-1445: get from kernel */
+	fbbpp = 32;          /* TODO: MIDEGL-1445: get from kernel */
 
 	if (!xf86SetDepthBpp(pScrn, default_depth, 0, fbbpp, Support32bppFb)) {
 		/* The above function prints an error message. */
@@ -933,8 +933,6 @@ OMAPBlockHandler(BLOCKHANDLER_ARGS_DECL)
 	swap(pOMAP, pScreen, BlockHandler);
 	(*pScreen->BlockHandler) (BLOCKHANDLER_ARGS);
 	swap(pOMAP, pScreen, BlockHandler);
-
-	/* TODO OMAPVideoBlockHandler(), etc.. */
 }
 
 

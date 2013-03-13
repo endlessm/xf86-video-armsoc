@@ -79,7 +79,7 @@ PrepareCompositeFail(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 static Bool
 CloseScreen(CLOSE_SCREEN_ARGS_DECL)
 {
-#if 0 // TODO need to change CloseScreen/FreeScreen ..
+#if 0 // TODO: MIDEGL-1449: Need to implement CloseScreen & FreeScreen
 	exaDriverFini(pScreen);
 	free(pNv->EXADriverPtr);
 #endif

@@ -430,7 +430,7 @@ OMAPVideoSetupTexturedVideo(ScreenPtr pScreen)
 /**
  * If EXA implementation supports GetFormats() and PutTextureImage() we can
  * use that to implement XV.  There is a copy involve because we need to
- * copy the buffer to a texture (TODO possibly we can support wrapping
+ * copy the buffer to a texture ( possibly we can support wrapping
  * external buffers, but current EXA submodule API doesn't give us a way to
  * do that).  So for optimal path from hw decoders to display, dri2video
  * should be used.  But this at least helps out legacy apps.

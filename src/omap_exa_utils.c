@@ -43,7 +43,7 @@
 /**
  * Helper function to implement video blit, handling clipping, damage, etc..
  *
- * TODO: move to EXA?
+ * TODO: MIDEGL-1434: Remove this function (& file)
  */
 int
 OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
@@ -89,8 +89,6 @@ OMAPVidCopyArea(DrawablePtr pSrcDraw, BoxPtr pSrcBox,
 
 	pixman_transform_init_scale(&srcxfrm, sx, sy);
 	pixman_transform_translate(NULL, &srcxfrm, tx, ty);
-
-	// TODO generate transform for osd as well
 
 	pbox = RegionRects(clipBoxes);
 	nbox = RegionNumRects(clipBoxes);

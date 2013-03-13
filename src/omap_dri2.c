@@ -158,25 +158,20 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	if (attachment == DRI2BufferFrontLeft) {
 		pPixmap = draw2pix(pDraw);
 
-		/* to do flipping, if we don't have DMM, then we need a scanout
-		 * capable (physically contiguous) buffer.. this bit of gymnastics
-		 * ensures that.
-		 *
-		 * TODO we may want to re-allocate and switch back to non-scanout
-		 * buffer when client disconnects from drawable..
-		 */
 
-/* TODO: We don't have enough memory to allocate three physically contiguous buffers at the same time! Because all our
+/* TODO: MIDEGL-1442: We don't have enough memory to allocate three physically contiguous buffers at the same time! Because all our
  * buffers are scanout-able we'll not bother allocating *another* scanout buffer and just use the one we already have
  * and save that extra buffer size */
 #if 0
+		/* to do flipping, if we don't have DMM, then we need a scanout
+		 * capable (physically contiguous) buffer.. this bit of gymnastics
+		 * ensures that.
+		 */
 		if (canflip(pDraw) && !has_dmm(pOMAP) &&
 				(OMAPPixmapBo(pPixmap) != pOMAP->scanout)) {
 
 			/* need to re-allocate pixmap to get a scanout capable buffer */
 			PixmapPtr pNewPix = createpix(pDraw);
-
-			// TODO copy contents..
 
 			OMAPPixmapExchange(pPixmap, pNewPix);
 
@@ -193,8 +188,8 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	if (!bo)
 	{
 		ERROR_MSG("Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		/* TODO: Returning NULL here ends up in a segfault all the way in pixman which has no backtrace. We get
-		 * a more friendly segfault if we just let it be dereferenced in a few lines */
+		/* TODO: MIDEGL-1462: Returning NULL here ends up in a segfault all the way in pixman which has no backtrace.
+		 * We get a more friendly segfault if we just let it be dereferenced in a few lines */
 	}
 
 	DRIBUF(buf)->attachment = attachment;
@@ -209,7 +204,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ret = omap_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
 		ERROR_MSG("could not get buffer name: %d", ret);
-		/* TODO cleanup */
+		/* TODO: MIDEGL-1462: cleanup */
 		return NULL;
 	}
 
@@ -236,7 +231,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 /**
  * Destroy Buffer
  *
- * TODO: depending on how flipping ends up working, we may need a refcnt or
+ * TODO: MIDEGL-1464: Depending on how flipping ends up working, we may need a refcnt or
  * something like this to defer destroying a buffer that is currently being
  * scanned out..
  */
@@ -511,7 +506,7 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		*/
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
-		/* TODO: handle rollback if only multiple CRTC flip is only partially successful
+		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is only partially successful
 		 */
 		ret = drmmode_page_flip(pDraw, src_fb_id, cmd);
 
