@@ -184,12 +184,20 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		pPixmap = createpix(pDraw);
 	}
 
+	if (!pPixmap)
+	{
+		assert(attachment != DRI2BufferFrontLeft);
+		ERROR_MSG("Failed to create back buffer for window");
+		free(buf);
+		return NULL;
+	}
+
 	bo = OMAPPixmapBo(pPixmap);
 	if (!bo)
 	{
 		ERROR_MSG("Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		/* TODO: MIDEGL-1462: Returning NULL here ends up in a segfault all the way in pixman which has no backtrace.
-		 * We get a more friendly segfault if we just let it be dereferenced in a few lines */
+		free(buf);
+		return NULL;
 	}
 
 	DRIBUF(buf)->attachment = attachment;

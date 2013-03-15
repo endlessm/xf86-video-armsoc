@@ -134,7 +134,7 @@ typedef struct {
 #define OMAP_CREATE_PIXMAP_TILED   0x40000000
 
 
-void * OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
+void * OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch);
 void OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv);

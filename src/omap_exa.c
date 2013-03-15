@@ -77,13 +77,36 @@ OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
 }
 
 _X_EXPORT void *
-OMAPCreatePixmap (ScreenPtr pScreen, int width, int height,
+OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
 {
 	OMAPPixmapPrivPtr priv = calloc(sizeof(OMAPPixmapPrivRec), 1);
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
 
-	/* actual allocation of buffer is in OMAPModifyPixmapHeader */
+	enum omap_buf_type buf_type = OMAP_BO_NON_SCANOUT;
+	if (usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
+	{
+		buf_type = OMAP_BO_SCANOUT;
+	}
+
+	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0)
+	{
+		priv->bo = omap_bo_new_with_dim(pOMAP->dev,
+				width,
+				height,
+				depth,
+				bitsPerPixel, buf_type);
+		if (!priv->bo)
+		{
+			ERROR_MSG("failed to allocate %dx%d bo, buf_type = %d",
+					width, height, buf_type);
+			free(priv);
+			return NULL;
+		}
+		*new_fb_pitch = omap_bo_pitch(priv->bo);
+	}
 
 	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is not
 	 * set to the usage_hint parameter passed to CreatePixmap.

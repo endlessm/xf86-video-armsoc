@@ -120,7 +120,7 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 
 	/* Required EXA functions: */
 	exa->WaitMarker = OMAPWaitMarker;
-	exa->CreatePixmap2 = OMAPCreatePixmap;
+	exa->CreatePixmap2 = OMAPCreatePixmap2;
 	exa->DestroyPixmap = OMAPDestroyPixmap;
 	exa->ModifyPixmapHeader = OMAPModifyPixmapHeader;
 
