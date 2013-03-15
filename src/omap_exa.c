@@ -125,9 +125,14 @@ OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	OMAPPixmapPrivPtr priv = driverPriv;
 
 	assert(!priv->ext_access_cnt);
-	assert(!omap_bo_has_dmabuf(priv->bo));
 
-	omap_bo_unreference(priv->bo);
+	/* If ModifyPixmapHeader failed, it's possible we don't have a bo
+	 * backing this pixmap. */
+	if (priv->bo)
+	{
+		assert(!omap_bo_has_dmabuf(priv->bo));
+		omap_bo_unreference(priv->bo);
+	}
 
 	free(priv);
 }

@@ -144,7 +144,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 	OMAPDRI2BufferPtr buf = calloc(1, sizeof(*buf));
-	PixmapPtr pPixmap;
+	PixmapPtr pPixmap = NULL;
 	struct omap_bo *bo;
 	int ret;
 
@@ -152,6 +152,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 			pDraw, attachment, format);
 
 	if (!buf) {
+		ERROR_MSG("Couldn't allocate internal buffer structure");
 		return NULL;
 	}
 
@@ -188,16 +189,14 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	{
 		assert(attachment != DRI2BufferFrontLeft);
 		ERROR_MSG("Failed to create back buffer for window");
-		free(buf);
-		return NULL;
+		goto fail;
 	}
 
 	bo = OMAPPixmapBo(pPixmap);
 	if (!bo)
 	{
 		ERROR_MSG("Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		free(buf);
-		return NULL;
+		goto fail;
 	}
 
 	DRIBUF(buf)->attachment = attachment;
@@ -212,8 +211,7 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ret = omap_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
 		ERROR_MSG("could not get buffer name: %d", ret);
-		/* TODO: MIDEGL-1462: cleanup */
-		return NULL;
+		goto fail;
 	}
 
 	/* Q: how to know across OMAP generations what formats that the display
@@ -234,6 +232,22 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	OMAPRegisterExternalAccess(pPixmap);
 
 	return DRIBUF(buf);
+
+fail:
+	if (pPixmap != NULL)
+	{
+		if (attachment != DRI2BufferFrontLeft)
+		{
+			pScreen->DestroyPixmap(pPixmap);
+		}
+		else
+		{
+			pPixmap->refcnt--;
+		}
+	}
+	free(buf);
+
+	return NULL;
 }
 
 /**
