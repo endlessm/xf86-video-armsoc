@@ -301,6 +301,11 @@ void *omap_bo_map(struct omap_bo *bo)
 			return NULL;
 
 		bo->map_addr = mmap(NULL, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED, bo->dev->fd, map_dumb.offset);
+
+		if (bo->map_addr == MAP_FAILED)
+		{
+			bo->map_addr = NULL;
+		}
 	}
 
 	return bo->map_addr;
