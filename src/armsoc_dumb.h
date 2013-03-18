@@ -81,6 +81,9 @@ int armsoc_bo_set_dmabuf(struct armsoc_bo *bo);
 void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_has_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_clear(struct armsoc_bo *bo);
+int armsoc_bo_rm_fb(struct armsoc_bo *bo);
+int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width, uint32_t new_height);
+
 
 #endif /* ARMSOC_DUMB_H_ */
 

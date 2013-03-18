@@ -53,6 +53,8 @@ struct armsoc_bo {
 	uint32_t pitch;
 	int refcnt;
 	int dmabuf;
+	/* initial size of backing memory. Used on resize to check if the new size will fit */
+	uint32_t original_size;
 };
 
 /* device related functions:
@@ -157,9 +159,9 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->map_addr = NULL;
 	new_buf->fb_id = 0;
 	new_buf->pitch = create_dumb.pitch;
-
 	new_buf->width = create_dumb.width;
 	new_buf->height = create_dumb.height;
+	new_buf->original_size = create_dumb.size;
 	new_buf->depth = depth;
 	new_buf->bpp = create_dumb.bpp;
 	new_buf->refcnt = 1;
@@ -180,7 +182,8 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 
 	if (bo->map_addr)
 	{
-		munmap(bo->map_addr, bo->size);
+		/* always map/unmap the full buffer for consistency */
+		munmap(bo->map_addr, bo->original_size);
 	}
 
 	if (bo->fb_id)
@@ -190,7 +193,6 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 			xf86DrvMsg(-1, X_ERROR, "drmModeRmFb failed %d : %s\n", res, strerror(errno));
 		}
 	}
-
 	destroy_dumb.handle = bo->handle;
 	res = drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
 	if(res) {
@@ -288,7 +290,8 @@ void *armsoc_bo_map(struct armsoc_bo *bo)
 		if (res)
 			return NULL;
 
-		bo->map_addr = mmap(NULL, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED, bo->dev->fd, map_dumb.offset);
+		/* always map/unmap the full buffer for consistency */
+		bo->map_addr = mmap(NULL, bo->original_size, PROT_READ | PROT_WRITE, MAP_SHARED, bo->dev->fd, map_dumb.offset);
 
 		if (bo->map_addr == MAP_FAILED)
 		{
@@ -318,7 +321,7 @@ int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op)
 			ret = select(bo->dmabuf+1, &fds, NULL, NULL, &t);
 			if (ret == 0)
 			{
-				xf86DrvMsg(-1, X_ERROR, "select() on dma_buf fd has timed-out");
+				xf86DrvMsg(-1, X_ERROR, "select() on dma_buf fd has timed-out\n");
 			}
 		}while ( (ret == -1 && errno == EINTR) || ret == 0 );
 
@@ -344,10 +347,25 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->depth,
 			bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
 	if (ret < 0) {
-		xf86DrvMsg(-1, X_ERROR, "Could not add fb to bo %d", ret);
+		xf86DrvMsg(-1, X_ERROR, "Could not add fb to bo %d\n", ret);
 		bo->fb_id = 0;
 		return ret;
 	}
+	return 0;
+}
+
+int armsoc_bo_rm_fb(struct armsoc_bo *bo)
+{
+	int ret;
+
+	assert(bo->refcnt > 0);
+	assert(bo->fb_id != 0);
+	ret = drmModeRmFB( bo->dev->fd, bo->fb_id );
+	if( ret < 0 ) {
+		xf86DrvMsg(-1, X_ERROR, "Could not remove fb from bo %d\n", ret);
+		return ret;
+	}
+	bo->fb_id = 0;
 	return 0;
 }
 
@@ -373,10 +391,38 @@ int armsoc_bo_clear(struct armsoc_bo *bo)
 		return -1;
 	}
 	memset(dst, 0x0, bo->size);
-	if(armsoc_bo_cpu_fini(bo, ARMSOC_GEM_WRITE)) {
-		xf86DrvMsg(-1, X_ERROR," %s: armsoc_bo_cpu_fini failed - "
-					"unable to flush.\n", __FUNCTION__ );
-		return -1;
-	}
+	(void)armsoc_bo_cpu_fini(bo, ARMSOC_GEM_WRITE);
 	return 0;
+}
+
+int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width, uint32_t new_height)
+{
+	uint32_t new_size;
+	uint32_t new_pitch;
+
+	assert( bo != NULL );
+	assert( new_width > 0 );
+	assert( new_height > 0 );
+	assert( bo->fb_id == 0 ); /* The caller must remove the fb object before attempting to resize. */
+	assert(bo->refcnt > 0);
+
+	xf86DrvMsg(-1, X_INFO, "Resizing bo from %dx%d to %dx%d\n",
+		   bo->width, bo->height, new_width, new_height);
+
+	/* TODO: MIDEGL-1563: Get pitch from DRM as only DRM knows the ideal pitch and alignment requirements */
+	new_pitch  = new_width * armsoc_bo_Bpp(bo);
+	/* Align pitch to 64 byte */
+	new_pitch  = ((new_pitch + 63) & ~(63));
+	new_size   = (((new_height-1) * new_pitch) + (new_width * armsoc_bo_Bpp(bo) ));
+
+	if( new_size <= bo->original_size )
+	{
+	    bo->width  = new_width;
+	    bo->height = new_height;
+	    bo->pitch  = new_pitch;
+	    bo->size   = new_size;
+	    return 0;
+	}
+	xf86DrvMsg(-1, X_ERROR, "Failed to resize buffer\n");
+	return -1;
 }

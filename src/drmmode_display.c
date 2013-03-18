@@ -1074,17 +1074,12 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
 	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	ScreenPtr pScreen = pScrn->pScreen;
-	struct armsoc_bo *new_scanout;
-	int res;
 	uint32_t pitch;
 	int i;
 	xf86CrtcConfigPtr xf86_config;
 
 	TRACE_ENTER();
-
-	/* if fb required size has changed, realloc! */
-
-	DEBUG_MSG("Resize!  %dx%d", width, height);
+	DEBUG_MSG("Resize: %dx%d", width, height);
 
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
@@ -1092,54 +1087,72 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	if (  (width != armsoc_bo_width(pARMSOC->scanout))
 	      || (height != armsoc_bo_height(pARMSOC->scanout))
 	      || (pScrn->bitsPerPixel != armsoc_bo_bpp(pARMSOC->scanout)) ) {
-
-		pARMSOC->has_resized = TRUE;
-		DEBUG_MSG("allocating new scanout buffer: %dx%d",
-				width, height);
+		struct armsoc_bo *new_scanout;
 
 		/* allocate new scanout buffer */
-		new_scanout = armsoc_bo_new_with_dim(pARMSOC->dev, width, height,
-				pScrn->depth, pScrn->bitsPerPixel,
-				ARMSOC_BO_SCANOUT );
-
-		if (!new_scanout) {
-			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-					"Error reallocating scanout buffer\n");
-			return FALSE;
-		}
-		pitch = armsoc_bo_pitch(new_scanout);
-
-		if (armsoc_bo_clear(new_scanout) || armsoc_bo_add_fb(new_scanout)) {
-			armsoc_bo_unreference(new_scanout);
-			return FALSE;
-		}
-
-		/* Handle dma_buf fd that may be attached to bo */
-		if(armsoc_bo_has_dmabuf(pARMSOC->scanout))
+		new_scanout = armsoc_bo_new_with_dim(pARMSOC->dev, width, height, pScrn->depth, pScrn->bitsPerPixel, ARMSOC_BO_SCANOUT );
+		if (!new_scanout)
 		{
-			armsoc_bo_clear_dmabuf(pARMSOC->scanout);
-			res = armsoc_bo_set_dmabuf(new_scanout);
-			if(res) {
-				xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-						"Unable to attach dma_buf fd to new scanout buffer. "
-						"Error: %d (%s)\n", res, strerror(res));
+			/* Try to use the previous buffer if the new resolution is smaller than the one on buffer creation */
+			DEBUG_MSG("allocate new scanout buffer failed - resizing existing bo");
+			/* Remove the old fb from the bo */
+			if( armsoc_bo_rm_fb( pARMSOC->scanout ) )
+			{
+				return FALSE;
+			}
+			/* Resize the bo */
+			if ( armsoc_bo_resize(pARMSOC->scanout, width, height) )
+			{
+				armsoc_bo_clear(pARMSOC->scanout);
+				armsoc_bo_add_fb(pARMSOC->scanout);
+				return FALSE;
+			}
+			/* Add new fb to the bo */
+			if( armsoc_bo_clear(pARMSOC->scanout) || armsoc_bo_add_fb(pARMSOC->scanout) )
+			{
+				return FALSE;
+			}
+			pitch = armsoc_bo_pitch(pARMSOC->scanout);
+		}
+		else
+		{
+			DEBUG_MSG("allocated new scanout buffer okay");
+			pitch = armsoc_bo_pitch(new_scanout);
+			/* clear new BO and add FB */
+			if (armsoc_bo_clear(new_scanout) || armsoc_bo_add_fb(new_scanout))
+			{
 				armsoc_bo_unreference(new_scanout);
 				return FALSE;
 			}
+			/* Handle dma_buf fd that may be attached to old bo */
+			if(armsoc_bo_has_dmabuf(pARMSOC->scanout))
+			{
+				int res;
+
+				armsoc_bo_clear_dmabuf(pARMSOC->scanout);
+				res = armsoc_bo_set_dmabuf(new_scanout);
+				if(res) {
+					ERROR_MSG("Unable to attach dma_buf fd to new scanout buffer - %d (%s)\n", res, strerror(res));
+					armsoc_bo_unreference(new_scanout);
+					return FALSE;
+				}
+			}
+			/* delete old scanout buffer */
+			armsoc_bo_unreference(pARMSOC->scanout);
+			/* use new scanout buffer */
+			set_scanout_bo(pScrn, new_scanout);
 		}
-
-		/* delete old scanout buffer */
-		armsoc_bo_unreference(pARMSOC->scanout);
-
-		set_scanout_bo(pScrn, new_scanout);
-
+		pARMSOC->has_resized = TRUE;
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
-	}else{
+	}
+	else
+	{
 		pitch = armsoc_bo_pitch(pARMSOC->scanout);
 	}
 
 	if (pScreen && pScreen->ModifyPixmapHeader) {
 		PixmapPtr rootPixmap = pScreen->GetScreenPixmap(pScreen);
+
 		pScreen->ModifyPixmapHeader(rootPixmap,
 				pScrn->virtualX, pScrn->virtualY,
 				pScrn->depth, pScrn->bitsPerPixel, pitch,
@@ -1158,7 +1171,6 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		drmmode_set_mode_major(crtc, &crtc->mode,
 				crtc->rotation, crtc->x, crtc->y);
 	}
-
 
 	TRACE_EXIT();
 	return TRUE;
