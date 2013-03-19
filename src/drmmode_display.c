@@ -467,7 +467,10 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return TRUE;
 	}
 
-	cursor = calloc(1, sizeof(drmmode_cursor_rec));
+	if(!xf86LoaderCheckSymbol("drmModeGetPlaneResources")) {
+		ERROR_MSG("drmModeGetPlaneResources() not supported (needs libdrm 2.4.30 or higher)");
+		return FALSE;
+	}
 
 	/* find an unused plane which can be used as a mouse cursor.  Note
 	 * that we cheat a bit, in order to not burn one overlay per crtc,
@@ -481,17 +484,35 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	if (plane_resources->count_planes < 1) {
 		ERROR_MSG("not enough planes for HW cursor");
+		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
 	}
 
 	ovr = drmModeGetPlane(drmmode->fd, plane_resources->planes[0]);
 	if (!ovr) {
 		ERROR_MSG("drmModeGetPlane failed: %s", strerror(errno));
+		drmModeFreePlaneResources(plane_resources);
+		return FALSE;
+	}
+
+	cursor = calloc(1, sizeof(drmmode_cursor_rec));
+	if (!cursor) {
+		ERROR_MSG("calloc failed");
+		drmModeFreePlane(ovr);
+		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
 	}
 
 	cursor->ovr = ovr;
 	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 0, 32, OMAP_BO_SCANOUT );
+
+	if (!cursor->bo) {
+		ERROR_MSG("error allocating hw cursor buffer");
+		free(cursor);
+		drmModeFreePlane(ovr);
+		drmModeFreePlaneResources(plane_resources);
+		return FALSE;
+	}
 
 	handles[0] = omap_bo_handle(cursor->bo);
 	pitches[0] = omap_bo_pitch(cursor->bo);
@@ -500,17 +521,28 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
 			handles, pitches, offsets, &cursor->fb_id, 0)) {
 		ERROR_MSG("drmModeAddFB2 failed: %s", strerror(errno));
+		omap_bo_unreference(cursor->bo);
+		free(cursor);
+		drmModeFreePlane(ovr);
+		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
 	}
 
-	if (xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB)) {
-		INFO_MSG("HW cursor initialized");
-		drmmode->cursor = cursor;
-		return TRUE;
+	if (!xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB)) {
+		ERROR_MSG("xf86_cursors_init() failed");
+		if(drmModeRmFB(drmmode->fd, cursor->fb_id)) {
+			ERROR_MSG("drmModeRmFB() failed");
+		}
+		omap_bo_unreference(cursor->bo);
+		free(cursor);
+		drmModeFreePlane(ovr);
+		drmModeFreePlaneResources(plane_resources);
+		return FALSE;
 	}
 
-	// TODO: MIDEGL-1276: Clean up on failures
-	return FALSE;
+	INFO_MSG("HW cursor initialized");
+	drmmode->cursor = cursor;
+	return TRUE;
 }
 
 #if 1==OMAP_SUPPORT_GAMMA
