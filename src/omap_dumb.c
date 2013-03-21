@@ -41,7 +41,6 @@ struct omap_bo {
 	struct omap_device *dev;
 	uint32_t handle;
 	uint32_t size;
-	int from_name;
 	void *map_addr;
 	uint32_t fb_id;
 	uint32_t width;
@@ -155,37 +154,6 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	new_buf->height = create_dumb.height;
 	new_buf->depth = depth;
 	new_buf->bpp = create_dumb.bpp;
-	new_buf->refcnt = 1;
-	new_buf->dmabuf = -1;
-
-	return new_buf;
-}
-
-struct omap_bo *omap_bo_from_name(struct omap_device *dev, uint32_t name)
-{
-	struct omap_bo *new_buf;
-	struct drm_gem_open gem_open;
-	int res;
-
-	new_buf = malloc(sizeof(*new_buf));
-	if (!new_buf)
-		return NULL;
-
-	gem_open.name = name;
-
-	res = drmIoctl(dev->fd, DRM_IOCTL_GEM_OPEN, &gem_open);
-	if (res)
-	{
-		free(new_buf);
-		return NULL;
-	}
-
-	new_buf->dev = dev;
-	new_buf->handle = gem_open.handle;
-	new_buf->size = gem_open.size;
-	new_buf->from_name = 1;
-	new_buf->map_addr = NULL;
-	new_buf->fb_id = 0;
 	new_buf->refcnt = 1;
 	new_buf->dmabuf = -1;
 
