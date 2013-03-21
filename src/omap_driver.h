@@ -72,7 +72,10 @@
 #define OMAP_PATCHLEVEL		0
 
 #define OMAP_USE_PAGE_FLIP_EVENTS 0
-#define OMAP_SUPPORT_GAMMA		0
+#define OMAP_SUPPORT_GAMMA 0
+
+#define CURSORW  (64)
+#define CURSORH  (64)
 
 /**
  * This controls whether debug statements (and function "trace" enter/exit)
@@ -219,6 +222,10 @@ Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
 void drmmode_wait_for_event(ScrnInfoPtr pScrn);
 Bool drmmode_cursor_init(ScreenPtr pScreen);
 
+/* 
+ * pl111 cursor helper functions..
+ */
+void drmmode_argb_cursor_to_pl111_lbbp( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s, uint32_t size);
 
 /**
  * DRI2 functions..

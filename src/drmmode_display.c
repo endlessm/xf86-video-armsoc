@@ -338,9 +338,6 @@ done:
 	return ret;
 }
 
-#define CURSORW  64
-#define CURSORH  64
-
 static void
 drmmode_hide_cursor(xf86CrtcPtr crtc)
 {
@@ -425,6 +422,7 @@ drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
 static void
 drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 {
+	uint32_t * d;
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	drmmode_cursor_ptr cursor = drmmode->cursor;
@@ -438,7 +436,15 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	if (visible)
 		drmmode_hide_cursor(crtc);
 
-	memcpy(omap_bo_map(cursor->bo), image, omap_bo_size(cursor->bo));
+	d = omap_bo_map(cursor->bo);
+
+#if ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_ARGB )
+	memcpy(d, image, omap_bo_size(cursor->bo));
+#elif ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_PL111 )
+	drmmode_argb_cursor_to_pl111_lbbp(crtc, d, image, omap_bo_size(cursor->bo) );
+#else
+	#error Please provide a method to set your cursor image.
+#endif
 
 	if (visible)
 		drmmode_show_cursor(crtc);

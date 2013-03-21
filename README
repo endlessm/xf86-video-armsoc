@@ -19,4 +19,20 @@ The platform specific defines are :
 	#define DRM_BO_NON_SCANOUT			0x00000000			/* request non-scanout compatible buffer */
 
 
- 
+HW Cursors support
+-------------------
+
+HW Cursor plane configuration
+------------------------------
+
+The cursor plane format needs to be modified to select the format that the platform expects. This can
+be done by setting DRM_CURSOR_PLANE_FORMAT define to the desired format in omap_drmif_fb.h.
+
+Currently available options are:
+
+HW_CURSOR_ARGB   -  Cursor images support full ARGB8888 pixel format.
+HW_CURSOR_PL111  -  Cursor images support PL111 LBBP pixel format.
+
+For example to set HW_CURSOR_PL111 cursor support set DRM_CURSOR_PLANE_FORMAT in the following way:
+
+#define DRM_CURSOR_PLANE_FORMAT	HW_CURSOR_PL111

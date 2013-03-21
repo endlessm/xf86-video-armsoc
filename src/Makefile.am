@@ -49,4 +49,6 @@ armsoc_drv_la_SOURCES = \
          omap_xv.c \
          omap_dri2.c \
          omap_driver.c \
-         omap_dumb.c
+         omap_dumb.c \
+         drm_pl111_cursor.c
+
