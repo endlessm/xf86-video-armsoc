@@ -5,9 +5,7 @@ Platform specific values
 ------------------------
 The meaning of the bits in the 'flags' element in the drm_mode_create_dumb struct
 used by DRM_IOCTL_MODE_CREATE_DUMB is platform dependent.  
-Defines for the flag values should be added to omap_drmif_fb.h for the target platform in use. 
-The code which uses these defines in omap_dumb.c function omap_bo_new_with_dim() to select either a
-scanout or non-scanout buffer should be suitably modified.
+The defines for the flag values in omap_drmif_fb.h should be modified for the target platform in use. 
 
 The example given is for a DRM driver which uses bit 0 of flags to select the buffer type. 
 In this case a value of 1 for bit 0 selects a buffer with a scanoutable allocation.
@@ -20,16 +18,5 @@ The platform specific defines are :
 	#define DRM_BO_SCANOUT				0x00000001			/* request scanout compatible buffer */
 	#define DRM_BO_NON_SCANOUT			0x00000000			/* request non-scanout compatible buffer */
 
-And the code which sets the flags according to the requested buffer type is : 
-
-	assert((OMAP_BO_SCANOUT == buf_type) || (OMAP_BO_NON_SCANOUT == buf_type));
-	if (OMAP_BO_SCANOUT == buf_type)
-	{
-		create_dumb.flags = DRM_BO_SCANOUT;
-	}
-	else
-	{
-		create_dumb.flags = DRM_BO_NON_SCANOUT;
-	}
 
  
