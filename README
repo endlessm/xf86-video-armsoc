@@ -1,23 +1,28 @@
 xf86-video-armsoc
 Open-source X.org graphics driver for ARM graphics
 
-Platform specific values
-------------------------
-The meaning of the bits in the 'flags' element in the drm_mode_create_dumb struct
-used by DRM_IOCTL_MODE_CREATE_DUMB is platform dependent.  
-The defines for the flag values in omap_drmif_fb.h should be modified for the target platform in use. 
+DRM driver selection
+--------------------
+While most operations use only the standard DRM modesetting interfaces, certain operations
+unavoidably rely on specific driver behaviour (including dumb buffer allocation flags and cursor
+plane z-ordering). As such, the armsoc driver must be configured for a particular DRM driver.
 
-The example given is for a DRM driver which uses bit 0 of flags to select the buffer type. 
-In this case a value of 1 for bit 0 selects a buffer with a scanoutable allocation.
+The currently supported DRM drivers are:
+- pl111
+- exynos
 
-The platform specific defines are :
+To configure armsoc for one of these, pass the --with-drmmode option to ./configure. For example:
 
-	/* Platform specific values for the flags element of the drm_mode_create_dumb struct
- 	* used by DRM_IOCTL_MODE_CREATE_DUMB. Substitute appropriate values for the target drm driver.
- 	*/
-	#define DRM_BO_SCANOUT				0x00000001			/* request scanout compatible buffer */
-	#define DRM_BO_NON_SCANOUT			0x00000000			/* request non-scanout compatible buffer */
+$ ./configure --with-drmmode=pl111
 
+For other drivers, you will need to implement this support yourself. A template implementation is
+provided in src/drmmode_template which can be built by passing --with-drmmode=template to ./configure.
+The interface is defined and documented in src/drmmode_driver.h, and you should refer to this while
+modifying the template to set up your DRM driver's abstraction appropriately.
+
+You can also copy src/drmmode_template into src/drmmode_<yourdrivername> and build with:
+
+$ ./configure --with-drmmode=<yourdrivername>
 
 HW Cursors support
 -------------------

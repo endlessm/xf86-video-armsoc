@@ -31,15 +31,6 @@
 #define HW_CURSOR_ARGB		(0)
 #define HW_CURSOR_PL111		(1)
 
-/* Platform specific values for the flags element of the drm_mode_create_dumb struct
- * used by DRM_IOCTL_MODE_CREATE_DUMB. These are used by omap_bo_new_with_dim() to
- * request either a scanoutable or non-scanoutable buffer
- */
-/*
- * THESE VALUES SHOULD BE CUSTOMISED FOR THE TARGET DRM DRIVER - SEE THE README FILE
- */
-#define DRM_BO_SCANOUT				0x00000001			/* request scanout compatible buffer */
-#define DRM_BO_NON_SCANOUT			0x00000000			/* request non-scanout compatible buffer */
 
 /*
  * HARDWARE CURSOR SUPORT CONFIGURATION
@@ -62,7 +53,7 @@ enum omap_buf_type {
 	OMAP_BO_NON_SCANOUT
 };
 
-struct omap_device *omap_device_new(int fd);
+struct omap_device *omap_device_new(int fd, uint32_t dumb_scanout_flags, uint32_t dumb_no_scanout_flags);
 void omap_device_del(struct omap_device *dev);
 int omap_bo_get_name(struct omap_bo *bo, uint32_t *name);
 uint32_t omap_bo_handle(struct omap_bo *bo);

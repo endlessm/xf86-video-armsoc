@@ -94,6 +94,8 @@
 #include <sys/ioctl.h>
 #include <libudev.h>
 
+#include "drmmode_driver.h"
+
 typedef struct {
 	/* hardware cursor: */
 	drmModePlane *ovr;
@@ -1237,16 +1239,16 @@ static drmEventContext event_context = {
 int
 drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 {
-	ScrnInfoPtr scrn = xf86Screens[draw->pScreen->myNum];
-	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(scrn);
+	ScrnInfoPtr pScrn = xf86Screens[draw->pScreen->myNum];
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
 	drmmode_crtc_private_ptr crtc = config->crtc[0]->driver_private;
 	drmmode_ptr mode = crtc->drmmode;
 	int ret, i, failed = 0, num_flipped = 0;
 	unsigned int flags = 0;
 
-#if OMAP_USE_PAGE_FLIP_EVENTS
-	flags |= DRM_MODE_PAGE_FLIP_EVENT;
-#endif
+	if (pOMAP->drmmode->use_page_flip_events)
+		flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
 	/* if we can flip, we must be fullscreen.. so flip all CRTC's.. */
 	for (i = 0; i < config->num_crtc; i++) {
@@ -1255,7 +1257,7 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 		ret = drmModePageFlip(mode->fd, crtc->mode_crtc->crtc_id,
 				fb_id, flags, priv);
 		if (ret) {
-			xf86DrvMsg(scrn->scrnIndex, X_WARNING,
+			xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 					"flip queue failed: %s\n", strerror(errno));
 			failed = 1;
 		}

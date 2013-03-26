@@ -38,6 +38,8 @@
 #include "omap_driver.h"
 #include "compat-api.h"
 
+#include "drmmode_driver.h"
+
 Bool omapDebug = 0;
 
 /*
@@ -483,8 +485,14 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	}
 	DEBUG_MSG("Became DRM master.");
 
+	pOMAP->drmmode = drmmode_interface_get_implementation(pOMAP->drmFD);
+	if (!pOMAP->drmmode)
+		goto fail;
+
 	/* create DRM device instance: */
-	pOMAP->dev = omap_device_new(pOMAP->drmFD);
+	pOMAP->dev = omap_device_new(pOMAP->drmFD,
+			pOMAP->drmmode->dumb_scanout_flags,
+			pOMAP->drmmode->dumb_no_scanout_flags);
 
 	/* query chip-id: */
 	if (omap_get_param(pOMAP->dev, OMAP_PARAM_CHIPSET_ID, &value)) {

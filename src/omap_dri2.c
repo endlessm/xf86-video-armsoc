@@ -41,6 +41,8 @@
 #	error "Requires newer DRI2"
 #endif
 
+#include "drmmode_driver.h"
+
 typedef struct {
 	DRI2BufferRec base;
 
@@ -541,12 +543,13 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			 * Error while flipping; bail.
 			 */
 			cmd->flags |= OMAP_SWAP_FAIL;
-#if !OMAP_USE_PAGE_FLIP_EVENTS
-			cmd->swapCount = 0;
-#else
-			cmd->swapCount = -(ret + 1);
+
+			if (pOMAP->drmmode->use_page_flip_events)
+				cmd->swapCount = -(ret + 1);
+			else
+				cmd->swapCount = 0;
+
 			if (cmd->swapCount == 0)
-#endif
 			{
 				OMAPDRI2SwapComplete(cmd);
 			}
@@ -554,12 +557,13 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		} else {
 			if (ret == 0)
 				cmd->flags |= OMAP_SWAP_FAKE_FLIP;
-#if !OMAP_USE_PAGE_FLIP_EVENTS
-			cmd->swapCount = 0;
-#else
-			cmd->swapCount = ret;
+
+			if (pOMAP->drmmode->use_page_flip_events)
+				cmd->swapCount = ret;
+			else
+				cmd->swapCount = 0;
+
 			if (cmd->swapCount == 0)
-#endif
 			{
 				OMAPDRI2SwapComplete(cmd);
 			}

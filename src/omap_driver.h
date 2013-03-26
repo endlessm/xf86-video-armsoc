@@ -71,7 +71,6 @@
 #define OMAP_MINOR_VERSION	83
 #define OMAP_PATCHLEVEL		0
 
-#define OMAP_USE_PAGE_FLIP_EVENTS 0
 #define OMAP_SUPPORT_GAMMA 0
 
 #define CURSORW  (64)
@@ -136,6 +135,8 @@ typedef struct _OMAPRec
 	int					drmFD;
 
 	char 				*deviceName;
+
+	struct drmmode_interface *drmmode;
 
 	/** DRM device instance */
 	struct omap_device	*dev;

@@ -32,9 +32,12 @@
 #include <xf86drmMode.h>
 
 #include "omap_drmif_fb.h"
+#include "drmmode_driver.h"
 
 struct omap_device {
 	int fd;
+	uint32_t dumb_scanout_flags;
+	uint32_t dumb_no_scanout_flags;
 };
 
 struct omap_bo {
@@ -55,13 +58,15 @@ struct omap_bo {
 /* device related functions:
  */
 
-struct omap_device *omap_device_new(int fd)
+struct omap_device *omap_device_new(int fd, uint32_t dumb_scanout_flags, uint32_t dumb_no_scanout_flags)
 {
 	struct omap_device *new_dev = malloc(sizeof(*new_dev));
 	if (!new_dev)
 		return NULL;
 
 	new_dev->fd = fd;
+	new_dev->dumb_scanout_flags = dumb_scanout_flags;
+	new_dev->dumb_no_scanout_flags = dumb_no_scanout_flags;
 	return new_dev;
 }
 
@@ -126,11 +131,11 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	assert((OMAP_BO_SCANOUT == buf_type) || (OMAP_BO_NON_SCANOUT == buf_type));
 	if (OMAP_BO_SCANOUT == buf_type)
 	{
-		create_dumb.flags = DRM_BO_SCANOUT;
+		create_dumb.flags = dev->dumb_scanout_flags;
 	}
 	else
 	{
-		create_dumb.flags = DRM_BO_NON_SCANOUT;
+		create_dumb.flags = dev->dumb_no_scanout_flags;
 	}
 
 	res = drmIoctl(dev->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
