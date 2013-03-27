@@ -997,6 +997,8 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 
 			memcpy(&atom, value->data, 4);
 			name = NameForAtom(atom);
+			if (name == NULL)
+				return FALSE;
 
 			/* search for matching name string, then
 			 * set its value down
