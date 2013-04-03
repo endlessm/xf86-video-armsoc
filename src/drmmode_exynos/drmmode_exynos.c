@@ -23,11 +23,33 @@
  */
 
 #include "../drmmode_driver.h"
+#include <xf86drmMode.h>
+#include <sys/ioctl.h>
+
+struct drm_exynos_plane_set_zpos {
+	__u32 plane_id;
+	__s32 zpos;
+};
+
+#define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
+#define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
+		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
+
+static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
+{
+	struct drm_exynos_plane_set_zpos data;
+
+	data.plane_id = plane_id;
+	data.zpos = 1;
+
+	return ioctl(drm_fd, DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS, &data);
+}
 
 struct drmmode_interface exynos_interface = {
 	0x00000001 /* dumb_scanout_flags */,
 	0x00000001 /* dumb_no_scanout_flags */,
-	1 /* use_page_flip_events */
+	1 /* use_page_flip_events */,
+	init_plane_for_cursor /* init_plane_for_cursor */
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

@@ -503,6 +503,13 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return FALSE;
 	}
 
+	if (pOMAP->drmmode->init_plane_for_cursor &&
+	    pOMAP->drmmode->init_plane_for_cursor(drmmode->fd, ovr->plane_id)) {
+		ERROR_MSG("Failed driver-specific cursor initialization");
+		drmModeFreePlaneResources(plane_resources);
+		return FALSE;
+	}
+
 	cursor = calloc(1, sizeof(drmmode_cursor_rec));
 	if (!cursor) {
 		ERROR_MSG("calloc failed");

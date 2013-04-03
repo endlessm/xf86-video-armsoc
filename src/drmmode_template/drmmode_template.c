@@ -24,10 +24,17 @@
 
 #include "../drmmode_driver.h"
 
+/* Optional function */
+static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
+{
+	return 0;
+}
+
 struct drmmode_interface template_interface = {
 	0x00000000 /* dumb_scanout_flags */,
 	0x00000000 /* dumb_no_scanout_flags */,
-	1 /* use_page_flip_events */
+	1 /* use_page_flip_events */,
+	init_plane_for_cursor /* init_plane_for_cursor */
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

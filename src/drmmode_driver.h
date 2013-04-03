@@ -45,6 +45,17 @@ struct drmmode_interface {
 	 * waited for during DRM_IOCTL_MODE_PAGE_FLIP.
 	 */
 	int use_page_flip_events;
+
+	/* (Optional) Initialize the given plane for use as a hardware cursor.
+	 *
+	 * This function should do any initialization necessary, for example setting the
+	 * z-order on the plane to appear above all other layers.
+	 *
+	 * @param drm_fd   The DRM device file
+	 * @param plane_id The plane to initialize
+	 * @return 0 on success, non-zero on failure
+	 */
+	int (*init_plane_for_cursor)(int drm_fd, uint32_t plane_id);
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd);

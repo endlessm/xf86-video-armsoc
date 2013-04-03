@@ -23,11 +23,13 @@
  */
 
 #include "../drmmode_driver.h"
+#include <stddef.h>
 
 struct drmmode_interface pl111_interface = {
 	0x00000001 /* dumb_scanout_flags */,
 	0x00000000 /* dumb_no_scanout_flags */,
-	0 /* use_page_flip_events */
+	0 /* use_page_flip_events */,
+	NULL /* init_plane_for_cursor */
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)
