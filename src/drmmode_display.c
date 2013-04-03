@@ -64,10 +64,8 @@
 #include "scrnintstr.h"
 #include "fb.h"
 #include "xf86cmap.h"
-#include "shadowfb.h"
 
 #include "xf86xv.h"
-#include <X11/extensions/Xv.h>
 
 #include "xf86Cursor.h"
 #include "xf86DDC.h"
@@ -91,7 +89,6 @@
 #include "drm_fourcc.h"
 #include "X11/Xatom.h"
 
-#include <sys/ioctl.h>
 #include <libudev.h>
 
 #include "drmmode_driver.h"
@@ -248,6 +245,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 			return FALSE;
 
 		fb_id = omap_bo_get_fb(pOMAP->scanout);
+		if (0 == fb_id)
+			return FALSE;
 	}
 
 	/* Save the current mode in case there's a problem: */
@@ -439,6 +438,13 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 		drmmode_hide_cursor(crtc);
 
 	d = omap_bo_map(cursor->bo);
+	if(!d) {
+		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
+			"load_cursor_argb map failure\n");
+		if (visible)
+			drmmode_show_cursor(crtc);
+		return;
+	}
 
 #if ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_ARGB )
 	memcpy(d, image, omap_bo_size(cursor->bo));
@@ -1075,7 +1081,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 	ScreenPtr pScreen = pScrn->pScreen;
-	struct omap_bo *new_scanout;
+	struct omap_bo *new_scanout = NULL;
 	int res;
 	uint32_t pitch;
 	int i;
@@ -1178,6 +1184,10 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 	TRACE_ENTER();
 
 	drmmode = calloc(1, sizeof *drmmode);
+	if(!drmmode) {
+		return FALSE;
+	}
+
 	drmmode->fd = fd;
 
 	xf86CrtcConfigInit(pScrn, &drmmode_xf86crtc_config_funcs);
@@ -1186,6 +1196,7 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 	drmmode->cpp = cpp;
 	drmmode->mode_res = drmModeGetResources(drmmode->fd);
 	if (!drmmode->mode_res) {
+		free(drmmode);
 		return FALSE;
 	} else {
 		DEBUG_MSG("Got KMS resources");
@@ -1379,11 +1390,13 @@ static void
 drmmode_wakeup_handler(pointer data, int err, pointer p)
 {
 	ScrnInfoPtr pScrn = data;
-	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+	drmmode_ptr drmmode;
 	fd_set *read_mask = p;
 
 	if (pScrn == NULL || err < 0)
 		return;
+
+	drmmode = drmmode_from_scrn(pScrn);
 
 	if (FD_ISSET(drmmode->fd, read_mask))
 		drmHandleEvent(drmmode->fd, &event_context);

@@ -84,8 +84,13 @@ OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 	OMAPPixmapPrivPtr priv = calloc(sizeof(OMAPPixmapPrivRec), 1);
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
-
 	enum omap_buf_type buf_type = OMAP_BO_NON_SCANOUT;
+
+	if(!priv)
+	{
+		return NULL;
+	}
+
 	if (usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
 	{
 		buf_type = OMAP_BO_SCANOUT;
@@ -243,7 +248,7 @@ static inline enum omap_gem_op idx2op(int index)
 	case EXA_PREPARE_AUX_DEST:
 	case EXA_PREPARE_DEST:
 	default:
-		return OMAP_GEM_READ | OMAP_GEM_WRITE;
+		return OMAP_GEM_READ_WRITE;
 	}
 }
 

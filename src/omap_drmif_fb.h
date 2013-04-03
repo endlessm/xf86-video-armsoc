@@ -46,6 +46,7 @@ struct omap_device;
 enum omap_gem_op {
 	OMAP_GEM_READ = 0x01,
 	OMAP_GEM_WRITE = 0x02,
+	OMAP_GEM_READ_WRITE = 0x03,
 };
 
 enum omap_buf_type {
