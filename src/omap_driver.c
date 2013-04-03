@@ -208,6 +208,10 @@ OMAPMapMem(ScrnInfoPtr pScrn)
 static Bool
 OMAPUnmapMem(ScrnInfoPtr pScrn)
 {
+	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	omap_bo_unreference(pOMAP->scanout);
+	pOMAP->scanout = NULL;
+	pScrn->displayWidth = 0;
 	return TRUE;
 }
 
