@@ -46,13 +46,32 @@ struct ARMSOCDRI2BufferRec {
 	DRI2BufferRec base;
 
 	/**
-	 * Pixmap that is backing the buffer
+	 * Pixmap(s) that are backing the buffer
 	 *
 	 * NOTE: don't track the pixmap ptr for the front buffer if it is
 	 * a window.. this could get reallocated from beneath us, so we should
 	 * always use draw2pix to be sure to have the correct one
 	 */
-	PixmapPtr pPixmap;
+	PixmapPtr *pPixmaps;
+
+	/**
+	 * Pixmap that corresponds to the DRI2BufferRec.name, so wraps
+	 * the buffer that will be used for DRI2GetBuffers calls and the
+	 * next DRI2SwapBuffers call.
+	 *
+	 * When using more than double buffering this (and the name) are updated
+	 * after a swap, before the next DRI2GetBuffers call.
+	 */
+	unsigned currentPixmap;
+
+	/**
+	 * Number of Pixmaps to use.
+	 *
+	 * This allows the number of back buffers used to be reduced, for
+	 * example when allocation fails. It cannot be changed to increase the
+	 * number of buffers as we would overflow the pPixmaps array.
+	 */
+	unsigned numPixmaps;
 
 	/**
 	 * The DRI2 buffers are reference counted to avoid crashyness when the
@@ -62,8 +81,8 @@ struct ARMSOCDRI2BufferRec {
 	int refcnt;
 
 	/**
-	 * The value of canflip() for the previous frame. Used so that we can tell
-	 * whether the buffer should be re-allocated, e.g into scanout-able
+	 * The value of canflip() for the previous frame. Used so that we can
+	 * tell whether the buffer should be re-allocated, e.g into scanout-able
 	 * memory if the buffer can now be flipped.
 	 *
 	 * We don't want to re-allocate every frame because it is unnecessary
@@ -87,8 +106,10 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 {
 	if (buf->attachment == DRI2BufferFrontLeft)
 		return pDraw;
-	else
-		return &(ARMSOCBUF(buf)->pPixmap->drawable);
+	else {
+		const unsigned curPix = ARMSOCBUF(buf)->currentPixmap;
+		return &(ARMSOCBUF(buf)->pPixmaps[curPix]->drawable);
+	}
 }
 
 static Bool
@@ -144,6 +165,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	PixmapPtr pPixmap = NULL;
 	struct armsoc_bo *bo;
 	int ret;
@@ -169,6 +191,23 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
+	if (attachment == DRI2BufferBackLeft && pARMSOC->driNumBufs > 2) {
+		buf->pPixmaps = calloc(pARMSOC->driNumBufs-1,
+				sizeof(PixmapPtr));
+		buf->numPixmaps = pARMSOC->driNumBufs-1;
+	} else {
+		buf->pPixmaps = malloc(sizeof(PixmapPtr));
+		buf->numPixmaps = 1;
+	}
+
+	if (!buf->pPixmaps) {
+		ERROR_MSG("Failed to allocate PixmapPtr array for DRI2Buffer");
+		goto fail;
+	}
+
+	buf->pPixmaps[0] = pPixmap;
+	assert(buf->currentPixmap == 0);
+
 	bo = ARMSOCPixmapBo(pPixmap);
 	if (!bo) {
 		ERROR_MSG(
@@ -182,7 +221,6 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->format = format;
 	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
-	buf->pPixmap = pPixmap;
 	buf->previous_canflip = -1;
 
 	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
@@ -217,6 +255,7 @@ fail:
 		else
 			pPixmap->refcnt--;
 	}
+	free(buf->pPixmaps);
 	free(buf);
 
 	return NULL;
@@ -232,18 +271,28 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	/* Note: pDraw may already be deleted, so use the pPixmap here
 	 * instead (since it is at least refcntd)
 	 */
-	ScreenPtr pScreen = buf->pPixmap->drawable.pScreen;
+	ScreenPtr pScreen = buf->pPixmaps[0]->drawable.pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	int numBuffers, i;
 
 	if (--buf->refcnt > 0)
 		return;
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
 
-	ARMSOCDeregisterExternalAccess(buf->pPixmap);
+	if (buffer->attachment == DRI2BufferBackLeft) {
+		assert(pARMSOC->driNumBufs > 1);
+		numBuffers = pARMSOC->driNumBufs-1;
+	} else
+		numBuffers = 1;
 
-	pScreen->DestroyPixmap(buf->pPixmap);
+	for (i = 0; i < numBuffers && buf->pPixmaps[i] != NULL; i++) {
+		ARMSOCDeregisterExternalAccess(buf->pPixmaps[i]);
+		pScreen->DestroyPixmap(buf->pPixmaps[i]);
+	}
 
+	free(buf->pPixmaps);
 	free(buf);
 }
 
@@ -356,6 +405,120 @@ static const char * const swap_names[] = {
 		[DRI2_FLIP_COMPLETE] = "flip,"
 };
 
+static Bool allocNextBuffer(DrawablePtr pDraw, PixmapPtr *ppPixmap,
+		uint32_t *name) {
+	ScreenPtr pScreen = pDraw->pScreen;
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	struct armsoc_bo *bo;
+	PixmapPtr pPixmap;
+	int ret;
+	uint32_t new_name;
+	Bool extRegistered = FALSE;
+
+	pPixmap = createpix(pDraw);
+
+	if (!pPixmap)
+		goto error;
+
+	bo = ARMSOCPixmapBo(pPixmap);
+	if (!bo) {
+		WARNING_MSG(
+			"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
+		goto error;
+	}
+
+	ARMSOCRegisterExternalAccess(pPixmap);
+	extRegistered = TRUE;
+
+	ret = armsoc_bo_get_name(bo, &new_name);
+	if (ret) {
+		ERROR_MSG("Could not get buffer name: %d", ret);
+		goto error;
+	}
+
+	if (!armsoc_bo_get_fb(bo)) {
+		ret = armsoc_bo_add_fb(bo);
+		/* Should always be able to add fb, as we only add more buffers
+		 * when flipping*/
+		if (ret) {
+			ERROR_MSG(
+				"Could not add framebuffer to additional back buffer");
+			goto error;
+		}
+	}
+
+	/* No errors, update pixmap and name */
+	*ppPixmap = pPixmap;
+	*name = new_name;
+
+	return TRUE;
+
+error:
+	/* revert to existing pixmap */
+	if (pPixmap) {
+		if (extRegistered)
+			ARMSOCDeregisterExternalAccess(pPixmap);
+		pScreen->DestroyPixmap(pPixmap);
+	}
+
+	return FALSE;
+}
+
+static void nextBuffer(DrawablePtr pDraw, struct ARMSOCDRI2BufferRec *backBuf)
+{
+	ScreenPtr pScreen = pDraw->pScreen;
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+
+	if (pARMSOC->driNumBufs <= 2) {
+		/*Only using double buffering, leave the pixmap as-is */
+		return;
+	}
+
+	backBuf->currentPixmap++;
+	backBuf->currentPixmap %= backBuf->numPixmaps;
+
+	if (backBuf->pPixmaps[backBuf->currentPixmap]) {
+		/* Already allocated the next buffer - get the name and
+		 * early-out */
+		struct armsoc_bo *bo;
+		int ret;
+
+		bo = ARMSOCPixmapBo(backBuf->pPixmaps[backBuf->currentPixmap]);
+		assert(bo);
+		ret = armsoc_bo_get_name(bo, &DRIBUF(backBuf)->name);
+		assert(!ret);
+	} else {
+		Bool ret;
+		PixmapPtr * const curBackPix =
+			&backBuf->pPixmaps[backBuf->currentPixmap];
+		ret = allocNextBuffer(pDraw, curBackPix,
+			&DRIBUF(backBuf)->name);
+		if (!ret) {
+			/* can't have failed on the first buffer */
+			assert(backBuf->currentPixmap > 0);
+			/* Fall back to last buffer */
+			backBuf->currentPixmap--;
+			WARNING_MSG(
+				"Failed to use the requested %d-buffering due to an allocation failure.\n"
+				"Falling back to %d-buffering for this DRI2Drawable",
+				backBuf->numPixmaps+1,
+				backBuf->currentPixmap+2);
+			backBuf->numPixmaps = backBuf->currentPixmap+1;
+		}
+	}
+}
+
+static struct armsoc_bo *boFromBuffer(DRI2BufferPtr buf)
+{
+	PixmapPtr pPixmap;
+	struct ARMSOCPixmapPrivRec *priv;
+
+	pPixmap = ARMSOCBUF(buf)->pPixmaps[ARMSOCBUF(buf)->currentPixmap];
+	priv = exaGetPixmapDriverPrivate(pPixmap);
+	return priv->bo;
+}
+
 void
 ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 {
@@ -364,19 +527,14 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
-	struct ARMSOCPixmapPrivRec *src_priv, *dst_priv;
 	struct armsoc_bo *old_src_bo, *old_dst_bo;
 
 	if (--cmd->swapCount > 0)
 		return;
 
 	/* Save the old source bo for unreference below */
-	src_priv = exaGetPixmapDriverPrivate(
-		ARMSOCBUF(cmd->pSrcBuffer)->pPixmap);
-	dst_priv = exaGetPixmapDriverPrivate(
-		ARMSOCBUF(cmd->pDstBuffer)->pPixmap);
-	old_src_bo = src_priv->bo;
-	old_dst_bo = dst_priv->bo;
+	old_src_bo = boFromBuffer(cmd->pSrcBuffer);
+	old_dst_bo = boFromBuffer(cmd->pDstBuffer);
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
@@ -392,6 +550,11 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				exchangebufs(pDraw, cmd->pSrcBuffer,
 							cmd->pDstBuffer);
+
+				if (cmd->pSrcBuffer->attachment ==
+						DRI2BufferBackLeft)
+					nextBuffer(pDraw,
+						ARMSOCBUF(cmd->pSrcBuffer));
 			}
 
 			DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
@@ -399,10 +562,9 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
-				dst_priv = exaGetPixmapDriverPrivate(draw2pix(
-					dri2draw(pDraw, cmd->pDstBuffer)));
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				set_scanout_bo(pScrn, dst_priv->bo);
+				set_scanout_bo(pScrn,
+					boFromBuffer(cmd->pDstBuffer));
 			}
 		}
 	}
@@ -442,8 +604,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
 	struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(pDstBuffer);
 	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
+	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
-	struct ARMSOCPixmapPrivRec *src_priv, *dst_priv;
 	int new_canflip, ret, do_flip;
 
 	if (!cmd)
@@ -468,11 +630,11 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	ARMSOCDRI2ReferenceBuffer(pDstBuffer);
 	pARMSOC->pending_flips++;
 
-	src_priv = exaGetPixmapDriverPrivate(src->pPixmap);
-	dst_priv = exaGetPixmapDriverPrivate(dst->pPixmap);
+	src_bo = boFromBuffer(pSrcBuffer);
+	dst_bo = boFromBuffer(pDstBuffer);
 
-	src_fb_id = armsoc_bo_get_fb(src_priv->bo);
-	dst_fb_id = armsoc_bo_get_fb(dst_priv->bo);
+	src_fb_id = armsoc_bo_get_fb(src_bo);
+	dst_fb_id = armsoc_bo_get_fb(dst_bo);
 
 	new_canflip = canflip(pDraw);
 	if ((src->previous_canflip != -1 &&
@@ -496,8 +658,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src->previous_canflip = new_canflip;
 	dst->previous_canflip = new_canflip;
 
-	armsoc_bo_reference(src_priv->bo);
-	armsoc_bo_reference(dst_priv->bo);
+	armsoc_bo_reference(src_bo);
+	armsoc_bo_reference(dst_bo);
 
 	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
 
@@ -509,8 +671,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	 * Once the client calls DRI2GetBuffers again, it will receive a new back buffer of the
 	 * same size as the new resolution, and subsequent DRI2SwapBuffers will result in a flip.
 	 */
-	do_flip = do_flip && (armsoc_bo_width(src_priv->bo) == armsoc_bo_width(dst_priv->bo));
-	do_flip = do_flip && (armsoc_bo_height(src_priv->bo) == armsoc_bo_height(dst_priv->bo));
+	do_flip = do_flip && (armsoc_bo_width(src_bo) == armsoc_bo_width(dst_bo));
+	do_flip = do_flip && (armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo));
 
 	if (do_flip) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);

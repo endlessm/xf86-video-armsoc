@@ -118,6 +118,7 @@ struct ARMSOCRec {
 
 	/** user-configurable option: */
 	Bool				NoFlip;
+	unsigned			driNumBufs;
 
 	/** File descriptor of the connection with the DRM. */
 	int					drmFD;

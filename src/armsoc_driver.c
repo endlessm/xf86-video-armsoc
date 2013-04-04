@@ -110,6 +110,7 @@ enum {
 	OPTION_CARD_NUM,
 	OPTION_BUSID,
 	OPTION_DRIVERNAME,
+	OPTION_DRI_NUM_BUF,
 };
 
 /** Supported options. */
@@ -119,6 +120,7 @@ static const OptionInfoRec ARMSOCOptions[] = {
 	{ OPTION_CARD_NUM,   "DRICard",    OPTV_INTEGER, {0}, FALSE },
 	{ OPTION_BUSID,      "BusID",      OPTV_STRING,  {0}, FALSE },
 	{ OPTION_DRIVERNAME, "DriverName", OPTV_STRING,  {0}, FALSE },
+	{ OPTION_DRI_NUM_BUF, "DRI2MaxBuffers", OPTV_INTEGER, {-1}, FALSE },
 	{ -1,                NULL,         OPTV_NONE,    {0}, FALSE }
 };
 
@@ -599,6 +601,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	rgb defaultMask = { 0, 0, 0 };
 	Gamma defaultGamma = { 0.0, 0.0, 0.0 };
 	int i;
+	int driNumBufs;
 
 	TRACE_ENTER();
 
@@ -705,6 +708,21 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	armsocDebug = xf86ReturnOptValBool(pARMSOC->pOptionInfo,
 					OPTION_DEBUG, FALSE);
 
+	if (!xf86GetOptValInteger(pARMSOC->pOptionInfo, OPTION_DRI_NUM_BUF,
+			&driNumBufs)) {
+		/* Default to double buffering */
+		driNumBufs = 2;
+	}
+
+	if (driNumBufs < 2) {
+		ERROR_MSG(
+			"Invalid option for %s: %d. Must be greater than or equal to 2",
+			xf86TokenToOptName(pARMSOC->pOptionInfo,
+				OPTION_DRI_NUM_BUF),
+			driNumBufs);
+		return FALSE;
+	}
+	pARMSOC->driNumBufs = driNumBufs;
 	/* Determine if user wants to disable buffer flipping: */
 	pARMSOC->NoFlip = xf86ReturnOptValBool(pARMSOC->pOptionInfo,
 			OPTION_NO_FLIP, FALSE);
