@@ -59,6 +59,7 @@ struct armsoc_bo {
 	 * check if the new size will fit
 	 */
 	uint32_t original_size;
+	uint32_t name;
 };
 
 /* device related functions:
@@ -165,6 +166,7 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->bpp = create_dumb.bpp;
 	new_buf->refcnt = 1;
 	new_buf->dmabuf = -1;
+	new_buf->name = 0;
 
 	return new_buf;
 }
@@ -176,6 +178,8 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 
 	if (!bo)
 		return;
+
+	/* NB: name doesn't need cleanup */
 
 	assert(bo->refcnt == 0);
 	assert(bo->dmabuf < 0);
@@ -218,17 +222,26 @@ void armsoc_bo_reference(struct armsoc_bo *bo)
 
 int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 {
-	int ret;
-	struct drm_gem_flink flink;
+	if (bo->name == 0) {
+		int ret;
+		struct drm_gem_flink flink;
 
-	assert(bo->refcnt > 0);
-	flink.handle = bo->handle;
+		assert(bo->refcnt > 0);
+		flink.handle = bo->handle;
 
-	ret = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_FLINK, &flink);
-	if (ret)
-		return ret;
+		ret = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_FLINK, &flink);
+		if (ret) {
+			xf86DrvMsg(-1, X_ERROR,
+					"_GEM_FLINK(handle:0x%X)failed. errno:0x%X\n",
+					flink.handle, errno);
+			return ret;
+		}
 
-	*name = flink.name;
+		bo->name = flink.name;
+	}
+
+	*name = bo->name;
+
 	return 0;
 }
 
