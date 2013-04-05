@@ -66,9 +66,6 @@
 #define ARMSOC_VERSION		1000	/* Apparently not used by X server */
 #define ARMSOC_NAME			"ARMSOC"	/* Name used to prefix messages */
 #define ARMSOC_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
-#define ARMSOC_MAJOR_VERSION	0
-#define ARMSOC_MINOR_VERSION	83
-#define ARMSOC_PATCHLEVEL		0
 
 #define ARMSOC_SUPPORT_GAMMA 0
 
