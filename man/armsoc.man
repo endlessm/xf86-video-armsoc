@@ -111,16 +111,6 @@ builtin laptop screen, both running at 1024x768.
 .BI "  Option \*qmonitor-VGA\*q \*qSome Random CRT\*q"
 .B "EndSection"
         
-.SH REPORTING BUGS
-
-The xf86-video-armsoc driver is part of the X.Org and Freedesktop.org
-umbrella projects.  Report bugs at
-https://bugs.freedesktop.org/enter_bug.cgi?product=xorg.  Mailing
-lists are also commonly used to report experiences and ask questions
-about configuration and other topics.  See lists.freedesktop.org for
-more information (the xorg@lists.freedesktop.org mailing list is the
-most appropriate place to ask X.Org and driver related questions).
-
 .SH "SEE ALSO"
 __xservername__(__appmansuffix__), __xconfigfile__(__filemansuffix__), Xserver(__appmansuffix__), X(__miscmansuffix__)
 .SH AUTHORS
