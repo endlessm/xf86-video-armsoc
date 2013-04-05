@@ -25,4 +25,5 @@ depcomp
 .cproject
 .project
 .settings
-man/omap.4
+man/armsoc.4
+/m4
