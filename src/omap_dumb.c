@@ -31,7 +31,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-#include "omap_drmif_fb.h"
+#include "omap_dumb.h"
 #include "drmmode_driver.h"
 
 struct armsoc_device {
