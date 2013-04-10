@@ -72,14 +72,6 @@ typedef struct _OMAPEXARec
 
 
 /**
- * Canonical name of an external sub-module providing support for EXA
- * acceleration, that utiltizes the OMAP's PowerVR accelerator and uses closed
- * source from Imaginations Technology Limited.
- */
-#define SUB_MODULE_PVR	"omap_pvr"
-OMAPEXAPtr InitPowerVREXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
-
-/**
  * Fallback EXA implementation
  */
 OMAPEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
@@ -121,7 +113,6 @@ typedef struct {
 } OMAPPixmapPrivRec, *OMAPPixmapPrivPtr;
 
 #define OMAP_CREATE_PIXMAP_SCANOUT 0x80000000
-#define OMAP_CREATE_PIXMAP_TILED   0x40000000
 
 
 void * OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,

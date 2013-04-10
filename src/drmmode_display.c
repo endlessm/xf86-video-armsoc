@@ -166,7 +166,7 @@ drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 	mode->VTotal = kmode->vtotal;
 	mode->VScan = kmode->vscan;
 
-	mode->Flags = kmode->flags; //& FLAG_BITS;
+	mode->Flags = kmode->flags;
 	mode->name = strdup(kmode->name);
 
 	DEBUG_MSG("copy mode %s (%p %p)", kmode->name, mode->name, mode);
@@ -198,7 +198,7 @@ drmmode_ConvertToKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 	kmode->vtotal = mode->VTotal;
 	kmode->vscan = mode->VScan;
 
-	kmode->flags = mode->Flags; //& FLAG_BITS;
+	kmode->flags = mode->Flags;
 	if (mode->name)
 		strncpy(kmode->name, mode->name, DRM_DISPLAY_MODE_LEN);
 	kmode->name[DRM_DISPLAY_MODE_LEN-1] = 0;

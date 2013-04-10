@@ -26,8 +26,6 @@
 
 #include <stdint.h>
 
-#define OMAP_PARAM_CHIPSET_ID 0
-
 #define HW_CURSOR_ARGB		(0)
 #define HW_CURSOR_PL111		(1)
 

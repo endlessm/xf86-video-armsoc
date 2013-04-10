@@ -306,14 +306,6 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
 		}
 	}
 
-	/* wait for blits complete.. note we could be a bit more clever here
-	 * for non-DRI2 buffers and use separate OMAP{Prepare,Finish}GPUAccess()
-	 * fxns wrapping accelerated GPU operations.. this way we don't have
-	 * to prep/fini around each CPU operation, but only when there is an
-	 * intervening GPU operation (or if we go to a stronger op mask, ie.
-	 * first CPU access is READ and second is WRITE).
-	 */
-
 	if (omap_bo_cpu_prep(priv->bo, idx2op(index))) {
 		xf86DrvMsg(-1, X_ERROR, "%s: omap_bo_cpu_prep failed - "
 				"unable to synchronise access.\n", __FUNCTION__);

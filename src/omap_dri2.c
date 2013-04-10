@@ -159,28 +159,6 @@ OMAPDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 
 	if (attachment == DRI2BufferFrontLeft) {
 		pPixmap = draw2pix(pDraw);
-
-
-/* TODO: MIDEGL-1442: We don't have enough memory to allocate three physically contiguous buffers at the same time! Because all our
- * buffers are scanout-able we'll not bother allocating *another* scanout buffer and just use the one we already have
- * and save that extra buffer size */
-#if 0
-		/* to do flipping, if we don't have DMM, then we need a scanout
-		 * capable (physically contiguous) buffer.. this bit of gymnastics
-		 * ensures that.
-		 */
-		if (canflip(pDraw) && !has_dmm(pOMAP) &&
-				(OMAPPixmapBo(pPixmap) != pOMAP->scanout)) {
-
-			/* need to re-allocate pixmap to get a scanout capable buffer */
-			PixmapPtr pNewPix = createpix(pDraw);
-
-			OMAPPixmapExchange(pPixmap, pNewPix);
-
-			pScreen->DestroyPixmap(pNewPix);
-		}
-#endif
-
 		pPixmap->refcnt++;
 	} else {
 		pPixmap = createpix(pDraw);
@@ -603,10 +581,7 @@ OMAPDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw, CARD64 target_msc,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-//	OMAPPtr pOMAP = OMAPPTR(pScrn);
 
-#if 0
-#endif
 	ERROR_MSG("not implemented");
 	return FALSE;
 }

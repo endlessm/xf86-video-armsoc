@@ -84,27 +84,19 @@ _X_EXPORT DriverRec OMAP = {
 #endif
 };
 
+#define MALI_4XX_CHIPSET_ID (0x0400)
+#define MALI_T6XX_CHIPSET_ID (0x0600)
+
 /** Supported "chipsets." */
 static SymTabRec OMAPChipsets[] = {
-		/* OMAP2 and earlier not supported */
-		{ 0x3430, "OMAP3430 with PowerVR SGX530" },
-		{ 0x3630, "OMAP3630 with PowerVR SGX530" },
-		{ 0x4430, "OMAP4430 with PowerVR SGX540" },
-		{ 0x4460, "OMAP4460 with PowerVR SGX540" },
-		/*    { 4470, "OMAP4470 with <redacted> ;-)" }, */
-		{ 0x5430, "OMAP5430 with PowerVR SGX544 MP" },
-		{ 0x5432, "OMAP5432 with PowerVR SGX544 MP" },
-        { 0x0400, "Mali-T400" },
-		{ 0x0600, "Mali-T60x" },
+		{ MALI_4XX_CHIPSET_ID, "Mali-4XX" },
+		{ MALI_T6XX_CHIPSET_ID, "Mali-T6XX" },
 		{-1, NULL }
 };
 
 /** Supported options, as enum values. */
 typedef enum {
 	OPTION_DEBUG,
-	OPTION_DRI,
-	OPTION_NO_ACCEL,
-	OPTION_HW_CURSOR,
 	OPTION_NO_FLIP,
 	/* TODO: MIDEGL-1453: probably need to add an option to let user specify bus-id */
 } OMAPOpts;
@@ -112,9 +104,6 @@ typedef enum {
 /** Supported options. */
 static const OptionInfoRec OMAPOptions[] = {
 	{ OPTION_DEBUG,		"Debug",	OPTV_BOOLEAN,	{0},	FALSE },
-	{ OPTION_DRI,		"DRI",		OPTV_BOOLEAN,	{0},	FALSE },
-	{ OPTION_NO_ACCEL,	"NoAccel",	OPTV_BOOLEAN,	{0},	FALSE },
-	{ OPTION_HW_CURSOR,	"HWcursor",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_NO_FLIP,	"NoFlip",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ -1,				NULL,		OPTV_NONE,		{0},	FALSE }
 };
@@ -126,9 +115,7 @@ static const OptionInfoRec OMAPOptions[] = {
 static int
 OMAPOpenDRM(int n)
 {
-	char bus_id[32];
-	snprintf(bus_id, sizeof(bus_id), "platform:omapdrm:%02d", n);
-	return open("/dev/dri/card0", O_RDWR, 0);/*drmOpen("mali_drm", bus_id);*/
+	return open("/dev/dri/card0", O_RDWR, 0);
 }
 
 static Bool
@@ -498,27 +485,15 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 			pOMAP->drmmode->dumb_scanout_flags,
 			pOMAP->drmmode->dumb_no_scanout_flags);
 
-	/* query chip-id: */
-	if (omap_get_param(pOMAP->dev, OMAP_PARAM_CHIPSET_ID, &value)) {
-		ERROR_MSG("Could not read chipset");
-		goto fail;
-	}
-	pOMAP->chipset = value;
-
 	/* find matching chipset name: */
 	for (i = 0; OMAPChipsets[i].name; i++) {
-		if (OMAPChipsets[i].token == pOMAP->chipset) {
+		if (OMAPChipsets[i].token == MALI_T6XX_CHIPSET_ID) {
 			pScrn->chipset = (char *)OMAPChipsets[i].name;
 			break;
 		}
 	}
 
-	if (!pScrn->chipset) {
-		ERROR_MSG("Unknown chipset: %s", pScrn->chipset);
-		goto fail;
-	}
-
-	INFO_MSG("Found chipset: %s", pScrn->chipset);
+	INFO_MSG("Chipset: %s", pScrn->chipset);
 
 	/*
 	 * Process the "xorg.conf" file options:
@@ -533,21 +508,10 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	/* Determine if the user wants debug messages turned on: */
 	omapDebug = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DEBUG, FALSE);
 
-	pOMAP->dri = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DRI, TRUE);
-
-	/* Determine if user wants to disable hw mouse cursor: */
-	pOMAP->HWCursor = xf86ReturnOptValBool(pOMAP->pOptionInfo,
-			OPTION_HW_CURSOR, TRUE);
-	INFO_MSG("Using %s cursor", pOMAP->HWCursor ? "HW" : "SW");
-
 	/* Determine if user wants to disable buffer flipping: */
 	pOMAP->NoFlip = xf86ReturnOptValBool(pOMAP->pOptionInfo,
 			OPTION_NO_FLIP, FALSE);
 	INFO_MSG("Buffer Flipping is %s", pOMAP->NoFlip ? "Disabled" : "Enabled");
-
-	/* Determine if the user wants to disable acceleration: */
-	pOMAP->NoAccel = xf86ReturnOptValBool(pOMAP->pOptionInfo,
-			OPTION_NO_ACCEL, FALSE);
 
 	/*
 	 * Select the video modes:
@@ -591,32 +555,6 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 		goto fail;
 	}
 
-	switch (pOMAP->chipset) {
-	case 0x3430:
-	case 0x3630:
-	case 0x4430:
-	case 0x4460:
-	case 0x5430:
-	case 0x5432:
-		if (xf86LoadSubModule(pScrn, SUB_MODULE_PVR)) {
-			INFO_MSG("Loaded the %s sub-module", SUB_MODULE_PVR);
-		} else {
-			INFO_MSG("Cannot load the %s sub-module", SUB_MODULE_PVR);
-			/* note that this is not fatal.. since IMG/PVR EXA module
-			 * is closed source, it is only optional.
-			 */
-			pOMAP->NoAccel = TRUE;  /* don't call InitPowerVREXA() */
-		}
-		break;
-		/* case 0x4470: ..; break; */
-	case 0x0600:
-		pOMAP->NoAccel = TRUE;  /* don't call InitPowerVREXA() */
-		break;
-	default:
-		ERROR_MSG("Unsupported chipset: %d", pOMAP->chipset);
-		goto fail;
-	}
-
 	TRACE_EXIT();
 	return TRUE;
 
@@ -636,37 +574,11 @@ OMAPAccelInit(ScreenPtr pScreen)
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 	OMAPPtr pOMAP = OMAPPTR(pScrn);
 
-	if (!pOMAP->NoAccel) {
-		switch (pOMAP->chipset) {
-		case 0x3430:
-		case 0x3630:
-		case 0x4430:
-		case 0x4460:
-		case 0x5430:
-		case 0x5432:
-			INFO_MSG("Initializing the \"%s\" sub-module ...", SUB_MODULE_PVR);
-			pOMAP->pOMAPEXA = InitPowerVREXA(pScreen, pScrn, pOMAP->drmFD);
-			if (pOMAP->pOMAPEXA) {
-				INFO_MSG("Successfully initialized the \"%s\" sub-module",
-						SUB_MODULE_PVR);
-			} else {
-				INFO_MSG("Could not initialize the \"%s\" sub-module",
-						SUB_MODULE_PVR);
-				pOMAP->NoAccel = TRUE;
-			}
-			break;
-		default:
-			ERROR_MSG("Unsupported chipset: %d", pOMAP->chipset);
-			pOMAP->NoAccel = TRUE;
-			break;
-		}
-	}
-
 	if (!pOMAP->pOMAPEXA) {
 		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn, pOMAP->drmFD);
 	}
 
-	if (pOMAP->dri && pOMAP->pOMAPEXA) {
+	if (pOMAP->pOMAPEXA) {
 		pOMAP->dri = OMAPDRI2ScreenInit(pScreen);
 	} else {
 		pOMAP->dri = FALSE;
@@ -790,11 +702,8 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Initialize the cursor: */
 	miDCInitialize(pScreen, xf86GetPointerScreenFuncs());
 
-	if (pOMAP->HWCursor) {
-		if (!drmmode_cursor_init(pScreen)) {
-			ERROR_MSG("Hardware cursor initialization failed");
-			pOMAP->HWCursor = FALSE;
-		}
+	if (!drmmode_cursor_init(pScreen)) {
+		ERROR_MSG("Hardware cursor initialization failed");
 	}
 
 	/* XXX -- Is this the right place for this?  The Intel i830 driver says:

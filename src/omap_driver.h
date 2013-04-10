@@ -115,19 +115,16 @@ extern _X_EXPORT Bool omapDebug;
 /** The driver's Screen-specific, "private" data structure. */
 typedef struct _OMAPRec
 {
-	/** Chipset id */
-	int					chipset;
-
 	/**
 	 * Pointer to a structure used to communicate and coordinate with an
 	 * external EXA library (if loaded).
 	 */
 	OMAPEXAPtr			pOMAPEXA;
 
-	/** various user-configurable options: */
+	/** record if OMAPDRI2ScreenInit() was successful */
 	Bool				dri;
-	Bool				HWCursor;
-	Bool				NoAccel;
+
+	/** user-configurable option: */
 	Bool				NoFlip;
 
 	/** File descriptor of the connection with the DRM. */
@@ -156,18 +153,13 @@ typedef struct _OMAPRec
 
 	/** Flips we are waiting for: */
 	int					pending_flips;
-       /* For invalidating backbuffers on Hotplug */
+	/* For invalidating backbuffers on Hotplug */
 	Bool			has_resized;
 } OMAPRec, *OMAPPtr;
 
 /*
  * Misc utility macros:
  */
-
-static inline Bool has_dmm(OMAPPtr pOMAP)
-{
-	return pOMAP->chipset >= 0x4430;
-}
 
 /** Return a pointer to the driver's private structure. */
 #define OMAPPTR(p) ((OMAPPtr)((p)->driverPrivate))
