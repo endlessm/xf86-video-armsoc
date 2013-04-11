@@ -65,8 +65,6 @@
 #include "fb.h"
 #include "xf86cmap.h"
 
-#include "xf86xv.h"
-
 #include "xf86Cursor.h"
 #include "xf86DDC.h"
 

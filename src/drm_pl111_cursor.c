@@ -60,9 +60,6 @@
 #include "xf86cmap.h"
 #include "shadowfb.h"
 
-#include "xf86xv.h"
-#include <X11/extensions/Xv.h>
-
 #include "xf86Cursor.h"
 #include "xf86DDC.h"
 
