@@ -39,10 +39,10 @@
 #include "compat-api.h"
 
 /**
- * A per-Screen structure used to communicate and coordinate between the OMAP X
- * driver and an external EXA sub-module (if loaded).
+ * A per-Screen structure used to communicate and coordinate between the
+ * ARMSOC X driver and an external EXA sub-module (if loaded).
  */
-typedef struct _OMAPEXARec
+typedef struct _ARMSOCEXARec
 {
 	union { struct {
 
@@ -68,16 +68,16 @@ typedef struct _OMAPEXARec
 	 */
 	}; void *pad[64]; };
 
-} OMAPEXARec, *OMAPEXAPtr;
+} ARMSOCEXARec, *ARMSOCEXAPtr;
 
 
 /**
  * Fallback EXA implementation
  */
-OMAPEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
+ARMSOCEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
 
 
-OMAPEXAPtr OMAPEXAPTR(ScrnInfoPtr pScrn);
+ARMSOCEXAPtr ARMSOCEXAPTR(ScrnInfoPtr pScrn);
 
 static inline ScrnInfoPtr
 pix2scrn(PixmapPtr pPixmap)
@@ -97,10 +97,10 @@ draw2pix(DrawablePtr pDraw)
 	}
 }
 
-/* Common OMAP EXA functions, mostly related to pixmap/buffer allocation.
+/* Common ARMSOC EXA functions, mostly related to pixmap/buffer allocation.
  * Individual driver submodules can use these directly, or wrap them with
  * there own functions if anything additional is required.  Submodules
- * can use OMAPPrixmapPrivPtr#priv for their own private data.
+ * can use ARMSOCPrixmapPrivPtr#priv for their own private data.
  */
 
 typedef struct {
@@ -108,38 +108,38 @@ typedef struct {
 	int ext_access_cnt; /* Ref-count of DRI2Buffers that wrap the Pixmap,
 	                       that allow external access to the underlying
 	                       buffer. When >0 CPU access must be synchronised. */
-	struct omap_bo *bo;
+	struct armsoc_bo *bo;
 	int usage_hint;
-} OMAPPixmapPrivRec, *OMAPPixmapPrivPtr;
+} ARMSOCPixmapPrivRec, *ARMSOCPixmapPrivPtr;
 
-#define OMAP_CREATE_PIXMAP_SCANOUT 0x80000000
+#define ARMSOC_CREATE_PIXMAP_SCANOUT 0x80000000
 
 
-void * OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
+void * ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch);
-void OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv);
-Bool OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
+void ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv);
+Bool ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData);
-void OMAPWaitMarker(ScreenPtr pScreen, int marker);
-Bool OMAPPrepareAccess(PixmapPtr pPixmap, int index);
-void OMAPFinishAccess(PixmapPtr pPixmap, int index);
-Bool OMAPPixmapIsOffscreen(PixmapPtr pPixmap);
+void ARMSOCWaitMarker(ScreenPtr pScreen, int marker);
+Bool ARMSOCPrepareAccess(PixmapPtr pPixmap, int index);
+void ARMSOCFinishAccess(PixmapPtr pPixmap, int index);
+Bool ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap);
 
-static inline struct omap_bo *
-OMAPPixmapBo(PixmapPtr pPixmap)
+static inline struct armsoc_bo *
+ARMSOCPixmapBo(PixmapPtr pPixmap)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	return priv->bo;
 }
 
-void OMAPPixmapExchange(PixmapPtr a, PixmapPtr b);
+void ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b);
 
 /* Register that the pixmap can be accessed externally, so
  * CPU access must be synchronised. */
-void OMAPRegisterExternalAccess(PixmapPtr pPixmap);
-void OMAPDeregisterExternalAccess(PixmapPtr pPixmap);
+void ARMSOCRegisterExternalAccess(PixmapPtr pPixmap);
+void ARMSOCDeregisterExternalAccess(PixmapPtr pPixmap);
 
 
 #endif /* OMAP_EXA_COMMON_H_ */

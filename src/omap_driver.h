@@ -63,14 +63,14 @@
 #include "omap_exa.h"
 
 
-#define OMAP_VERSION		1000	/* Apparently not used by X server */
-#define OMAP_NAME			"ARMSOC"	/* Name used to prefix messages */
-#define OMAP_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
-#define OMAP_MAJOR_VERSION	0
-#define OMAP_MINOR_VERSION	83
-#define OMAP_PATCHLEVEL		0
+#define ARMSOC_VERSION		1000	/* Apparently not used by X server */
+#define ARMSOC_NAME			"ARMSOC"	/* Name used to prefix messages */
+#define ARMSOC_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
+#define ARMSOC_MAJOR_VERSION	0
+#define ARMSOC_MINOR_VERSION	83
+#define ARMSOC_PATCHLEVEL		0
 
-#define OMAP_SUPPORT_GAMMA 0
+#define ARMSOC_SUPPORT_GAMMA 0
 
 #define CURSORW  (64)
 #define CURSORH  (64)
@@ -79,20 +79,20 @@
  * This controls whether debug statements (and function "trace" enter/exit)
  * messages are sent to the log file (TRUE) or are ignored (FALSE).
  */
-extern _X_EXPORT Bool omapDebug;
+extern _X_EXPORT Bool armsocDebug;
 
 
 /* Various logging/debug macros for use in the X driver and the external
  * sub-modules:
  */
 #define TRACE_ENTER() \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Entering\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Entering\n",\
 				__FUNCTION__, __LINE__); } while (0)
 #define TRACE_EXIT() \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Exiting\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Exiting\n",\
 				__FUNCTION__, __LINE__); } while (0)
 #define DEBUG_MSG(fmt, ...) \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d " fmt "\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d " fmt "\n",\
 				__FUNCTION__, __LINE__, ##__VA_ARGS__); } while (0)
 #define INFO_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, X_INFO, fmt "\n",\
@@ -113,15 +113,15 @@ extern _X_EXPORT Bool omapDebug;
 
 
 /** The driver's Screen-specific, "private" data structure. */
-typedef struct _OMAPRec
+typedef struct _ARMSOCRec
 {
 	/**
 	 * Pointer to a structure used to communicate and coordinate with an
 	 * external EXA library (if loaded).
 	 */
-	OMAPEXAPtr			pOMAPEXA;
+	ARMSOCEXAPtr			pARMSOCEXA;
 
-	/** record if OMAPDRI2ScreenInit() was successful */
+	/** record if ARMSOCDRI2ScreenInit() was successful */
 	Bool				dri;
 
 	/** user-configurable option: */
@@ -135,10 +135,10 @@ typedef struct _OMAPRec
 	struct drmmode_interface *drmmode;
 
 	/** DRM device instance */
-	struct omap_device	*dev;
+	struct armsoc_device	*dev;
 
 	/** Scan-out buffer. */
-	struct omap_bo		*scanout;
+	struct armsoc_bo		*scanout;
 
 	/** Pointer to the options for this screen. */
 	OptionInfoPtr		pOptionInfo;
@@ -155,16 +155,16 @@ typedef struct _OMAPRec
 	int					pending_flips;
 	/* For invalidating backbuffers on Hotplug */
 	Bool			has_resized;
-} OMAPRec, *OMAPPtr;
+} ARMSOCRec, *ARMSOCPtr;
 
 /*
  * Misc utility macros:
  */
 
 /** Return a pointer to the driver's private structure. */
-#define OMAPPTR(p) ((OMAPPtr)((p)->driverPrivate))
-#define OMAPPTR_FROM_SCREEN(pScreen) \
-	((OMAPPtr)(xf86Screens[(pScreen)->myNum])->driverPrivate);
+#define ARMSOCPTR(p) ((ARMSOCPtr)((p)->driverPrivate))
+#define ARMSOCPTR_FROM_SCREEN(pScreen) \
+	((ARMSOCPtr)(xf86Screens[(pScreen)->myNum])->driverPrivate);
 
 #define wrap(priv, real, mem, func) {\
     priv->Saved##mem = real->mem; \
@@ -212,15 +212,15 @@ void drmmode_argb_cursor_to_pl111_lbbp( xf86CrtcPtr crtc, uint32_t * d, CARD32 *
 /**
  * DRI2 functions..
  */
-typedef struct _OMAPDRISwapCmd OMAPDRISwapCmd;
-Bool OMAPDRI2ScreenInit(ScreenPtr pScreen);
-void OMAPDRI2CloseScreen(ScreenPtr pScreen);
-void OMAPDRI2SwapComplete(OMAPDRISwapCmd *cmd);
+typedef struct _ARMSOCDRISwapCmd ARMSOCDRISwapCmd;
+Bool ARMSOCDRI2ScreenInit(ScreenPtr pScreen);
+void ARMSOCDRI2CloseScreen(ScreenPtr pScreen);
+void ARMSOCDRI2SwapComplete(ARMSOCDRISwapCmd *cmd);
 
 /**
  * DRI2 util functions..
  */
 
-void set_scanout_bo(ScrnInfoPtr pScrn, struct omap_bo *bo);
+void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo);
 
 #endif /* __OMAP_DRV_H__ */

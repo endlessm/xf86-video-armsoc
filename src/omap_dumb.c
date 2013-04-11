@@ -34,14 +34,14 @@
 #include "omap_drmif_fb.h"
 #include "drmmode_driver.h"
 
-struct omap_device {
+struct armsoc_device {
 	int fd;
 	uint32_t dumb_scanout_flags;
 	uint32_t dumb_no_scanout_flags;
 };
 
-struct omap_bo {
-	struct omap_device *dev;
+struct armsoc_bo {
+	struct armsoc_device *dev;
 	uint32_t handle;
 	uint32_t size;
 	void *map_addr;
@@ -58,9 +58,9 @@ struct omap_bo {
 /* device related functions:
  */
 
-struct omap_device *omap_device_new(int fd, uint32_t dumb_scanout_flags, uint32_t dumb_no_scanout_flags)
+struct armsoc_device *armsoc_device_new(int fd, uint32_t dumb_scanout_flags, uint32_t dumb_no_scanout_flags)
 {
-	struct omap_device *new_dev = malloc(sizeof(*new_dev));
+	struct armsoc_device *new_dev = malloc(sizeof(*new_dev));
 	if (!new_dev)
 		return NULL;
 
@@ -70,7 +70,7 @@ struct omap_device *omap_device_new(int fd, uint32_t dumb_scanout_flags, uint32_
 	return new_dev;
 }
 
-void omap_device_del(struct omap_device *dev)
+void armsoc_device_del(struct armsoc_device *dev)
 {
 	free(dev);
 }
@@ -78,12 +78,12 @@ void omap_device_del(struct omap_device *dev)
 /* buffer-object related functions:
  */
 
-int omap_bo_set_dmabuf(struct omap_bo *bo)
+int armsoc_bo_set_dmabuf(struct armsoc_bo *bo)
 {
 	int res;
 	struct drm_prime_handle prime_handle;
 
-	assert(!omap_bo_has_dmabuf(bo));
+	assert(!armsoc_bo_has_dmabuf(bo));
 
 	/* Try to get dma_buf fd */
 	prime_handle.handle = bo->handle;
@@ -100,25 +100,25 @@ int omap_bo_set_dmabuf(struct omap_bo *bo)
 	return res;
 }
 
-void omap_bo_clear_dmabuf(struct omap_bo *bo)
+void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo)
 {
-	assert(omap_bo_has_dmabuf(bo));
+	assert(armsoc_bo_has_dmabuf(bo));
 
 	close(bo->dmabuf);
 	bo->dmabuf = -1;
 }
 
-int omap_bo_has_dmabuf(struct omap_bo *bo)
+int armsoc_bo_has_dmabuf(struct armsoc_bo *bo)
 {
 	return bo->dmabuf >= 0;
 }
 
-struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
+struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 			uint32_t width, uint32_t height, uint8_t depth,
-			uint8_t bpp, enum omap_buf_type buf_type)
+			uint8_t bpp, enum armsoc_buf_type buf_type)
 {
 	struct drm_mode_create_dumb create_dumb;
-	struct omap_bo *new_buf;
+	struct armsoc_bo *new_buf;
 	int res;
 
 	new_buf = malloc(sizeof(*new_buf));
@@ -128,8 +128,8 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	create_dumb.height = height;
 	create_dumb.width = width;
 	create_dumb.bpp = bpp;
-	assert((OMAP_BO_SCANOUT == buf_type) || (OMAP_BO_NON_SCANOUT == buf_type));
-	if (OMAP_BO_SCANOUT == buf_type)
+	assert((ARMSOC_BO_SCANOUT == buf_type) || (ARMSOC_BO_NON_SCANOUT == buf_type));
+	if (ARMSOC_BO_SCANOUT == buf_type)
 	{
 		create_dumb.flags = dev->dumb_scanout_flags;
 	}
@@ -165,7 +165,7 @@ struct omap_bo *omap_bo_new_with_dim(struct omap_device *dev,
 	return new_buf;
 }
 
-static void omap_bo_del(struct omap_bo *bo)
+static void armsoc_bo_del(struct armsoc_bo *bo)
 {
 	int res;
 	struct drm_mode_destroy_dumb destroy_dumb;
@@ -173,7 +173,7 @@ static void omap_bo_del(struct omap_bo *bo)
 	if (!bo)
 		return;
 
-	assert(!omap_bo_has_dmabuf(bo));
+	assert(!armsoc_bo_has_dmabuf(bo));
 
 	if (bo->map_addr)
 	{
@@ -193,23 +193,23 @@ static void omap_bo_del(struct omap_bo *bo)
 	free(bo);
 }
 
-void omap_bo_unreference(struct omap_bo *bo)
+void armsoc_bo_unreference(struct armsoc_bo *bo)
 {
 	if (!bo)
 		return;
 
 	assert(bo->refcnt > 0);
 	if (--bo->refcnt == 0)
-		omap_bo_del(bo);
+		armsoc_bo_del(bo);
 }
 
-void omap_bo_reference(struct omap_bo *bo)
+void armsoc_bo_reference(struct armsoc_bo *bo)
 {
 	assert(bo->refcnt > 0);
 	bo->refcnt++;
 }
 
-int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
+int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 {
 	int ret;
 	struct drm_gem_flink flink;
@@ -224,43 +224,43 @@ int omap_bo_get_name(struct omap_bo *bo, uint32_t *name)
 	return 0;
 }
 
-uint32_t omap_bo_handle(struct omap_bo *bo)
+uint32_t armsoc_bo_handle(struct armsoc_bo *bo)
 {
 	return bo->handle;
 }
 
-uint32_t omap_bo_size(struct omap_bo *bo)
+uint32_t armsoc_bo_size(struct armsoc_bo *bo)
 {
 	return bo->size;
 }
 
-uint32_t omap_bo_width(struct omap_bo *bo)
+uint32_t armsoc_bo_width(struct armsoc_bo *bo)
 {
 	return bo->width;
 }
 
-uint32_t omap_bo_height(struct omap_bo *bo)
+uint32_t armsoc_bo_height(struct armsoc_bo *bo)
 {
 	return bo->height;
 }
 
-uint32_t omap_bo_bpp(struct omap_bo *bo)
+uint32_t armsoc_bo_bpp(struct armsoc_bo *bo)
 {
 	return bo->bpp;
 }
 
 /* Bytes per pixel */
-uint32_t omap_bo_Bpp(struct omap_bo *bo)
+uint32_t armsoc_bo_Bpp(struct armsoc_bo *bo)
 {
 	return (bo->bpp + 7) / 8;
 }
 
-uint32_t omap_bo_pitch(struct omap_bo *bo)
+uint32_t armsoc_bo_pitch(struct armsoc_bo *bo)
 {
 	return bo->pitch;
 }
 
-void *omap_bo_map(struct omap_bo *bo)
+void *armsoc_bo_map(struct armsoc_bo *bo)
 {
 	if (!bo->map_addr)
 	{
@@ -284,11 +284,11 @@ void *omap_bo_map(struct omap_bo *bo)
 	return bo->map_addr;
 }
 
-int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
+int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op)
 {
 	int ret = 0;
 
-	if(omap_bo_has_dmabuf(bo))
+	if(armsoc_bo_has_dmabuf(bo))
 	{
 		fd_set fds;
 		const struct timeval timeout = {10,0}; /* 10s before printing a msg */
@@ -312,12 +312,12 @@ int omap_bo_cpu_prep(struct omap_bo *bo, enum omap_gem_op op)
 	return ret;
 }
 
-int omap_bo_cpu_fini(struct omap_bo *bo, enum omap_gem_op op)
+int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op)
 {
 	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
 }
 
-int omap_bo_add_fb(struct omap_bo *bo)
+int armsoc_bo_add_fb(struct armsoc_bo *bo)
 {
 	int ret;
 
@@ -333,16 +333,16 @@ int omap_bo_add_fb(struct omap_bo *bo)
 	return 0;
 }
 
-uint32_t omap_bo_get_fb(struct omap_bo *bo)
+uint32_t armsoc_bo_get_fb(struct armsoc_bo *bo)
 {
 	return bo->fb_id;
 }
 
-int omap_bo_clear(struct omap_bo *bo)
+int armsoc_bo_clear(struct armsoc_bo *bo)
 {
 	unsigned char *dst;
 
-	if (!(dst = omap_bo_map(bo))) {
+	if (!(dst = armsoc_bo_map(bo))) {
 		xf86DrvMsg(-1, X_ERROR,
 				"Couldn't map scanout bo\n");
 		return -1;

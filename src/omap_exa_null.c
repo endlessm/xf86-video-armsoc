@@ -43,10 +43,10 @@
  */
 
 typedef struct {
-	OMAPEXARec base;
+	ARMSOCEXARec base;
 	ExaDriverPtr exa;
 	/* add any other driver private data here.. */
-} OMAPNullEXARec, *OMAPNullEXAPtr;
+} ARMSOCNullEXARec, *ARMSOCNullEXAPtr;
 
 
 static Bool
@@ -92,11 +92,11 @@ FreeScreen(FREE_SCREEN_ARGS_DECL)
 }
 
 
-OMAPEXAPtr
+ARMSOCEXAPtr
 InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 {
-	OMAPNullEXAPtr null_exa = calloc(sizeof (*null_exa), 1);
-	OMAPEXAPtr omap_exa;
+	ARMSOCNullEXAPtr null_exa = calloc(sizeof (*null_exa), 1);
+	ARMSOCEXAPtr armsoc_exa;
 	ExaDriverPtr exa;
 
 	INFO_MSG("Soft EXA mode");
@@ -104,7 +104,7 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	if(!null_exa) {
 		return NULL;
 	}
-	omap_exa = (OMAPEXAPtr)null_exa;
+	armsoc_exa = (ARMSOCEXAPtr)null_exa;
 
 	exa = exaDriverAlloc();
 	if (!exa) {
@@ -124,14 +124,14 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	exa->maxY = 4096;
 
 	/* Required EXA functions: */
-	exa->WaitMarker = OMAPWaitMarker;
-	exa->CreatePixmap2 = OMAPCreatePixmap2;
-	exa->DestroyPixmap = OMAPDestroyPixmap;
-	exa->ModifyPixmapHeader = OMAPModifyPixmapHeader;
+	exa->WaitMarker = ARMSOCWaitMarker;
+	exa->CreatePixmap2 = ARMSOCCreatePixmap2;
+	exa->DestroyPixmap = ARMSOCDestroyPixmap;
+	exa->ModifyPixmapHeader = ARMSOCModifyPixmapHeader;
 
-	exa->PrepareAccess = OMAPPrepareAccess;
-	exa->FinishAccess = OMAPFinishAccess;
-	exa->PixmapIsOffscreen = OMAPPixmapIsOffscreen;
+	exa->PrepareAccess = ARMSOCPrepareAccess;
+	exa->FinishAccess = ARMSOCFinishAccess;
+	exa->PixmapIsOffscreen = ARMSOCPixmapIsOffscreen;
 
 	// Always fallback for software operations
 	exa->PrepareCopy = PrepareCopyFail;
@@ -144,10 +144,10 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 		goto fail;
 	}
 
-	omap_exa->CloseScreen = CloseScreen;
-	omap_exa->FreeScreen = FreeScreen;
+	armsoc_exa->CloseScreen = CloseScreen;
+	armsoc_exa->FreeScreen = FreeScreen;
 
-	return omap_exa;
+	return armsoc_exa;
 
 fail:
 	if (null_exa) {

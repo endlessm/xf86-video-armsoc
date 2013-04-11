@@ -38,20 +38,20 @@
  * This controls whether debug statements (and function "trace" enter/exit)
  * messages are sent to the log file (TRUE) or are ignored (FALSE).
  */
-extern _X_EXPORT Bool omapDebug;
+extern _X_EXPORT Bool armsocDebug;
 
 
 /* Various logging/debug macros for use in the X driver and the external
  * sub-modules:
  */
 #define TRACE_ENTER() \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Entering\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Entering\n",\
 				__FUNCTION__, __LINE__); } while (0)
 #define TRACE_EXIT() \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Exiting\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Exiting\n",\
 				__FUNCTION__, __LINE__); } while (0)
 #define DEBUG_MSG(fmt, ...) \
-		do { if (omapDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d " fmt "\n",\
+		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d " fmt "\n",\
 				__FUNCTION__, __LINE__, ##__VA_ARGS__); } while (0)
 #define INFO_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, X_INFO, fmt "\n",\
@@ -71,8 +71,8 @@ extern _X_EXPORT Bool omapDebug;
 
 
 extern unsigned int
-OMAPCalculateStride(unsigned int fbWidth, unsigned int bitsPerPixel);
+ARMSOCCalculateStride(unsigned int fbWidth, unsigned int bitsPerPixel);
 extern unsigned int
-OMAPCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel);
+ARMSOCCalculateTiledStride(unsigned int width, unsigned int bitsPerPixel);
 
 #endif /* __OMAP_UTIL_H__ */

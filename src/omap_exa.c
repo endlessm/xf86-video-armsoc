@@ -34,71 +34,71 @@
 #include "omap_driver.h"
 
 /* keep this here, instead of static-inline so submodule doesn't
- * need to know layout of OMAPPtr..
+ * need to know layout of ARMSOCPtr..
  */
-_X_EXPORT OMAPEXAPtr
-OMAPEXAPTR(ScrnInfoPtr pScrn)
+_X_EXPORT ARMSOCEXAPtr
+ARMSOCEXAPTR(ScrnInfoPtr pScrn)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	return pOMAP->pOMAPEXA;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	return pARMSOC->pARMSOCEXA;
 }
 
-/* Common OMAP EXA functions, mostly related to pixmap/buffer allocation.
+/* Common ARMSOC EXA functions, mostly related to pixmap/buffer allocation.
  * Individual driver submodules can use these directly, or wrap them with
  * there own functions if anything additional is required.  Submodules
- * can use OMAPPrixmapPrivPtr#priv for their own private data.
+ * can use ARMSOCPrixmapPrivPtr#priv for their own private data.
  */
 
 /* used by DRI2 code to play buffer switcharoo */
 void
-OMAPPixmapExchange(PixmapPtr a, PixmapPtr b)
+ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b)
 {
-	OMAPPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
-	OMAPPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
+	ARMSOCPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
+	ARMSOCPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
 	exchange(apriv->priv, bpriv->priv);
 	exchange(apriv->bo, bpriv->bo);
 
 	/* Ensure neither pixmap has a dmabuf fd attached to the bo if the
 	 * ext_access_cnt refcount is 0, as it will never be cleared. */
-	if (omap_bo_has_dmabuf(apriv->bo) && !apriv->ext_access_cnt)
+	if (armsoc_bo_has_dmabuf(apriv->bo) && !apriv->ext_access_cnt)
 	{
-		omap_bo_clear_dmabuf(apriv->bo);
+		armsoc_bo_clear_dmabuf(apriv->bo);
 
 		/* Should only have to clear one dmabuf fd, otherwise the
 		 * refcount is wrong */
-		assert(!omap_bo_has_dmabuf(bpriv->bo));
+		assert(!armsoc_bo_has_dmabuf(bpriv->bo));
 	}
-	else if (omap_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt)
+	else if (armsoc_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt)
 	{
-		omap_bo_clear_dmabuf(bpriv->bo);
+		armsoc_bo_clear_dmabuf(bpriv->bo);
 
-		assert(!omap_bo_has_dmabuf(apriv->bo));
+		assert(!armsoc_bo_has_dmabuf(apriv->bo));
 	}
 }
 
 _X_EXPORT void *
-OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
+ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
 {
-	OMAPPixmapPrivPtr priv = calloc(sizeof(OMAPPixmapPrivRec), 1);
+	ARMSOCPixmapPrivPtr priv = calloc(sizeof(ARMSOCPixmapPrivRec), 1);
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	enum omap_buf_type buf_type = OMAP_BO_NON_SCANOUT;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
 	if(!priv)
 	{
 		return NULL;
 	}
 
-	if (usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
+	if (usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
 	{
-		buf_type = OMAP_BO_SCANOUT;
+		buf_type = ARMSOC_BO_SCANOUT;
 	}
 
 	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0)
 	{
-		priv->bo = omap_bo_new_with_dim(pOMAP->dev,
+		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width,
 				height,
 				depth,
@@ -110,7 +110,7 @@ OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 			free(priv);
 			return NULL;
 		}
-		*new_fb_pitch = omap_bo_pitch(priv->bo);
+		*new_fb_pitch = armsoc_bo_pitch(priv->bo);
 	}
 
 	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is not
@@ -125,9 +125,9 @@ OMAPCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 }
 
 _X_EXPORT void
-OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
+ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
-	OMAPPixmapPrivPtr priv = driverPriv;
+	ARMSOCPixmapPrivPtr priv = driverPriv;
 
 	assert(!priv->ext_access_cnt);
 
@@ -135,22 +135,22 @@ OMAPDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	 * backing this pixmap. */
 	if (priv->bo)
 	{
-		assert(!omap_bo_has_dmabuf(priv->bo));
-		omap_bo_unreference(priv->bo);
+		assert(!armsoc_bo_has_dmabuf(priv->bo));
+		armsoc_bo_unreference(priv->bo);
 	}
 
 	free(priv);
 }
 
 _X_EXPORT Bool
-OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
+ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	enum omap_buf_type buf_type = OMAP_BO_NON_SCANOUT;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
 	if (pPixData)
 		pPixmap->devPrivate.ptr = pPixData;
@@ -162,23 +162,23 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	 * We can't accelerate this pixmap, and don't ever want to
 	 * see it again..
 	 */
-	if (pPixData && pPixData != omap_bo_map(pOMAP->scanout)) {
+	if (pPixData && pPixData != armsoc_bo_map(pARMSOC->scanout)) {
 		/* scratch-pixmap (see GetScratchPixmapHeader()) gets recycled,
 		 * so could have a previous bo!
 		 */
-		omap_bo_unreference(priv->bo);
+		armsoc_bo_unreference(priv->bo);
 		priv->bo = NULL;
 
 		/* Returning FALSE calls miModifyPixmapHeader */
 		return FALSE;
 	}
 
-	if (pPixData == omap_bo_map(pOMAP->scanout))
-		priv->bo = pOMAP->scanout;
+	if (pPixData == armsoc_bo_map(pARMSOC->scanout))
+		priv->bo = pARMSOC->scanout;
 
-	if (priv->usage_hint & OMAP_CREATE_PIXMAP_SCANOUT)
+	if (priv->usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
 	{
-		buf_type = OMAP_BO_SCANOUT;
+		buf_type = ARMSOC_BO_SCANOUT;
 	}
 
 	if (depth > 0)
@@ -203,12 +203,12 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		return TRUE;
 
 	if (!priv->bo ||
-	    omap_bo_width(priv->bo) != pPixmap->drawable.width ||
-	    omap_bo_height(priv->bo) != pPixmap->drawable.height ||
-	    omap_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
+	    armsoc_bo_width(priv->bo) != pPixmap->drawable.width ||
+	    armsoc_bo_height(priv->bo) != pPixmap->drawable.height ||
+	    armsoc_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
 		/* re-allocate buffer! */
-		omap_bo_unreference(priv->bo);
-		priv->bo = omap_bo_new_with_dim(pOMAP->dev,
+		armsoc_bo_unreference(priv->bo);
+		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
 				pPixmap->drawable.depth,
@@ -220,7 +220,7 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 					pPixmap->drawable.height, buf_type);
 			return FALSE;
 		}
-		pPixmap->devKind = omap_bo_pitch(priv->bo);
+		pPixmap->devKind = armsoc_bo_pitch(priv->bo);
 	}
 
 	return TRUE;
@@ -228,27 +228,27 @@ OMAPModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 
 /**
  * WaitMarker is a required EXA callback but synchronization is
- * performed during OMAPPrepareAccess so this function does not
+ * performed during ARMSOCPrepareAccess so this function does not
  * have anything to do at present
  */
 _X_EXPORT void
-OMAPWaitMarker(ScreenPtr pScreen, int marker)
+ARMSOCWaitMarker(ScreenPtr pScreen, int marker)
 {
 	/* no-op */
 }
 
-static inline enum omap_gem_op idx2op(int index)
+static inline enum armsoc_gem_op idx2op(int index)
 {
 	switch (index) {
 	case EXA_PREPARE_SRC:
 	case EXA_PREPARE_MASK:
 	case EXA_PREPARE_AUX_SRC:
 	case EXA_PREPARE_AUX_MASK:
-		return OMAP_GEM_READ;
+		return ARMSOC_GEM_READ;
 	case EXA_PREPARE_AUX_DEST:
 	case EXA_PREPARE_DEST:
 	default:
-		return OMAP_GEM_READ_WRITE;
+		return ARMSOC_GEM_READ_WRITE;
 	}
 }
 
@@ -286,28 +286,28 @@ static inline enum omap_gem_op idx2op(int index)
  * DownloadFromScreen() to migate the pixmap out.
  */
 _X_EXPORT Bool
-OMAPPrepareAccess(PixmapPtr pPixmap, int index)
+ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 
-	pPixmap->devPrivate.ptr = omap_bo_map(priv->bo);
+	pPixmap->devPrivate.ptr = armsoc_bo_map(priv->bo);
 	if (!pPixmap->devPrivate.ptr) {
 		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __FUNCTION__);
 		return FALSE;
 	}
 
 	/* Attach dmabuf fd to bo to synchronise access if pixmap wrapped by DRI2 */
-	if (priv->ext_access_cnt && !omap_bo_has_dmabuf(priv->bo))
+	if (priv->ext_access_cnt && !armsoc_bo_has_dmabuf(priv->bo))
 	{
-		if(omap_bo_set_dmabuf(priv->bo)) {
+		if(armsoc_bo_set_dmabuf(priv->bo)) {
 			xf86DrvMsg(-1, X_ERROR, "%s: Unable to get dma_buf fd for bo, "
 					"to enable synchronised CPU access.\n", __FUNCTION__);
 			return FALSE;
 		}
 	}
 
-	if (omap_bo_cpu_prep(priv->bo, idx2op(index))) {
-		xf86DrvMsg(-1, X_ERROR, "%s: omap_bo_cpu_prep failed - "
+	if (armsoc_bo_cpu_prep(priv->bo, idx2op(index))) {
+		xf86DrvMsg(-1, X_ERROR, "%s: armsoc_bo_cpu_prep failed - "
 				"unable to synchronise access.\n", __FUNCTION__);
 		return FALSE;
 	}
@@ -326,9 +326,9 @@ OMAPPrepareAccess(PixmapPtr pPixmap, int index)
  * called if PrepareAccess() failed and the pixmap was migrated out.
  */
 _X_EXPORT void
-OMAPFinishAccess(PixmapPtr pPixmap, int index)
+ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	pPixmap->devPrivate.ptr = NULL;
 
@@ -336,7 +336,7 @@ OMAPFinishAccess(PixmapPtr pPixmap, int index)
 	 * buffer was accessed by sw, and pass that info down to kernel to
 	 * do a more precise cache flush..
 	 */
-	omap_bo_cpu_fini(priv->bo, idx2op(index));
+	armsoc_bo_cpu_fini(priv->bo, idx2op(index));
 }
 
 /**
@@ -353,28 +353,29 @@ OMAPFinishAccess(PixmapPtr pPixmap, int index)
  * with the CPU.
  */
 _X_EXPORT Bool
-OMAPPixmapIsOffscreen(PixmapPtr pPixmap)
+ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap)
 {
 	/* offscreen means in 'gpu accessible memory', not that it's off the
 	 * visible screen.  We currently have no special constraints, since
-	 * OMAP has a flat memory model (no separate GPU memory).  If
-	 * individual EXA implementation has additional constraints, like
-	 * buffer size or mapping in GPU MMU, it should wrap this function.
+	 * compatible ARM CPUS have a flat memory model
+	 * (no separate GPU memory).  Ifindividual EXA implementation has
+	 * additional constraints, like buffer size or mapping in GPU MMU, it
+	 * should wrap this function.
 	 */
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 	return priv && priv->bo;
 }
 
-void OMAPRegisterExternalAccess(PixmapPtr pPixmap)
+void ARMSOCRegisterExternalAccess(PixmapPtr pPixmap)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	priv->ext_access_cnt++;
 }
 
-void OMAPDeregisterExternalAccess(PixmapPtr pPixmap)
+void ARMSOCDeregisterExternalAccess(PixmapPtr pPixmap)
 {
-	OMAPPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	assert(priv->ext_access_cnt > 0);
 	priv->ext_access_cnt--;
@@ -383,9 +384,9 @@ void OMAPDeregisterExternalAccess(PixmapPtr pPixmap)
 	{
 		/* No DRI2 buffers wrapping the pixmap, so no need for synchronisation
 		 * with dma_buf */
-		if(omap_bo_has_dmabuf(priv->bo))
+		if(armsoc_bo_has_dmabuf(priv->bo))
 		{
-			omap_bo_clear_dmabuf(priv->bo);
+			armsoc_bo_clear_dmabuf(priv->bo);
 		}
 	}
 }

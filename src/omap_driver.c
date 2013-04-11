@@ -40,26 +40,26 @@
 
 #include "drmmode_driver.h"
 
-Bool omapDebug = 0;
+Bool armsocDebug = 0;
 
 /*
  * Forward declarations:
  */
-static const OptionInfoRec *OMAPAvailableOptions(int chipid, int busid);
-static void OMAPIdentify(int flags);
-static Bool OMAPProbe(DriverPtr drv, int flags);
-static Bool OMAPPreInit(ScrnInfoPtr pScrn, int flags);
-static Bool OMAPScreenInit(SCREEN_INIT_ARGS_DECL);
-static void OMAPLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
+static const OptionInfoRec *ARMSOCAvailableOptions(int chipid, int busid);
+static void ARMSOCIdentify(int flags);
+static Bool ARMSOCProbe(DriverPtr drv, int flags);
+static Bool ARMSOCPreInit(ScrnInfoPtr pScrn, int flags);
+static Bool ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL);
+static void ARMSOCLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
 		LOCO * colors, VisualPtr pVisual);
-static Bool OMAPCloseScreen(CLOSE_SCREEN_ARGS_DECL);
-static Bool OMAPCreateScreenResources(ScreenPtr pScreen);
-static void OMAPBlockHandler(BLOCKHANDLER_ARGS_DECL);
-static Bool OMAPSwitchMode(SWITCH_MODE_ARGS_DECL);
-static void OMAPAdjustFrame(ADJUST_FRAME_ARGS_DECL);
-static Bool OMAPEnterVT(VT_FUNC_ARGS_DECL);
-static void OMAPLeaveVT(VT_FUNC_ARGS_DECL);
-static void OMAPFreeScreen(FREE_SCREEN_ARGS_DECL);
+static Bool ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL);
+static Bool ARMSOCCreateScreenResources(ScreenPtr pScreen);
+static void ARMSOCBlockHandler(BLOCKHANDLER_ARGS_DECL);
+static Bool ARMSOCSwitchMode(SWITCH_MODE_ARGS_DECL);
+static void ARMSOCAdjustFrame(ADJUST_FRAME_ARGS_DECL);
+static Bool ARMSOCEnterVT(VT_FUNC_ARGS_DECL);
+static void ARMSOCLeaveVT(VT_FUNC_ARGS_DECL);
+static void ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL);
 
 
 
@@ -69,12 +69,12 @@ static void OMAPFreeScreen(FREE_SCREEN_ARGS_DECL);
  * before it calls the Probe() function.  The name of this structure must be
  * the all-upper-case version of the driver name.
  */
-_X_EXPORT DriverRec OMAP = {
-		OMAP_VERSION,
-		(char *)OMAP_DRIVER_NAME,
-		OMAPIdentify,
-		OMAPProbe,
-		OMAPAvailableOptions,
+_X_EXPORT DriverRec ARMSOC = {
+		ARMSOC_VERSION,
+		(char *)ARMSOC_DRIVER_NAME,
+		ARMSOCIdentify,
+		ARMSOCProbe,
+		ARMSOCAvailableOptions,
 		NULL,
 		0,
 		NULL,
@@ -88,7 +88,7 @@ _X_EXPORT DriverRec OMAP = {
 #define MALI_T6XX_CHIPSET_ID (0x0600)
 
 /** Supported "chipsets." */
-static SymTabRec OMAPChipsets[] = {
+static SymTabRec ARMSOCChipsets[] = {
 		{ MALI_4XX_CHIPSET_ID, "Mali-4XX" },
 		{ MALI_T6XX_CHIPSET_ID, "Mali-T6XX" },
 		{-1, NULL }
@@ -99,10 +99,10 @@ typedef enum {
 	OPTION_DEBUG,
 	OPTION_NO_FLIP,
 	/* TODO: MIDEGL-1453: probably need to add an option to let user specify bus-id */
-} OMAPOpts;
+} ARMSOCOpts;
 
 /** Supported options. */
-static const OptionInfoRec OMAPOptions[] = {
+static const OptionInfoRec ARMSOCOptions[] = {
 	{ OPTION_DEBUG,		"Debug",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ OPTION_NO_FLIP,	"NoFlip",	OPTV_BOOLEAN,	{0},	FALSE },
 	{ -1,				NULL,		OPTV_NONE,		{0},	FALSE }
@@ -113,20 +113,20 @@ static const OptionInfoRec OMAPOptions[] = {
  */
 
 static int
-OMAPOpenDRM(int n)
+ARMSOCOpenDRM(int n)
 {
 	return open("/dev/dri/card0", O_RDWR, 0);
 }
 
 static Bool
-OMAPOpenDRMMaster(ScrnInfoPtr pScrn, int n)
+ARMSOCOpenDRMMaster(ScrnInfoPtr pScrn, int n)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	drmSetVersion sv;
 	int err;
 
-	pOMAP->drmFD = OMAPOpenDRM(n);
-	if (pOMAP->drmFD == -1) {
+	pARMSOC->drmFD = ARMSOCOpenDRM(n);
+	if (pARMSOC->drmFD == -1) {
 		ERROR_MSG("Cannot open a connection with the DRM.");
 		return FALSE;
 	}
@@ -139,15 +139,15 @@ OMAPOpenDRMMaster(ScrnInfoPtr pScrn, int n)
 	sv.drm_di_minor = 1;
 	sv.drm_dd_major = -1;
 	sv.drm_dd_minor = -1;
-	err = drmSetInterfaceVersion(pOMAP->drmFD, &sv);
+	err = drmSetInterfaceVersion(pARMSOC->drmFD, &sv);
 	if (err != 0) {
 		ERROR_MSG("Cannot set the DRM interface version.");
-		drmClose(pOMAP->drmFD);
-		pOMAP->drmFD = -1;
+		drmClose(pARMSOC->drmFD);
+		pARMSOC->drmFD = -1;
 		return FALSE;
 	}
 
-	pOMAP->deviceName = drmGetDeviceNameFromFd(pOMAP->drmFD);
+	pARMSOC->deviceName = drmGetDeviceNameFromFd(pARMSOC->drmFD);
 
 	return TRUE;
 }
@@ -158,46 +158,46 @@ OMAPOpenDRMMaster(ScrnInfoPtr pScrn, int n)
  * Helper function for closing a connection to the DRM.
  */
 static void
-OMAPCloseDRMMaster(ScrnInfoPtr pScrn)
+ARMSOCCloseDRMMaster(ScrnInfoPtr pScrn)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
-	if (pOMAP && (pOMAP->drmFD > 0)) {
-		drmFree(pOMAP->deviceName);
-		drmClose(pOMAP->drmFD);
-		pOMAP->drmFD = -1;
+	if (pARMSOC && (pARMSOC->drmFD > 0)) {
+		drmFree(pARMSOC->deviceName);
+		drmClose(pARMSOC->drmFD);
+		pARMSOC->drmFD = -1;
 	}
 }
 
 static Bool
-OMAPMapMem(ScrnInfoPtr pScrn)
+ARMSOCMapMem(ScrnInfoPtr pScrn)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	DEBUG_MSG("allocating new scanout buffer: %dx%d",
 			pScrn->virtualX, pScrn->virtualY);
 
-	pOMAP->scanout = omap_bo_new_with_dim(pOMAP->dev, pScrn->virtualX,
+	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
 			pScrn->virtualY, pScrn->depth, pScrn->bitsPerPixel,
-			OMAP_BO_SCANOUT );
-	if (!pOMAP->scanout) {
+			ARMSOC_BO_SCANOUT );
+	if (!pARMSOC->scanout) {
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 			   "Error allocating scanout buffer\n");
 		return FALSE;
 	}
 
-	pScrn->displayWidth = omap_bo_pitch(pOMAP->scanout) / (pScrn->bitsPerPixel / 8);
+	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / (pScrn->bitsPerPixel / 8);
 
 	return TRUE;
 }
 
 
 static Bool
-OMAPUnmapMem(ScrnInfoPtr pScrn)
+ARMSOCUnmapMem(ScrnInfoPtr pScrn)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
-	omap_bo_unreference(pOMAP->scanout);
-	pOMAP->scanout = NULL;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	armsoc_bo_unreference(pARMSOC->scanout);
+	pARMSOC->scanout = NULL;
 	pScrn->displayWidth = 0;
 	return TRUE;
 }
@@ -205,17 +205,17 @@ OMAPUnmapMem(ScrnInfoPtr pScrn)
 
 
 /** Let the XFree86 code know the Setup() function. */
-static MODULESETUPPROTO(OMAPSetup);
+static MODULESETUPPROTO(ARMSOCSetup);
 
 /** Provide basic version information to the XFree86 code. */
-static XF86ModuleVersionInfo OMAPVersRec =
+static XF86ModuleVersionInfo ARMSOCVersRec =
 {
-		OMAP_DRIVER_NAME,
+		ARMSOC_DRIVER_NAME,
 		MODULEVENDORSTRING,
 		MODINFOSTRING1,
 		MODINFOSTRING2,
 		XORG_VERSION_CURRENT,
-		OMAP_MAJOR_VERSION, OMAP_MINOR_VERSION, OMAP_PATCHLEVEL,
+		ARMSOC_MAJOR_VERSION, ARMSOC_MINOR_VERSION, ARMSOC_PATCHLEVEL,
 		ABI_CLASS_VIDEODRV,
 		ABI_VIDEODRV_VERSION,
 		MOD_CLASS_VIDEODRV,
@@ -223,21 +223,21 @@ static XF86ModuleVersionInfo OMAPVersRec =
 };
 
 /** Let the XFree86 code know about the VersRec and Setup() function. */
-_X_EXPORT XF86ModuleData armsocModuleData = { &OMAPVersRec, OMAPSetup, NULL };
+_X_EXPORT XF86ModuleData armsocModuleData = { &ARMSOCVersRec, ARMSOCSetup, NULL };
 
 
 /**
  * The first function that the XFree86 code calls, after loading this module.
  */
 static pointer
-OMAPSetup(pointer module, pointer opts, int *errmaj, int *errmin)
+ARMSOCSetup(pointer module, pointer opts, int *errmaj, int *errmin)
 {
 	static Bool setupDone = FALSE;
 
 	/* This module should be loaded only once, but check to be sure: */
 	if (!setupDone) {
 		setupDone = TRUE;
-		xf86AddDriver(&OMAP, module, 0);
+		xf86AddDriver(&ARMSOC, module, 0);
 
 		/* The return value must be non-NULL on success even though there is no
 		 * TearDownProc.
@@ -256,12 +256,12 @@ OMAPSetup(pointer module, pointer opts, int *errmaj, int *errmin)
  * into the ScrnInfoRec's driverPrivate field.
  */
 static Bool
-OMAPGetRec(ScrnInfoPtr pScrn)
+ARMSOCGetRec(ScrnInfoPtr pScrn)
 {
 	if (pScrn->driverPrivate != NULL)
 		return TRUE;
 
-	pScrn->driverPrivate = calloc(1, sizeof(OMAPRec));
+	pScrn->driverPrivate = calloc(1, sizeof(ARMSOCRec));
 	if (pScrn->driverPrivate == NULL)
 		return FALSE;
 
@@ -274,7 +274,7 @@ OMAPGetRec(ScrnInfoPtr pScrn)
  * ScrnInfoRec's driverPrivate field.
  */
 static void
-OMAPFreeRec(ScrnInfoPtr pScrn)
+ARMSOCFreeRec(ScrnInfoPtr pScrn)
 {
 	if (pScrn->driverPrivate == NULL)
 		return;
@@ -289,9 +289,9 @@ OMAPFreeRec(ScrnInfoPtr pScrn)
  * and the user can see which options are available for them to use.
  */
 static const OptionInfoRec *
-OMAPAvailableOptions(int chipid, int busid)
+ARMSOCAvailableOptions(int chipid, int busid)
 {
-	return OMAPOptions;
+	return ARMSOCOptions;
 }
 
 
@@ -301,22 +301,23 @@ OMAPAvailableOptions(int chipid, int busid)
  * an identifying message, which includes the chipset(s) the driver supports.
  */
 static void
-OMAPIdentify(int flags)
+ARMSOCIdentify(int flags)
 {
-	xf86PrintChipsets(OMAP_NAME, "Driver for TI OMAP", OMAPChipsets);
+	xf86PrintChipsets(ARMSOC_NAME, "Driver for ARM compatible chipsets",
+			ARMSOCChipsets);
 }
 
 
 
 /**
- * The driver's Probe() function.  This function finds all instances of the
- * TI OMAP hardware that the driver supports (from within the "xorg.conf"
+ * The driver's Probe() function.  This function finds all instances of
+ * ARM hardware that the driver supports (from within the "xorg.conf"
  * device sections), and for instances not already claimed by another driver,
  * claim the instances, and allocate a ScrnInfoRec.  Only minimal hardware
  * probing is allowed here.
  */
 static Bool
-OMAPProbe(DriverPtr drv, int flags)
+ARMSOCProbe(DriverPtr drv, int flags)
 {
 	int i;
 	ScrnInfoPtr pScrn;
@@ -327,7 +328,7 @@ OMAPProbe(DriverPtr drv, int flags)
 	/* Get the "xorg.conf" file device sections that match this driver, and
 	 * return (error out) if there are none:
 	 */
-	numDevSections = xf86MatchDevice(OMAP_DRIVER_NAME, &devSections);
+	numDevSections = xf86MatchDevice(ARMSOC_DRIVER_NAME, &devSections);
 	if (numDevSections <= 0) {
 		EARLY_ERROR_MSG("Did not find any matching device section in "
 				"configuration file");
@@ -342,14 +343,14 @@ OMAPProbe(DriverPtr drv, int flags)
 	}
 
 	for (i = 0; i < numDevSections; i++) {
-		int fd = OMAPOpenDRM(i);
+		int fd = ARMSOCOpenDRM(i);
 		if (fd != -1) {
 
 			if (flags & PROBE_DETECT) {
 				/* just add the device.. we aren't a PCI device, so
 				 * call xf86AddBusDeviceToConfigure() directly
 				 */
-				xf86AddBusDeviceToConfigure(OMAP_DRIVER_NAME,
+				xf86AddBusDeviceToConfigure(ARMSOC_DRIVER_NAME,
 						BUS_NONE, NULL, i);
 				foundScreen = TRUE;
 				continue;
@@ -369,17 +370,17 @@ OMAPProbe(DriverPtr drv, int flags)
 
 			foundScreen = TRUE;
 
-			pScrn->driverVersion = OMAP_VERSION;
-			pScrn->driverName    = (char *)OMAP_DRIVER_NAME;
-			pScrn->name          = (char *)OMAP_NAME;
-			pScrn->Probe         = OMAPProbe;
-			pScrn->PreInit       = OMAPPreInit;
-			pScrn->ScreenInit    = OMAPScreenInit;
-			pScrn->SwitchMode    = OMAPSwitchMode;
-			pScrn->AdjustFrame   = OMAPAdjustFrame;
-			pScrn->EnterVT       = OMAPEnterVT;
-			pScrn->LeaveVT       = OMAPLeaveVT;
-			pScrn->FreeScreen    = OMAPFreeScreen;
+			pScrn->driverVersion = ARMSOC_VERSION;
+			pScrn->driverName    = (char *)ARMSOC_DRIVER_NAME;
+			pScrn->name          = (char *)ARMSOC_NAME;
+			pScrn->Probe         = ARMSOCProbe;
+			pScrn->PreInit       = ARMSOCPreInit;
+			pScrn->ScreenInit    = ARMSOCScreenInit;
+			pScrn->SwitchMode    = ARMSOCSwitchMode;
+			pScrn->AdjustFrame   = ARMSOCAdjustFrame;
+			pScrn->EnterVT       = ARMSOCEnterVT;
+			pScrn->LeaveVT       = ARMSOCLeaveVT;
+			pScrn->FreeScreen    = ARMSOCFreeScreen;
 
 			/* would be nice to be able to keep the connection open.. but
 			 * currently we don't allocate the private until PreInit
@@ -398,9 +399,9 @@ OMAPProbe(DriverPtr drv, int flags)
  * now, including display configuration.
  */
 static Bool
-OMAPPreInit(ScrnInfoPtr pScrn, int flags)
+ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 {
-	OMAPPtr pOMAP;
+	ARMSOCPtr pARMSOC;
 	int default_depth, fbbpp;
 	rgb defaultWeight = { 0, 0, 0 };
 	rgb defaultMask = { 0, 0, 0 };
@@ -412,7 +413,7 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 
 	if (flags & PROBE_DETECT) {
 		ERROR_MSG("The %s driver does not support the \"-configure\" or "
-				"\"-probe\" command line arguments.", OMAP_NAME);
+				"\"-probe\" command line arguments.", ARMSOC_NAME);
 		return FALSE;
 	}
 
@@ -424,10 +425,10 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	}
 
 	/* Allocate the driver's Screen-specific, "private" data structure: */
-	OMAPGetRec(pScrn);
-	pOMAP = OMAPPTR(pScrn);
+	ARMSOCGetRec(pScrn);
+	pARMSOC = ARMSOCPTR(pScrn);
 
-	pOMAP->pEntityInfo = xf86GetEntityInfo(pScrn->entityList[0]);
+	pARMSOC->pEntityInfo = xf86GetEntityInfo(pScrn->entityList[0]);
 
 	pScrn->monitor = pScrn->confScreen->monitor;
 
@@ -471,24 +472,24 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	pScrn->progClock = TRUE;
 
 	/* Open a connection to the DRM, so we can communicate with the KMS code: */
-	if (!OMAPOpenDRMMaster(pScrn, 0)) {
+	if (!ARMSOCOpenDRMMaster(pScrn, 0)) {
 		goto fail;
 	}
 	DEBUG_MSG("Became DRM master.");
 
-	pOMAP->drmmode = drmmode_interface_get_implementation(pOMAP->drmFD);
-	if (!pOMAP->drmmode)
+	pARMSOC->drmmode = drmmode_interface_get_implementation(pARMSOC->drmFD);
+	if (!pARMSOC->drmmode)
 		goto fail;
 
 	/* create DRM device instance: */
-	pOMAP->dev = omap_device_new(pOMAP->drmFD,
-			pOMAP->drmmode->dumb_scanout_flags,
-			pOMAP->drmmode->dumb_no_scanout_flags);
+	pARMSOC->dev = armsoc_device_new(pARMSOC->drmFD,
+			pARMSOC->drmmode->dumb_scanout_flags,
+			pARMSOC->drmmode->dumb_no_scanout_flags);
 
 	/* find matching chipset name: */
-	for (i = 0; OMAPChipsets[i].name; i++) {
-		if (OMAPChipsets[i].token == MALI_T6XX_CHIPSET_ID) {
-			pScrn->chipset = (char *)OMAPChipsets[i].name;
+	for (i = 0; ARMSOCChipsets[i].name; i++) {
+		if (ARMSOCChipsets[i].token == MALI_T6XX_CHIPSET_ID) {
+			pScrn->chipset = (char *)ARMSOCChipsets[i].name;
 			break;
 		}
 	}
@@ -499,19 +500,19 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	 * Process the "xorg.conf" file options:
 	 */
 	xf86CollectOptions(pScrn, NULL);
-	if (!(pOMAP->pOptionInfo = calloc(1, sizeof(OMAPOptions))))
+	if (!(pARMSOC->pOptionInfo = calloc(1, sizeof(ARMSOCOptions))))
 		return FALSE;
-	memcpy(pOMAP->pOptionInfo, OMAPOptions, sizeof(OMAPOptions));
-	xf86ProcessOptions(pScrn->scrnIndex, pOMAP->pEntityInfo->device->options,
-			pOMAP->pOptionInfo);
+	memcpy(pARMSOC->pOptionInfo, ARMSOCOptions, sizeof(ARMSOCOptions));
+	xf86ProcessOptions(pScrn->scrnIndex, pARMSOC->pEntityInfo->device->options,
+			pARMSOC->pOptionInfo);
 
 	/* Determine if the user wants debug messages turned on: */
-	omapDebug = xf86ReturnOptValBool(pOMAP->pOptionInfo, OPTION_DEBUG, FALSE);
+	armsocDebug = xf86ReturnOptValBool(pARMSOC->pOptionInfo, OPTION_DEBUG, FALSE);
 
 	/* Determine if user wants to disable buffer flipping: */
-	pOMAP->NoFlip = xf86ReturnOptValBool(pOMAP->pOptionInfo,
+	pARMSOC->NoFlip = xf86ReturnOptValBool(pARMSOC->pOptionInfo,
 			OPTION_NO_FLIP, FALSE);
-	INFO_MSG("Buffer Flipping is %s", pOMAP->NoFlip ? "Disabled" : "Enabled");
+	INFO_MSG("Buffer Flipping is %s", pARMSOC->NoFlip ? "Disabled" : "Enabled");
 
 	/*
 	 * Select the video modes:
@@ -523,7 +524,7 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 	 */
 
 	/* Do initial KMS setup: */
-	if (!drmmode_pre_init(pScrn, pOMAP->drmFD, (pScrn->bitsPerPixel >> 3))) {
+	if (!drmmode_pre_init(pScrn, pARMSOC->drmFD, (pScrn->bitsPerPixel >> 3))) {
 		ERROR_MSG("Cannot get KMS resources");
 	} else {
 		INFO_MSG("Got KMS resources");
@@ -560,7 +561,7 @@ OMAPPreInit(ScrnInfoPtr pScrn, int flags)
 
 fail:
 	TRACE_EXIT();
-	OMAPFreeRec(pScrn);
+	ARMSOCFreeRec(pScrn);
 	return FALSE;
 }
 
@@ -569,19 +570,19 @@ fail:
  * Initialize EXA and DRI2
  */
 static void
-OMAPAccelInit(ScreenPtr pScreen)
+ARMSOCAccelInit(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
-	if (!pOMAP->pOMAPEXA) {
-		pOMAP->pOMAPEXA = InitNullEXA(pScreen, pScrn, pOMAP->drmFD);
+	if (!pARMSOC->pARMSOCEXA) {
+		pARMSOC->pARMSOCEXA = InitNullEXA(pScreen, pScrn, pARMSOC->drmFD);
 	}
 
-	if (pOMAP->pOMAPEXA) {
-		pOMAP->dri = OMAPDRI2ScreenInit(pScreen);
+	if (pARMSOC->pARMSOCEXA) {
+		pARMSOC->dri = ARMSOCDRI2ScreenInit(pScreen);
 	} else {
-		pOMAP->dri = FALSE;
+		pARMSOC->dri = FALSE;
 	}
 }
 
@@ -590,10 +591,10 @@ OMAPAccelInit(ScreenPtr pScreen)
  * save state, initialize the mode, etc.
  */
 static Bool
-OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
+ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	VisualPtr visual;
 	xf86CrtcConfigPtr xf86_config;
 	int j;
@@ -601,7 +602,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	TRACE_ENTER();
 
 	/* Allocate and map memory areas we need */
-	if (!OMAPMapMem(pScrn))
+	if (!ARMSOCMapMem(pScrn))
 		return FALSE;
 
 	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
@@ -652,7 +653,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	}
 
 	/* Initialize some generic 2D drawing functions: */
-	if (!fbScreenInit(pScreen, omap_bo_map(pOMAP->scanout),
+	if (!fbScreenInit(pScreen, armsoc_bo_map(pARMSOC->scanout),
 			pScrn->virtualX, pScrn->virtualY,
 			pScrn->xDpi, pScrn->yDpi, pScrn->displayWidth,
 			pScrn->bitsPerPixel)) {
@@ -690,7 +691,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	 * miDCInitialize() otherwise stacking order for wrapped ScreenPtr fxns
 	 * ends up in the wrong order.
 	 */
-	OMAPAccelInit(pScreen);
+	ARMSOCAccelInit(pScreen);
 
 	/* Initialize backing store: */
 	miInitializeBackingStore(pScreen);
@@ -714,8 +715,8 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Take over the virtual terminal from the console, set the desired mode,
 	 * etc.:
 	 */
-	if (!OMAPEnterVT(VT_FUNC_ARGS(0))) {
-		ERROR_MSG("OMAPEnterVT() failed!");
+	if (!ARMSOCEnterVT(VT_FUNC_ARGS(0))) {
+		ERROR_MSG("ARMSOCEnterVT() failed!");
 		goto fail;
 	}
 
@@ -731,7 +732,7 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	}
 
 	if (!xf86HandleColormaps(pScreen, 1 << pScrn->rgbBits, pScrn->rgbBits,
-			OMAPLoadPalette, NULL, CMAP_PALETTED_TRUECOLOR)) {
+			ARMSOCLoadPalette, NULL, CMAP_PALETTED_TRUECOLOR)) {
 		ERROR_MSG("xf86HandleColormaps() failed!");
 		goto fail;
 	}
@@ -742,10 +743,9 @@ OMAPScreenInit(SCREEN_INIT_ARGS_DECL)
 	pScreen->SaveScreen = xf86SaveScreen;
 
 	/* Wrap some screen functions: */
-	wrap(pOMAP, pScreen, CloseScreen, OMAPCloseScreen);
-	wrap(pOMAP, pScreen, CreateScreenResources, OMAPCreateScreenResources);
-	wrap(pOMAP, pScreen, BlockHandler, OMAPBlockHandler);
-
+	wrap(pARMSOC, pScreen, CloseScreen, ARMSOCCloseScreen);
+	wrap(pARMSOC, pScreen, CreateScreenResources, ARMSOCCreateScreenResources);
+	wrap(pARMSOC, pScreen, BlockHandler, ARMSOCBlockHandler);
 	drmmode_screen_init(pScrn);
 
 	TRACE_EXIT();
@@ -758,7 +758,7 @@ fail:
 
 
 static void
-OMAPLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
+ARMSOCLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
 		LOCO * colors, VisualPtr pVisual)
 {
 	TRACE_ENTER();
@@ -773,36 +773,36 @@ OMAPLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
  * held by pScrn).
  */
 static Bool
-OMAPCloseScreen(CLOSE_SCREEN_ARGS_DECL)
+ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 {
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	TRACE_ENTER();
 
 	drmmode_screen_fini(pScrn);
 
 	if (pScrn->vtSema == TRUE) {
-		OMAPLeaveVT(VT_FUNC_ARGS(0));
+		ARMSOCLeaveVT(VT_FUNC_ARGS(0));
 	}
 
-	if (pOMAP->pOMAPEXA) {
-		if (pOMAP->pOMAPEXA->CloseScreen) {
-			pOMAP->pOMAPEXA->CloseScreen(CLOSE_SCREEN_ARGS);
+	if (pARMSOC->pARMSOCEXA) {
+		if (pARMSOC->pARMSOCEXA->CloseScreen) {
+			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 		}
 	}
 
-	if (pOMAP->dri) {
-		OMAPDRI2CloseScreen(pScreen);
+	if (pARMSOC->dri) {
+		ARMSOCDRI2CloseScreen(pScreen);
 	}
 
-	OMAPUnmapMem(pScrn);
+	ARMSOCUnmapMem(pScrn);
 
 	pScrn->vtSema = FALSE;
 
-	unwrap(pOMAP, pScreen, CloseScreen);
-	unwrap(pOMAP, pScreen, BlockHandler);
-	unwrap(pOMAP, pScreen, CreateScreenResources);
+	unwrap(pARMSOC, pScreen, CloseScreen);
+	unwrap(pARMSOC, pScreen, BlockHandler);
+	unwrap(pARMSOC, pScreen, CreateScreenResources);
 
 	TRACE_EXIT();
 
@@ -818,30 +818,30 @@ OMAPCloseScreen(CLOSE_SCREEN_ARGS_DECL)
  * CreateScreenResources.
  */
 static Bool
-OMAPCreateScreenResources(ScreenPtr pScreen)
+ARMSOCCreateScreenResources(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
-	swap(pOMAP, pScreen, CreateScreenResources);
+	swap(pARMSOC, pScreen, CreateScreenResources);
 	if (!(*pScreen->CreateScreenResources) (pScreen))
 		return FALSE;
-	swap(pOMAP, pScreen, CreateScreenResources);
+	swap(pARMSOC, pScreen, CreateScreenResources);
 
 	return TRUE;
 }
 
 
 static void
-OMAPBlockHandler(BLOCKHANDLER_ARGS_DECL)
+ARMSOCBlockHandler(BLOCKHANDLER_ARGS_DECL)
 {
 	SCREEN_PTR(arg);
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
-	swap(pOMAP, pScreen, BlockHandler);
+	swap(pARMSOC, pScreen, BlockHandler);
 	(*pScreen->BlockHandler) (BLOCKHANDLER_ARGS);
-	swap(pOMAP, pScreen, BlockHandler);
+	swap(pARMSOC, pScreen, BlockHandler);
 }
 
 
@@ -851,7 +851,7 @@ OMAPBlockHandler(BLOCKHANDLER_ARGS_DECL)
  * Screen.
  */
 static Bool
-OMAPSwitchMode(SWITCH_MODE_ARGS_DECL)
+ARMSOCSwitchMode(SWITCH_MODE_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
 	return xf86SetSingleMode(pScrn, mode, RR_Rotate_0);
@@ -865,7 +865,7 @@ OMAPSwitchMode(SWITCH_MODE_ARGS_DECL)
  * buffer within the "viewport" of the monitor.
  */
 static void
-OMAPAdjustFrame(ADJUST_FRAME_ARGS_DECL)
+ARMSOCAdjustFrame(ADJUST_FRAME_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
 	drmmode_adjust_frame(pScrn, x, y);
@@ -880,10 +880,10 @@ OMAPAdjustFrame(ADJUST_FRAME_ARGS_DECL)
  * HW state as needed by the X server.
  */
 static Bool
-OMAPEnterVT(VT_FUNC_ARGS_DECL)
+ARMSOCEnterVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	int i, ret;
 
 	TRACE_ENTER();
@@ -893,7 +893,7 @@ OMAPEnterVT(VT_FUNC_ARGS_DECL)
 			AttendClient(clients[i]);
 	}
 
-	ret = drmSetMaster(pOMAP->drmFD);
+	ret = drmSetMaster(pARMSOC->drmFD);
 	if (ret) {
 		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
 		return FALSE;
@@ -916,10 +916,10 @@ OMAPEnterVT(VT_FUNC_ARGS_DECL)
  * need to restore the console's HW state.
  */
 static void
-OMAPLeaveVT(VT_FUNC_ARGS_DECL)
+ARMSOCLeaveVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	int i, ret;
 
 	TRACE_ENTER();
@@ -929,7 +929,7 @@ OMAPLeaveVT(VT_FUNC_ARGS_DECL)
 			IgnoreClient(clients[i]);
 	}
 
-	ret = drmDropMaster(pOMAP->drmFD);
+	ret = drmDropMaster(pARMSOC->drmFD);
 	if (ret) {
 		WARNING_MSG("drmDropMaster failed: %s", strerror(errno));
 	}
@@ -945,30 +945,30 @@ OMAPLeaveVT(VT_FUNC_ARGS_DECL)
  * up-to-and-including an unsuccessful ScreenInit() call.
  */
 static void
-OMAPFreeScreen(FREE_SCREEN_ARGS_DECL)
+ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	TRACE_ENTER();
 
-	if (!pOMAP) {
+	if (!pARMSOC) {
 		/* This can happen if a Screen is deleted after Probe(): */
 		return;
 	}
 
-	if (pOMAP->pOMAPEXA) {
-		if (pOMAP->pOMAPEXA->FreeScreen) {
-			pOMAP->pOMAPEXA->FreeScreen(FREE_SCREEN_ARGS(pScrn));
+	if (pARMSOC->pARMSOCEXA) {
+		if (pARMSOC->pARMSOCEXA->FreeScreen) {
+			pARMSOC->pARMSOCEXA->FreeScreen(FREE_SCREEN_ARGS(pScrn));
 		}
-		free(pOMAP->pOMAPEXA);
+		free(pARMSOC->pARMSOCEXA);
 	}
 
-	omap_device_del(pOMAP->dev);
+	armsoc_device_del(pARMSOC->dev);
 
-	OMAPCloseDRMMaster(pScrn);
+	ARMSOCCloseDRMMaster(pScrn);
 
-	OMAPFreeRec(pScrn);
+	ARMSOCFreeRec(pScrn);
 
 	TRACE_EXIT();
 }

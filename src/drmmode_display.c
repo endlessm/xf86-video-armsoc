@@ -94,7 +94,7 @@
 typedef struct {
 	/* hardware cursor: */
 	drmModePlane *ovr;
-	struct omap_bo *bo;
+	struct armsoc_bo *bo;
 	uint32_t fb_id;
 	int x, y;
 } drmmode_cursor_rec, *drmmode_cursor_ptr;
@@ -215,7 +215,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		Rotation rotation, int x, int y)
 {
 	ScrnInfoPtr pScrn = crtc->scrn;
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(crtc->scrn);
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
@@ -231,18 +231,18 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	TRACE_ENTER();
 
-	fb_id = omap_bo_get_fb(pOMAP->scanout);
+	fb_id = armsoc_bo_get_fb(pARMSOC->scanout);
 
 	if (fb_id == 0) {
 
 		DEBUG_MSG("create framebuffer: %dx%d",
 				pScrn->virtualX, pScrn->virtualY);
 
-		ret = omap_bo_add_fb(pOMAP->scanout);
+		ret = armsoc_bo_add_fb(pARMSOC->scanout);
 		if (ret)
 			return FALSE;
 
-		fb_id = omap_bo_get_fb(pOMAP->scanout);
+		fb_id = armsoc_bo_get_fb(pARMSOC->scanout);
 		if (0 == fb_id)
 			return FALSE;
 	}
@@ -435,7 +435,7 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	if (visible)
 		drmmode_hide_cursor(crtc);
 
-	d = omap_bo_map(cursor->bo);
+	d = armsoc_bo_map(cursor->bo);
 	if(!d) {
 		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
 			"load_cursor_argb map failure\n");
@@ -445,9 +445,9 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	}
 
 #if ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_ARGB )
-	memcpy(d, image, omap_bo_size(cursor->bo));
+	memcpy(d, image, armsoc_bo_size(cursor->bo));
 #elif ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_PL111 )
-	drmmode_argb_cursor_to_pl111_lbbp(crtc, d, image, omap_bo_size(cursor->bo) );
+	drmmode_argb_cursor_to_pl111_lbbp(crtc, d, image, armsoc_bo_size(cursor->bo) );
 #else
 	#error Please provide a method to set your cursor image.
 #endif
@@ -460,7 +460,7 @@ Bool
 drmmode_cursor_init(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
 	drmmode_cursor_ptr cursor;
 	drmModePlaneRes *plane_resources;
@@ -507,8 +507,8 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return FALSE;
 	}
 
-	if (pOMAP->drmmode->init_plane_for_cursor &&
-	    pOMAP->drmmode->init_plane_for_cursor(drmmode->fd, ovr->plane_id)) {
+	if (pARMSOC->drmmode->init_plane_for_cursor &&
+	    pARMSOC->drmmode->init_plane_for_cursor(drmmode->fd, ovr->plane_id)) {
 		ERROR_MSG("Failed driver-specific cursor initialization");
 		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
@@ -523,7 +523,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	cursor->ovr = ovr;
-	cursor->bo  = omap_bo_new_with_dim(pOMAP->dev, w, h, 0, 32, OMAP_BO_SCANOUT );
+	cursor->bo  = armsoc_bo_new_with_dim(pARMSOC->dev, w, h, 0, 32, ARMSOC_BO_SCANOUT );
 
 	if (!cursor->bo) {
 		ERROR_MSG("error allocating hw cursor buffer");
@@ -533,14 +533,14 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return FALSE;
 	}
 
-	handles[0] = omap_bo_handle(cursor->bo);
-	pitches[0] = omap_bo_pitch(cursor->bo);
+	handles[0] = armsoc_bo_handle(cursor->bo);
+	pitches[0] = armsoc_bo_pitch(cursor->bo);
 	offsets[0] = 0;
 
 	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
 			handles, pitches, offsets, &cursor->fb_id, 0)) {
 		ERROR_MSG("drmModeAddFB2 failed: %s", strerror(errno));
-		omap_bo_unreference(cursor->bo);
+		armsoc_bo_unreference(cursor->bo);
 		free(cursor);
 		drmModeFreePlane(ovr);
 		drmModeFreePlaneResources(plane_resources);
@@ -552,7 +552,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		if(drmModeRmFB(drmmode->fd, cursor->fb_id)) {
 			ERROR_MSG("drmModeRmFB() failed");
 		}
-		omap_bo_unreference(cursor->bo);
+		armsoc_bo_unreference(cursor->bo);
 		free(cursor);
 		drmModeFreePlane(ovr);
 		drmModeFreePlaneResources(plane_resources);
@@ -564,7 +564,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	return TRUE;
 }
 
-#if 1==OMAP_SUPPORT_GAMMA
+#if 1==ARMSOC_SUPPORT_GAMMA
 static void
 drmmode_gamma_set(xf86CrtcPtr crtc, CARD16 *red, CARD16 *green, CARD16 *blue,
 		int size)
@@ -589,7 +589,7 @@ static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
 		.show_cursor = drmmode_show_cursor,
 		.hide_cursor = drmmode_hide_cursor,
 		.load_cursor_argb = drmmode_load_cursor_argb,
-#if 1==OMAP_SUPPORT_GAMMA
+#if 1==ARMSOC_SUPPORT_GAMMA
 		.gamma_set = drmmode_gamma_set,
 #endif
 };
@@ -1064,22 +1064,22 @@ drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	return;
 }
 
-void set_scanout_bo(ScrnInfoPtr pScrn, struct omap_bo *bo)
+void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	/* It had better have a framebuffer if we're scanning it out */
-	assert(omap_bo_get_fb(bo));
+	assert(armsoc_bo_get_fb(bo));
 
-	pOMAP->scanout = bo;
+	pARMSOC->scanout = bo;
 }
 
 static Bool
 drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	ScreenPtr pScreen = pScrn->pScreen;
-	struct omap_bo *new_scanout = NULL;
+	struct armsoc_bo *new_scanout;
 	int res;
 	uint32_t pitch;
 	int i;
@@ -1094,53 +1094,53 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
 
-	if (  (width != omap_bo_width(pOMAP->scanout))
-	      || (height != omap_bo_height(pOMAP->scanout))
-	      || (pScrn->bitsPerPixel != omap_bo_bpp(pOMAP->scanout)) ) {
+	if (  (width != armsoc_bo_width(pARMSOC->scanout))
+	      || (height != armsoc_bo_height(pARMSOC->scanout))
+	      || (pScrn->bitsPerPixel != armsoc_bo_bpp(pARMSOC->scanout)) ) {
 
-		pOMAP->has_resized = TRUE;
+		pARMSOC->has_resized = TRUE;
 		DEBUG_MSG("allocating new scanout buffer: %dx%d",
 				width, height);
 
 		/* allocate new scanout buffer */
-		new_scanout = omap_bo_new_with_dim(pOMAP->dev, width, height,
+		new_scanout = armsoc_bo_new_with_dim(pARMSOC->dev, width, height,
 				pScrn->depth, pScrn->bitsPerPixel,
-				OMAP_BO_SCANOUT );
+				ARMSOC_BO_SCANOUT );
 
 		if (!new_scanout) {
 			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 					"Error reallocating scanout buffer\n");
 			return FALSE;
 		}
-		pitch = omap_bo_pitch(new_scanout);
+		pitch = armsoc_bo_pitch(new_scanout);
 
-		if (omap_bo_clear(new_scanout) || omap_bo_add_fb(new_scanout)) {
-			omap_bo_unreference(new_scanout);
+		if (armsoc_bo_clear(new_scanout) || armsoc_bo_add_fb(new_scanout)) {
+			armsoc_bo_unreference(new_scanout);
 			return FALSE;
 		}
 
 		/* Handle dma_buf fd that may be attached to bo */
-		if(omap_bo_has_dmabuf(pOMAP->scanout))
+		if(armsoc_bo_has_dmabuf(pARMSOC->scanout))
 		{
-			omap_bo_clear_dmabuf(pOMAP->scanout);
-			res = omap_bo_set_dmabuf(new_scanout);
+			armsoc_bo_clear_dmabuf(pARMSOC->scanout);
+			res = armsoc_bo_set_dmabuf(new_scanout);
 			if(res) {
 				xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 						"Unable to attach dma_buf fd to new scanout buffer. "
 						"Error: %d (%s)\n", res, strerror(res));
-				omap_bo_unreference(new_scanout);
+				armsoc_bo_unreference(new_scanout);
 				return FALSE;
 			}
 		}
 
 		/* delete old scanout buffer */
-		omap_bo_unreference(pOMAP->scanout);
+		armsoc_bo_unreference(pARMSOC->scanout);
 
 		set_scanout_bo(pScrn, new_scanout);
 
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
 	}else{
-		pitch = omap_bo_pitch(pOMAP->scanout);
+		pitch = armsoc_bo_pitch(pARMSOC->scanout);
 	}
 
 	if (pScreen && pScreen->ModifyPixmapHeader) {
@@ -1148,7 +1148,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 		pScreen->ModifyPixmapHeader(rootPixmap,
 				pScrn->virtualX, pScrn->virtualY,
 				pScrn->depth, pScrn->bitsPerPixel, pitch,
-				omap_bo_map(pOMAP->scanout));
+				armsoc_bo_map(pARMSOC->scanout));
 	}
 
 	/* Framebuffer needs to be reset on all CRTCs, not just
@@ -1244,7 +1244,7 @@ static void
 page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 		unsigned int tv_usec, void *user_data)
 {
-	OMAPDRI2SwapComplete(user_data);
+	ARMSOCDRI2SwapComplete(user_data);
 }
 
 static drmEventContext event_context = {
@@ -1256,14 +1256,14 @@ int
 drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 {
 	ScrnInfoPtr pScrn = xf86Screens[draw->pScreen->myNum];
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
 	drmmode_crtc_private_ptr crtc = config->crtc[0]->driver_private;
 	drmmode_ptr mode = crtc->drmmode;
 	int ret, i, failed = 0, num_flipped = 0;
 	unsigned int flags = 0;
 
-	if (pOMAP->drmmode->use_page_flip_events)
+	if (pARMSOC->drmmode->use_page_flip_events)
 		flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
 	/* if we can flip, we must be fullscreen.. so flip all CRTC's.. */
@@ -1296,7 +1296,7 @@ static void
 drmmode_handle_uevents(int fd, void *closure)
 {
 	ScrnInfoPtr pScrn = closure;
-	OMAPPtr pOMAP = OMAPPTR(pScrn);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
 	struct udev_device *dev;
 	const char *hotplug;
@@ -1316,7 +1316,7 @@ drmmode_handle_uevents(int fd, void *closure)
 	 * sure it's a hotplug event (HOTPLUG=1)
 	 */
 	udev_devnum = udev_device_get_devnum(dev);
-	fstat(pOMAP->drmFD, &s);
+	fstat(pARMSOC->drmFD, &s);
 
 	hotplug = udev_device_get_property_value(dev, "HOTPLUG");
 
