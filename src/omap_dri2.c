@@ -33,7 +33,6 @@
 #include "omap_driver.h"
 #include "omap_exa.h"
 
-#include "xf86drmMode.h"
 #include "dri2.h"
 
 /* any point to support earlier? */
@@ -472,6 +471,11 @@ OMAPDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	int src_fb_id, dst_fb_id;
 	OMAPPixmapPrivPtr src_priv, dst_priv;
 	int new_canflip, ret;
+
+	if(!cmd)
+	{
+		return FALSE;
+	}
 
 	cmd->client = client;
 	cmd->pScreen = pScreen;
