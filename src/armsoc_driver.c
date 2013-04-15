@@ -406,7 +406,6 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	rgb defaultWeight = { 0, 0, 0 };
 	rgb defaultMask = { 0, 0, 0 };
 	Gamma defaultGamma = { 0.0, 0.0, 0.0 };
-	uint64_t value;
 	int i;
 
 	TRACE_ENTER();
