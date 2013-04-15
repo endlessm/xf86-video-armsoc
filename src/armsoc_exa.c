@@ -30,8 +30,8 @@
 #include "config.h"
 #endif
 
-#include "omap_exa.h"
-#include "omap_driver.h"
+#include "armsoc_exa.h"
+#include "armsoc_driver.h"
 
 /* keep this here, instead of static-inline so submodule doesn't
  * need to know layout of ARMSOCPtr..

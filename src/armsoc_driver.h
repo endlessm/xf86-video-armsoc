@@ -27,8 +27,8 @@
  *    Rob Clark <rob@ti.com>
  */
 
-#ifndef __OMAP_DRV_H__
-#define __OMAP_DRV_H__
+#ifndef __ARMSOC_DRV_H__
+#define __ARMSOC_DRV_H__
 
 /* All drivers need the following headers: */
 #include "xorg-server.h"
@@ -56,11 +56,11 @@
 #include "xf86drm.h"
 #include "dri2.h"
 
-#include "omap_dumb.h"
+#include "armsoc_dumb.h"
 
 #include <errno.h>
 
-#include "omap_exa.h"
+#include "armsoc_exa.h"
 
 
 #define ARMSOC_VERSION		1000	/* Apparently not used by X server */
@@ -223,4 +223,4 @@ void ARMSOCDRI2SwapComplete(ARMSOCDRISwapCmd *cmd);
 
 void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo);
 
-#endif /* __OMAP_DRV_H__ */
+#endif /* __ARMSOC_DRV_H__ */

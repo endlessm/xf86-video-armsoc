@@ -44,10 +44,10 @@ DRMMODE_SRCS = drmmode_@drmmode@/drmmode_@drmmode@.c
 
 armsoc_drv_la_SOURCES = \
          drmmode_display.c \
-         omap_exa.c \
-         omap_exa_null.c \
-         omap_dri2.c \
-         omap_driver.c \
-         omap_dumb.c \
+         armsoc_exa.c \
+         armsoc_exa_null.c \
+         armsoc_dri2.c \
+         armsoc_driver.c \
+         armsoc_dumb.c \
          drm_pl111_cursor.c \
          $(DRMMODE_SRCS)

@@ -26,14 +26,14 @@
  *    Rob Clark <rob@ti.com>
  */
 
-#ifndef OMAP_EXA_COMMON_H_
-#define OMAP_EXA_COMMON_H_
+#ifndef ARMSOC_EXA_COMMON_H_
+#define ARMSOC_EXA_COMMON_H_
 
-/* note: don't include "omap_driver.h" here.. we want to keep some
+/* note: don't include "armsoc_driver.h" here.. we want to keep some
  * isolation between structs shared with submodules and stuff internal
  * to core driver..
  */
-#include "omap_dumb.h"
+#include "armsoc_dumb.h"
 #include "xf86.h"
 #include "xf86_OSproc.h"
 #include "exa.h"
@@ -143,4 +143,4 @@ void ARMSOCRegisterExternalAccess(PixmapPtr pPixmap);
 void ARMSOCDeregisterExternalAccess(PixmapPtr pPixmap);
 
 
-#endif /* OMAP_EXA_COMMON_H_ */
+#endif /* ARMSOC_EXA_COMMON_H_ */

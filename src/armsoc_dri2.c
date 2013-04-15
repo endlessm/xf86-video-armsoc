@@ -30,8 +30,8 @@
 #include "config.h"
 #endif
 
-#include "omap_driver.h"
-#include "omap_exa.h"
+#include "armsoc_driver.h"
+#include "armsoc_exa.h"
 
 #include "dri2.h"
 

@@ -35,7 +35,7 @@
 #include "config.h"
 #endif
 
-#include "omap_driver.h"
+#include "armsoc_driver.h"
 #include "compat-api.h"
 
 #include "drmmode_driver.h"

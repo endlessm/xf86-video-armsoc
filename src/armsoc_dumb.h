@@ -21,8 +21,8 @@
  * SOFTWARE.
  */
 
-#ifndef OMAP_DUMB_H_
-#define OMAP_DUMB_H_
+#ifndef ARMSOC_DUMB_H_
+#define ARMSOC_DUMB_H_
 
 #include <stdint.h>
 
@@ -82,5 +82,5 @@ void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_has_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_clear(struct armsoc_bo *bo);
 
-#endif /* OMAP_DUMB_H_ */
+#endif /* ARMSOC_DUMB_H_ */
 

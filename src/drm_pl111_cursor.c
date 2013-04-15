@@ -74,7 +74,7 @@
 #include <X11/extensions/dpms.h>
 #endif
 
-#include "omap_driver.h"
+#include "armsoc_driver.h"
 
 #include "xf86Crtc.h"
 
