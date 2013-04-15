@@ -23,6 +23,7 @@
  */
 
 #include "../drmmode_driver.h"
+#include <stddef.h>
 #include <xf86drmMode.h>
 #include <sys/ioctl.h>
 
