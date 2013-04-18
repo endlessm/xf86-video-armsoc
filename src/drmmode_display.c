@@ -287,8 +287,6 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		goto done;
 	}
 
-	// TODO: MIDEGL-1432: Intel puts this function here, and Nouveau puts it at the end
-	// of this function -> determine what's best for Armsoc
 	if (crtc->funcs->gamma_set)
 		crtc->funcs->gamma_set(crtc, crtc->gamma_red, crtc->gamma_green,
 				       crtc->gamma_blue, crtc->gamma_size);
