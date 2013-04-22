@@ -388,8 +388,11 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 		return FALSE;
 	}
 
-	/* Allocate the driver's Screen-specific, "private" data structure: */
+	/* Allocate the driver's Screen-specific, "private" data structure.
+	 * If PreInit fails this will be freed by ARMSOCFreeScreen()
+	*/
 	ARMSOCGetRec(pScrn);
+
 	pARMSOC = ARMSOCPTR(pScrn);
 
 	pARMSOC->pEntityInfo = xf86GetEntityInfo(pScrn->entityList[0]);
@@ -525,7 +528,6 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 
 fail:
 	TRACE_EXIT();
-	ARMSOCFreeRec(pScrn);
 	return FALSE;
 }
 
@@ -565,6 +567,11 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 
 	TRACE_ENTER();
 
+	/* set drm master before allocating scanout buffer */
+	if(drmSetMaster(pARMSOC->drmFD)) {
+		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
+		return FALSE;
+	}
 	/* Allocate initial scanout buffer */
 	DEBUG_MSG("allocating new scanout buffer: %dx%d",
 			pScrn->virtualX, pScrn->virtualY);
@@ -755,9 +762,6 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 
 	drmmode_screen_fini(pScrn);
 
-	if (pScrn->vtSema == TRUE) {
-		ARMSOCLeaveVT(VT_FUNC_ARGS(0));
-	}
 
 	if (pARMSOC->pARMSOCEXA) {
 		if (pARMSOC->pARMSOCEXA->CloseScreen) {
@@ -774,6 +778,9 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 	pARMSOC->scanout = NULL;
 	pScrn->displayWidth = 0;
 
+	if (pScrn->vtSema == TRUE) {
+		ARMSOCLeaveVT(VT_FUNC_ARGS(0));
+	}
 	pScrn->vtSema = FALSE;
 
 	unwrap(pARMSOC, pScreen, CloseScreen);
@@ -913,12 +920,10 @@ ARMSOCLeaveVT(VT_FUNC_ARGS_DECL)
 	TRACE_EXIT();
 }
 
-
-
 /**
- * The driver's FreeScreen() function.  This is called at the server's end of
- * life.  This should free any driver-allocated data that was allocated
- * up-to-and-including an unsuccessful ScreenInit() call.
+ * The driver's FreeScreen() function.
+ * Frees the ScrnInfoRec driverPrivate field when a screen is deleted by the common layer.
+ * This function is not used in normal (error free) operation.
  */
 static void
 ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL)
@@ -937,7 +942,6 @@ ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL)
 		if (pARMSOC->pARMSOCEXA->FreeScreen) {
 			pARMSOC->pARMSOCEXA->FreeScreen(FREE_SCREEN_ARGS(pScrn));
 		}
-		free(pARMSOC->pARMSOCEXA);
 	}
 
 	armsoc_device_del(pARMSOC->dev);

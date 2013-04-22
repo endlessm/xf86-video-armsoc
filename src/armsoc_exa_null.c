@@ -76,16 +76,29 @@ PrepareCompositeFail(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 	return FALSE;
 }
 
+/**
+ * CloseScreen() is called at the end of each server generation and
+ * cleans up everything initialised in InitNullEXA()
+ */
 static Bool
 CloseScreen(CLOSE_SCREEN_ARGS_DECL)
 {
-#if 0 // TODO: MIDEGL-1449: Need to implement CloseScreen & FreeScreen
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+
 	exaDriverFini(pScreen);
-	free(pNv->EXADriverPtr);
-#endif
+	free( ((ARMSOCNullEXAPtr)pARMSOC->pARMSOCEXA)->exa);
+	free(pARMSOC->pARMSOCEXA);
+	pARMSOC->pARMSOCEXA = NULL;
+
 	return TRUE;
 }
 
+/* FreeScreen() is called on an error during PreInit and 
+ * should clean up anything initialised before InitNullEXA()
+ * (which currently is nothing)
+ *
+ */
 static void
 FreeScreen(FREE_SCREEN_ARGS_DECL)
 {
@@ -150,6 +163,9 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	return armsoc_exa;
 
 fail:
+	if(exa) {
+		free(exa);
+	}
 	if (null_exa) {
 		free(null_exa);
 	}

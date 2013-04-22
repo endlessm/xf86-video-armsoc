@@ -183,13 +183,16 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 	if (bo->fb_id)
 	{
 		res = drmModeRmFB(bo->dev->fd, bo->fb_id);
-		assert(res == 0);
+		if(res) {
+			xf86DrvMsg(-1, X_ERROR, "drmModeRmFb failed %d : %s\n", res, strerror(errno));
+		}
 	}
-
 
 	destroy_dumb.handle = bo->handle;
 	res = drmIoctl(bo->dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
-	assert(res == 0);
+	if(res) {
+		xf86DrvMsg(-1, X_ERROR, "destroy dumb failed %d : %s\n", res, strerror(errno));
+	}
 	free(bo);
 }
 
