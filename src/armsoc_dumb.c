@@ -347,6 +347,16 @@ int armsoc_bo_clear(struct armsoc_bo *bo)
 				"Couldn't map scanout bo\n");
 		return -1;
 	}
+	if( armsoc_bo_cpu_prep(bo, ARMSOC_GEM_WRITE)) {
+		xf86DrvMsg(-1, X_ERROR," %s: armsoc_bo_cpu_prep failed - "
+					"unable to synchronise access.\n", __FUNCTION__);
+		return -1;
+	}
 	memset(dst, 0x0, bo->size);
+	if(armsoc_bo_cpu_fini(bo, ARMSOC_GEM_WRITE)) {
+		xf86DrvMsg(-1, X_ERROR," %s: armsoc_bo_cpu_fini failed - "
+					"unable to flush.\n", __FUNCTION__ );
+		return -1;
+	}
 	return 0;
 }
