@@ -169,41 +169,6 @@ ARMSOCCloseDRMMaster(ScrnInfoPtr pScrn)
 	}
 }
 
-static Bool
-ARMSOCMapMem(ScrnInfoPtr pScrn)
-{
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
-
-	DEBUG_MSG("allocating new scanout buffer: %dx%d",
-			pScrn->virtualX, pScrn->virtualY);
-
-	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
-			pScrn->virtualY, pScrn->depth, pScrn->bitsPerPixel,
-			ARMSOC_BO_SCANOUT );
-	if (!pARMSOC->scanout) {
-		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-			   "Error allocating scanout buffer\n");
-		return FALSE;
-	}
-
-	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / (pScrn->bitsPerPixel / 8);
-
-	return TRUE;
-}
-
-
-static Bool
-ARMSOCUnmapMem(ScrnInfoPtr pScrn)
-{
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
-	armsoc_bo_unreference(pARMSOC->scanout);
-	pARMSOC->scanout = NULL;
-	pScrn->displayWidth = 0;
-	return TRUE;
-}
-
-
-
 /** Let the XFree86 code know the Setup() function. */
 static MODULESETUPPROTO(ARMSOCSetup);
 
@@ -600,9 +565,19 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 
 	TRACE_ENTER();
 
-	/* Allocate and map memory areas we need */
-	if (!ARMSOCMapMem(pScrn))
+	/* Allocate initial scanout buffer */
+	DEBUG_MSG("allocating new scanout buffer: %dx%d",
+			pScrn->virtualX, pScrn->virtualY);
+
+	assert(!pARMSOC->scanout);
+	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
+			pScrn->virtualY, pScrn->depth, pScrn->bitsPerPixel,
+			ARMSOC_BO_SCANOUT );
+	if (!pARMSOC->scanout) {
+		ERROR_MSG("Error allocating scanout buffer\n");
 		return FALSE;
+	}
+	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / (pScrn->bitsPerPixel / 8);
 
 	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
@@ -795,7 +770,10 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 		ARMSOCDRI2CloseScreen(pScreen);
 	}
 
-	ARMSOCUnmapMem(pScrn);
+	/* release the scanout buffer */
+	armsoc_bo_unreference(pARMSOC->scanout);
+	pARMSOC->scanout = NULL;
+	pScrn->displayWidth = 0;
 
 	pScrn->vtSema = FALSE;
 
