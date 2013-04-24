@@ -40,7 +40,6 @@
  * XXX - figure out what can be removed..
  */
 #include "mipointer.h"
-#include "mibstore.h"
 #include "micmap.h"
 #include "colormapst.h"
 #include "xf86cmap.h"
