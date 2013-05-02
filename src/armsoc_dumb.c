@@ -83,6 +83,7 @@ int armsoc_bo_set_dmabuf(struct armsoc_bo *bo)
 	int res;
 	struct drm_prime_handle prime_handle;
 
+	assert(bo->refcnt > 0);
 	assert(!armsoc_bo_has_dmabuf(bo));
 
 	/* Try to get dma_buf fd */
@@ -102,6 +103,7 @@ int armsoc_bo_set_dmabuf(struct armsoc_bo *bo)
 
 void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	assert(armsoc_bo_has_dmabuf(bo));
 
 	close(bo->dmabuf);
@@ -110,6 +112,7 @@ void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo)
 
 int armsoc_bo_has_dmabuf(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->dmabuf >= 0;
 }
 
@@ -172,8 +175,8 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 
 	if (!bo)
 		return;
-
-	assert(!armsoc_bo_has_dmabuf(bo));
+	assert(bo->refcnt == 0);
+	assert(bo->dmabuf < 0);
 
 	if (bo->map_addr)
 	{
@@ -217,6 +220,7 @@ int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 	int ret;
 	struct drm_gem_flink flink;
 
+	assert(bo->refcnt > 0);
 	flink.handle = bo->handle;
 
 	ret = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_FLINK, &flink);
@@ -229,42 +233,50 @@ int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->handle;
 }
 
 uint32_t armsoc_bo_size(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->size;
 }
 
 uint32_t armsoc_bo_width(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->width;
 }
 
 uint32_t armsoc_bo_height(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->height;
 }
 
 uint32_t armsoc_bo_bpp(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->bpp;
 }
 
 /* Bytes per pixel */
 uint32_t armsoc_bo_Bpp(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return (bo->bpp + 7) / 8;
 }
 
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->pitch;
 }
 
 void *armsoc_bo_map(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	if (!bo->map_addr)
 	{
 		struct drm_mode_map_dumb map_dumb;
@@ -291,6 +303,7 @@ int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op)
 {
 	int ret = 0;
 
+	assert(bo->refcnt > 0);
 	if(armsoc_bo_has_dmabuf(bo))
 	{
 		fd_set fds;
@@ -317,6 +330,7 @@ int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op)
 
 int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op)
 {
+	assert(bo->refcnt > 0);
 	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
 }
 
@@ -324,6 +338,7 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 {
 	int ret;
 
+	assert(bo->refcnt > 0);
 	assert(bo->fb_id == 0);
 
 	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->depth,
@@ -338,6 +353,7 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 
 uint32_t armsoc_bo_get_fb(struct armsoc_bo *bo)
 {
+	assert(bo->refcnt > 0);
 	return bo->fb_id;
 }
 
@@ -345,6 +361,7 @@ int armsoc_bo_clear(struct armsoc_bo *bo)
 {
 	unsigned char *dst;
 
+	assert(bo->refcnt > 0);
 	if (!(dst = armsoc_bo_map(bo))) {
 		xf86DrvMsg(-1, X_ERROR,
 				"Couldn't map scanout bo\n");
