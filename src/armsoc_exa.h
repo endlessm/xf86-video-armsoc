@@ -45,8 +45,6 @@
  */
 typedef struct _ARMSOCEXARec
 {
-	union { struct {
-
 	/**
 	 * Called by X driver's CloseScreen() function at the end of each server
 	 * generation to free per-Screen data structures (except those held by
@@ -62,12 +60,6 @@ typedef struct _ARMSOCEXARec
 	void (*FreeScreen)(FREE_SCREEN_ARGS_DECL);
 
 	/* add new fields here at end, to preserve ABI */
-
-
-	/* padding to keep ABI stable, so an existing EXA submodule
-	 * doesn't need to be recompiled when new fields are added
-	 */
-	}; void *pad[64]; };
 
 } ARMSOCEXARec, *ARMSOCEXAPtr;
 
