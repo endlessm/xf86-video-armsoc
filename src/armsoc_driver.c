@@ -40,6 +40,8 @@
 
 #include "drmmode_driver.h"
 
+#define DRM_DEVICE "/dev/dri/card0"
+
 Bool armsocDebug = 0;
 
 /*
@@ -109,62 +111,111 @@ static const OptionInfoRec ARMSOCOptions[] = {
 };
 
 /**
- * Helper function for opening a connection to the DRM.
+ * Helper functions for sharing a DRM connection across screens.
  */
+static struct ARMSOCConnection {
+	int fd;
+	int open_count;
+	int master_count;
+} connection = {-1, 0, 0};
 
 static int
-ARMSOCOpenDRM(int n)
+ARMSOCSetDRMMaster(void)
 {
-	return open("/dev/dri/card0", O_RDWR, 0);
+	int ret=0;
+
+	assert( connection.fd >=0 );
+
+	if(!connection.master_count) {
+		ret = drmSetMaster(connection.fd);
+	}
+	if(!ret) {
+		connection.master_count++;
+	}
+	return ret;
+}
+
+static int
+ARMSOCDropDRMMaster(void)
+{
+	int ret = 0;
+
+	assert( connection.fd >=0 );
+	assert( connection.master_count > 0 );
+
+	if(1 == connection.master_count) {
+		ret = drmDropMaster(connection.fd);
+	}
+	if(!ret) {
+		connection.master_count--;
+	}
+	return ret;
 }
 
 static Bool
-ARMSOCOpenDRMMaster(ScrnInfoPtr pScrn, int n)
+ARMSOCOpenDRM(ScrnInfoPtr pScrn)
 {
 	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	drmSetVersion sv;
 	int err;
 
-	pARMSOC->drmFD = ARMSOCOpenDRM(n);
-	if (pARMSOC->drmFD == -1) {
-		ERROR_MSG("Cannot open a connection with the DRM.");
-		return FALSE;
+	if(-1 == connection.fd)
+	{
+		assert(!connection.open_count);
+		assert(!connection.master_count);
+		pARMSOC->drmFD = open(DRM_DEVICE, O_RDWR, 0);
+		if (pARMSOC->drmFD == -1) {
+			ERROR_MSG("Cannot open a connection with the DRM.");
+			return FALSE;
+		}
+		/* Check that what we are or can become drm master by attempting
+		 * a drmSetInterfaceVersion(). If successful this leaves us as master.
+		 * (see DRIOpenDRMMaster() in DRI1)
+		 */
+		sv.drm_di_major = 1;
+		sv.drm_di_minor = 1;
+		sv.drm_dd_major = -1;
+		sv.drm_dd_minor = -1;
+		err = drmSetInterfaceVersion(pARMSOC->drmFD, &sv);
+		if (err != 0) {
+			ERROR_MSG("Cannot set the DRM interface version.");
+			drmClose(pARMSOC->drmFD);
+			pARMSOC->drmFD = -1;
+			return FALSE;
+		}
+		connection.fd = pARMSOC->drmFD;
+		connection.open_count = 1;
+		connection.master_count = 1;
 	}
-
-	/* Check that what we opened was a master or a master-capable FD,
-	 * by setting the version of the interface we'll use to talk to it.
-	 * (see DRIOpenDRMMaster() in DRI1)
-	 */
-	sv.drm_di_major = 1;
-	sv.drm_di_minor = 1;
-	sv.drm_dd_major = -1;
-	sv.drm_dd_minor = -1;
-	err = drmSetInterfaceVersion(pARMSOC->drmFD, &sv);
-	if (err != 0) {
-		ERROR_MSG("Cannot set the DRM interface version.");
-		drmClose(pARMSOC->drmFD);
-		pARMSOC->drmFD = -1;
-		return FALSE;
+	else
+	{
+		assert(connection.open_count);
+		connection.open_count++;
+		connection.master_count++;
+		pARMSOC->drmFD = connection.fd;
 	}
-
 	pARMSOC->deviceName = drmGetDeviceNameFromFd(pARMSOC->drmFD);
 
 	return TRUE;
 }
 
-
-
 /**
  * Helper function for closing a connection to the DRM.
  */
 static void
-ARMSOCCloseDRMMaster(ScrnInfoPtr pScrn)
+ARMSOCCloseDRM(ScrnInfoPtr pScrn)
 {
 	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
-	if (pARMSOC && (pARMSOC->drmFD > 0)) {
+	if (pARMSOC && (pARMSOC->drmFD >= 0)) {
 		drmFree(pARMSOC->deviceName);
-		drmClose(pARMSOC->drmFD);
+		connection.open_count--;
+		if( !connection.open_count )
+		{
+			assert(!connection.master_count);
+			drmClose(pARMSOC->drmFD);
+			connection.fd = -1;
+		}
 		pARMSOC->drmFD = -1;
 	}
 }
@@ -215,39 +266,6 @@ ARMSOCSetup(pointer module, pointer opts, int *errmaj, int *errmin)
 	}
 }
 
-
-/**
- * Allocate the driver's Screen-specific, "private" data structure and hook it
- * into the ScrnInfoRec's driverPrivate field.
- */
-static Bool
-ARMSOCGetRec(ScrnInfoPtr pScrn)
-{
-	if (pScrn->driverPrivate != NULL)
-		return TRUE;
-
-	pScrn->driverPrivate = calloc(1, sizeof(ARMSOCRec));
-	if (pScrn->driverPrivate == NULL)
-		return FALSE;
-
-	return TRUE;
-}
-
-
-/**
- * Free the driver's Screen-specific, "private" data structure and NULL-out the
- * ScrnInfoRec's driverPrivate field.
- */
-static void
-ARMSOCFreeRec(ScrnInfoPtr pScrn)
-{
-	if (pScrn->driverPrivate == NULL)
-		return;
-	free(pScrn->driverPrivate);
-	pScrn->driverPrivate = NULL;
-}
-
-
 /**
  * The mandatory AvailableOptions() function.  It returns the available driver
  * options to the "-configure" option, so that an xorg.conf file can be built
@@ -286,7 +304,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 {
 	int i;
 	ScrnInfoPtr pScrn;
-	GDevPtr *devSections;
+	GDevPtr *devSections=NULL;
 	int numDevSections;
 	Bool foundScreen = FALSE;
 
@@ -308,8 +326,24 @@ ARMSOCProbe(DriverPtr drv, int flags)
 	}
 
 	for (i = 0; i < numDevSections; i++) {
-		int fd = ARMSOCOpenDRM(i);
+		int fd = open(DRM_DEVICE, O_RDWR, 0);
 		if (fd != -1) {
+			ARMSOCPtr pARMSOC;
+
+			/* Allocate the ScrnInfoRec */
+			pScrn = xf86AllocateScreen(drv, 0);
+			if (!pScrn) {
+				EARLY_ERROR_MSG("Cannot allocate a ScrnInfoPtr");
+				return FALSE;
+			}
+			/* Allocate the driver's Screen-specific, "private" data structure
+			 * and hook it into the ScrnInfoRec's driverPrivate field. */
+			pScrn->driverPrivate = calloc(1, sizeof(ARMSOCRec));
+			if (!pScrn->driverPrivate)
+				return FALSE;
+
+			pARMSOC = ARMSOCPTR(pScrn);
+			pARMSOC->crtcNum = -1; /* intially mark to use all DRM crtc */
 
 			if (flags & PROBE_DETECT) {
 				/* just add the device.. we aren't a PCI device, so
@@ -318,20 +352,21 @@ ARMSOCProbe(DriverPtr drv, int flags)
 				xf86AddBusDeviceToConfigure(ARMSOC_DRIVER_NAME,
 						BUS_NONE, NULL, i);
 				foundScreen = TRUE;
+				drmClose(fd);
 				continue;
-			}
-
-			pScrn = xf86AllocateScreen(drv, 0);
-
-			if (!pScrn) {
-				EARLY_ERROR_MSG("Cannot allocate a ScrnInfoPtr");
-				return FALSE;
 			}
 
 			if (devSections) {
 				int entity = xf86ClaimNoSlot(drv, 0, devSections[i], TRUE);
 				xf86AddEntityToScreen(pScrn, entity);
 			}
+
+			/* if there are multiple screens, use a separate crtc for each one */
+			if(numDevSections > 1) {
+				pARMSOC->crtcNum = i;
+			}
+
+			xf86Msg(X_INFO,"Screen:%d,  CRTC:%d\n", pScrn->scrnIndex, pARMSOC->crtcNum);
 
 			foundScreen = TRUE;
 
@@ -347,17 +382,13 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			pScrn->LeaveVT       = ARMSOCLeaveVT;
 			pScrn->FreeScreen    = ARMSOCFreeScreen;
 
-			/* would be nice to be able to keep the connection open.. but
-			 * currently we don't allocate the private until PreInit
-			 */
+			/* would be nice to keep the connection open */
 			drmClose(fd);
 		}
 	}
 	free(devSections);
 	return foundScreen;
 }
-
-
 
 /**
  * The driver's PreInit() function.  Additional hardware probing is allowed
@@ -388,13 +419,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 		return FALSE;
 	}
 
-	/* Allocate the driver's Screen-specific, "private" data structure.
-	 * If PreInit fails this will be freed by ARMSOCFreeScreen()
-	*/
-	ARMSOCGetRec(pScrn);
-
 	pARMSOC = ARMSOCPTR(pScrn);
-
 	pARMSOC->pEntityInfo = xf86GetEntityInfo(pScrn->entityList[0]);
 
 	pScrn->monitor = pScrn->confScreen->monitor;
@@ -439,14 +464,13 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	pScrn->progClock = TRUE;
 
 	/* Open a connection to the DRM, so we can communicate with the KMS code: */
-	if (!ARMSOCOpenDRMMaster(pScrn, 0)) {
+	if (!ARMSOCOpenDRM(pScrn)) {
 		goto fail;
 	}
-	DEBUG_MSG("Became DRM master.");
 
 	pARMSOC->drmmode = drmmode_interface_get_implementation(pARMSOC->drmFD);
 	if (!pARMSOC->drmmode)
-		goto fail;
+		goto fail2;
 
 	/* create DRM device instance: */
 	pARMSOC->dev = armsoc_device_new(pARMSOC->drmFD,
@@ -468,7 +492,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	 */
 	xf86CollectOptions(pScrn, NULL);
 	if (!(pARMSOC->pOptionInfo = calloc(1, sizeof(ARMSOCOptions))))
-		return FALSE;
+		goto fail2;
 	memcpy(pARMSOC->pOptionInfo, ARMSOCOptions, sizeof(ARMSOCOptions));
 	xf86ProcessOptions(pScrn->scrnIndex, pARMSOC->pEntityInfo->device->options,
 			pARMSOC->pOptionInfo);
@@ -493,6 +517,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	/* Do initial KMS setup: */
 	if (!drmmode_pre_init(pScrn, pARMSOC->drmFD, (pScrn->bitsPerPixel >> 3))) {
 		ERROR_MSG("Cannot get KMS resources");
+		goto fail2;
 	} else {
 		INFO_MSG("Got KMS resources");
 	}
@@ -511,7 +536,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	default:
 		ERROR_MSG("The requested number of bits per pixel (%d) is unsupported.",
 				pScrn->bitsPerPixel);
-		goto fail;
+		goto fail2;
 	}
 
 
@@ -520,12 +545,17 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	if (!(xf86LoadSubModule(pScrn, "dri2") &&
 			xf86LoadSubModule(pScrn, "exa") &&
 			xf86LoadSubModule(pScrn, "fb"))) {
-		goto fail;
+		goto fail2;
 	}
 
 	TRACE_EXIT();
 	return TRUE;
 
+fail2:
+	/* Cleanup here where we know whether we took a connection
+	 * instead of in FreeScreen where we don't */
+	ARMSOCDropDRMMaster();
+	ARMSOCCloseDRM(pScrn);
 fail:
 	TRACE_EXIT();
 	return FALSE;
@@ -568,7 +598,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	TRACE_ENTER();
 
 	/* set drm master before allocating scanout buffer */
-	if(drmSetMaster(pARMSOC->drmFD)) {
+	if(ARMSOCSetDRMMaster()) {
 		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
 		return FALSE;
 	}
@@ -866,7 +896,6 @@ static Bool
 ARMSOCEnterVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	int i, ret;
 
 	TRACE_ENTER();
@@ -876,7 +905,7 @@ ARMSOCEnterVT(VT_FUNC_ARGS_DECL)
 			AttendClient(clients[i]);
 	}
 
-	ret = drmSetMaster(pARMSOC->drmFD);
+	ret = ARMSOCSetDRMMaster();
 	if (ret) {
 		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
 		return FALSE;
@@ -902,7 +931,6 @@ static void
 ARMSOCLeaveVT(VT_FUNC_ARGS_DECL)
 {
 	SCRN_INFO_PTR(arg);
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	int i, ret;
 
 	TRACE_ENTER();
@@ -912,7 +940,7 @@ ARMSOCLeaveVT(VT_FUNC_ARGS_DECL)
 			IgnoreClient(clients[i]);
 	}
 
-	ret = drmDropMaster(pARMSOC->drmFD);
+	ret = ARMSOCDropDRMMaster();
 	if (ret) {
 		WARNING_MSG("drmDropMaster failed: %s", strerror(errno));
 	}
@@ -946,9 +974,13 @@ ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL)
 
 	armsoc_device_del(pARMSOC->dev);
 
-	ARMSOCCloseDRMMaster(pScrn);
-
-	ARMSOCFreeRec(pScrn);
+	/* Free the driver's Screen-specific, "private" data structure and
+	 * NULL-out the ScrnInfoRec's driverPrivate field.
+	 */
+	if (pScrn->driverPrivate) {
+		free(pScrn->driverPrivate);
+		pScrn->driverPrivate = NULL;
+	}
 
 	TRACE_EXIT();
 }

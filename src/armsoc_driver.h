@@ -106,8 +106,6 @@ extern _X_EXPORT Bool armsocDebug;
 		do { xf86Msg(X_ERROR, "ERROR: " fmt "\n",\
 				##__VA_ARGS__); } while (0)
 
-
-
 /** The driver's Screen-specific, "private" data structure. */
 typedef struct _ARMSOCRec
 {
@@ -150,7 +148,11 @@ typedef struct _ARMSOCRec
 	/** Flips we are waiting for: */
 	int					pending_flips;
 	/* For invalidating backbuffers on Hotplug */
-	Bool			has_resized;
+	Bool				has_resized;
+
+	/* Identify which CRTC to use. -1 uses all CRTCs */
+	int					crtcNum;
+
 } ARMSOCRec, *ARMSOCPtr;
 
 /*

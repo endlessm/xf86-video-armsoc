@@ -606,6 +606,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	drmmode_crtc->mode_crtc = drmModeGetCrtc(drmmode->fd,
 			drmmode->mode_res->crtcs[num]);
 	drmmode_crtc->drmmode = drmmode;
+	INFO_MSG("Got CRTC: %d",num);
 
 	// TODO: MIDEGL-1438: Potentially add code to allocate a HW cursor here.
 
@@ -1051,7 +1052,14 @@ drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	output->mm_height = koutput->mmHeight;
 	output->driver_private = drmmode_output;
 
-	output->possible_crtcs = kencoder->possible_crtcs;
+	if (ARMSOCPTR(pScrn)->crtcNum >= 0) {
+		/* Only single crtc per screen - see if this output can use it*/
+		output->possible_crtcs =
+				(kencoder->possible_crtcs>>(ARMSOCPTR(pScrn)->crtcNum))&1;
+	} else {
+		output->possible_crtcs = kencoder->possible_crtcs;
+	}
+
 	output->possible_clones = kencoder->possible_clones;
 	output->interlaceAllowed = TRUE;
 
@@ -1217,8 +1225,17 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 	}
 	xf86CrtcSetSizeRange(pScrn, 320, 200, drmmode->mode_res->max_width,
 			drmmode->mode_res->max_height);
-	for (i = 0; i < drmmode->mode_res->count_crtcs; i++)
-		drmmode_crtc_init(pScrn, drmmode, i);
+
+	if(ARMSOCPTR(pScrn)->crtcNum == -1) {
+		INFO_MSG("Adding all CRTCs");
+		for (i = 0; i < drmmode->mode_res->count_crtcs; i++)
+			drmmode_crtc_init(pScrn, drmmode, i);
+	}else if(ARMSOCPTR(pScrn)->crtcNum < drmmode->mode_res->count_crtcs) {
+		drmmode_crtc_init(pScrn, drmmode, ARMSOCPTR(pScrn)->crtcNum);
+	} else {
+		ERROR_MSG("Specified more Screens in xorg.conf than there are DRM CRTCs");
+		return FALSE;
+	}
 
 	for (i = 0; i < drmmode->mode_res->count_connectors; i++)
 		drmmode_output_init(pScrn, drmmode, i);
