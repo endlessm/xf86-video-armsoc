@@ -583,8 +583,9 @@ ARMSOCAccelInit(ScreenPtr pScreen)
 }
 
 /**
- * The driver's ScreenInit() function.  Fill in pScreen, map the frame buffer,
- * save state, initialize the mode, etc.
+ * The driver's ScreenInit() function, called at the start of each server
+ * generation. Fill in pScreen, map the frame buffer, save state, 
+ * initialize the mode, etc.
  */
 static Bool
 ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
@@ -600,22 +601,20 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* set drm master before allocating scanout buffer */
 	if(ARMSOCSetDRMMaster()) {
 		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
-		return FALSE;
+		goto fail;
 	}
 	/* Allocate initial scanout buffer */
 	DEBUG_MSG("allocating new scanout buffer: %dx%d",
 			pScrn->virtualX, pScrn->virtualY);
-
 	assert(!pARMSOC->scanout);
 	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
 			pScrn->virtualY, pScrn->depth, pScrn->bitsPerPixel,
 			ARMSOC_BO_SCANOUT );
 	if (!pARMSOC->scanout) {
-		ERROR_MSG("Error allocating scanout buffer\n");
-		return FALSE;
+		ERROR_MSG("Cannot allocate scanout buffer\n");
+		goto fail1;
 	}
 	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / (pScrn->bitsPerPixel / 8);
-
 	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
 	/* need to point to new screen on server regeneration */
@@ -636,16 +635,13 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	 * are not appropriate.  In this driver, we fixup the visuals after.
 	 */
 
-	/*
-	 * Reset the visual list.
-	 */
-
+	/* Reset the visual list. */
 	miClearVisualTypes();
 	if (!miSetVisualTypes(pScrn->bitsPerPixel, miGetDefaultVisualMask(pScrn->depth),
 			pScrn->rgbBits, pScrn->defaultVisual)) {
 		ERROR_MSG("Cannot initialize the visual type for %d bits per pixel!",
 				pScrn->bitsPerPixel);
-		goto fail;
+		goto fail2;
 	}
 
 	if(pScrn->bitsPerPixel == 32 && pScrn->depth == 24) {
@@ -660,7 +656,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 
 	if (!miSetPixmapDepths()) {
 		ERROR_MSG("Cannot initialize the pixmap depth!");
-		goto fail;
+		goto fail3;
 	}
 
 	/* Initialize some generic 2D drawing functions: */
@@ -669,7 +665,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 			pScrn->xDpi, pScrn->yDpi, pScrn->displayWidth,
 			pScrn->bitsPerPixel)) {
 		ERROR_MSG("fbScreenInit() failed!");
-		goto fail;
+		goto fail3;
 	}
 
 	/* Fixup RGB ordering: */
@@ -692,7 +688,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	 */
 	if (!fbPictureInit(pScreen, NULL, 0)) {
 		ERROR_MSG("fbPictureInit() failed!");
-		goto fail;
+		goto fail4;
 	}
 
 	/* Set the initial black & white colormap indices: */
@@ -711,13 +707,16 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	xf86SetSilkenMouse(pScreen);
 
 	/* Initialize the cursor: */
-	miDCInitialize(pScreen, xf86GetPointerScreenFuncs());
-
-	if (!drmmode_cursor_init(pScreen)) {
-		ERROR_MSG("Hardware cursor initialization failed");
+	if(!miDCInitialize(pScreen, xf86GetPointerScreenFuncs())) {
+		ERROR_MSG("miDCInitialize() failed!");
+		goto fail5;
 	}
 
-	/* XXX -- Is this the right place for this?  The Intel i830 driver says:
+	/* ignore failures here as we will fall back to software cursor */
+	(void)drmmode_cursor_init(pScreen);
+
+	/* TODO: MIDEGL-1458: Is this the right place for this?
+	 * The Intel i830 driver says:
 	 * "Must force it before EnterVT, so we are in control of VT..."
 	 */
 	pScrn->vtSema = TRUE;
@@ -727,24 +726,21 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	 */
 	if (!ARMSOCEnterVT(VT_FUNC_ARGS(0))) {
 		ERROR_MSG("ARMSOCEnterVT() failed!");
-		goto fail;
+		goto fail6;
 	}
 
-	/* Do some XRandR initialization: */
-	if (!xf86CrtcScreenInit(pScreen)) {
-		ERROR_MSG("xf86CrtcScreenInit() failed!");
-		goto fail;
-	}
+	/* Do some XRandR initialization. Return value is not useful */
+	(void)xf86CrtcScreenInit(pScreen);
 
 	if (!miCreateDefColormap(pScreen)) {
 		ERROR_MSG("Cannot create colormap!");
-		goto fail;
+		goto fail7;
 	}
 
 	if (!xf86HandleColormaps(pScreen, 1 << pScrn->rgbBits, pScrn->rgbBits,
 			ARMSOCLoadPalette, NULL, CMAP_PALETTED_TRUECOLOR)) {
 		ERROR_MSG("xf86HandleColormaps() failed!");
-		goto fail;
+		goto fail8;
 	}
 
 	/* Setup power management: */
@@ -760,6 +756,50 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 
 	TRACE_EXIT();
 	return TRUE;
+
+/* cleanup on failures */
+fail8:
+	/* uninstall the default colormap */
+	miUninstallColormap(GetInstalledmiColormap(pScreen));
+
+fail7:
+	ARMSOCLeaveVT(VT_FUNC_ARGS(0));
+	pScrn->vtSema = FALSE;
+
+fail6:
+	drmmode_cursor_fini(pScreen);
+
+fail5:
+	if (pARMSOC->dri) {
+		ARMSOCDRI2CloseScreen(pScreen);
+	}
+	if (pARMSOC->pARMSOCEXA) {
+		if (pARMSOC->pARMSOCEXA->CloseScreen) {
+			pARMSOC->pARMSOCEXA->CloseScreen(pScrn->scrnIndex, pScreen);
+		}
+	}
+fail4:
+	/* Call the CloseScreen functions for fbInitScreen,  miDCInitialize,
+	 * exaDriverInit & xf86CrtcScreenInit as appropriate via their wrapped pointers.
+	 * exaDDXCloseScreen uses the XF86SCRNINFO macro so we must
+	 * set up the key for this before it gets called.
+	 */
+	dixSetPrivate(&pScreen->devPrivates, xf86ScreenKey, pScrn);
+	(*pScreen->CloseScreen)(pScrn->scrnIndex, pScreen);
+
+fail3:
+	/* reset the visual list */
+	miClearVisualTypes();
+
+fail2:
+	/* release the scanout buffer */
+	armsoc_bo_unreference(pARMSOC->scanout);
+	pARMSOC->scanout = NULL;
+	pScrn->displayWidth = 0;
+
+fail1:
+	/* drop drm master */
+	(void)drmDropMaster(pARMSOC->drmFD);
 
 fail:
 	TRACE_EXIT();
@@ -792,15 +832,13 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 
 	drmmode_screen_fini(pScrn);
 
-
+	if (pARMSOC->dri) {
+		ARMSOCDRI2CloseScreen(pScreen);
+	}
 	if (pARMSOC->pARMSOCEXA) {
 		if (pARMSOC->pARMSOCEXA->CloseScreen) {
 			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 		}
-	}
-
-	if (pARMSOC->dri) {
-		ARMSOCDRI2CloseScreen(pScreen);
 	}
 
 	/* release the scanout buffer */

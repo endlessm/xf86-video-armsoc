@@ -475,7 +475,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	if(!xf86LoaderCheckSymbol("drmModeGetPlaneResources")) {
-		ERROR_MSG("drmModeGetPlaneResources() not supported (needs libdrm 2.4.30 or higher)");
+		ERROR_MSG("HW cursor not supported (needs libdrm 2.4.30 or higher)");
 		return FALSE;
 	}
 
@@ -485,7 +485,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	 */
 	plane_resources = drmModeGetPlaneResources(drmmode->fd);
 	if (!plane_resources) {
-		ERROR_MSG("drmModeGetPlaneResources failed: %s", strerror(errno));
+		ERROR_MSG("HW cursor: drmModeGetPlaneResources failed: %s", strerror(errno));
 		return FALSE;
 	}
 
@@ -497,7 +497,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	ovr = drmModeGetPlane(drmmode->fd, plane_resources->planes[0]);
 	if (!ovr) {
-		ERROR_MSG("drmModeGetPlane failed: %s", strerror(errno));
+		ERROR_MSG("HW cursor: drmModeGetPlane failed: %s", strerror(errno));
 		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
 	}
@@ -511,7 +511,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	cursor = calloc(1, sizeof(drmmode_cursor_rec));
 	if (!cursor) {
-		ERROR_MSG("calloc failed");
+		ERROR_MSG("HW cursor: calloc failed");
 		drmModeFreePlane(ovr);
 		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
@@ -521,7 +521,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	cursor->bo  = armsoc_bo_new_with_dim(pARMSOC->dev, w, h, 0, 32, ARMSOC_BO_SCANOUT );
 
 	if (!cursor->bo) {
-		ERROR_MSG("error allocating hw cursor buffer");
+		ERROR_MSG("HW cursor: buffer allocation failed");
 		free(cursor);
 		drmModeFreePlane(ovr);
 		drmModeFreePlaneResources(plane_resources);
@@ -534,7 +534,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
 			handles, pitches, offsets, &cursor->fb_id, 0)) {
-		ERROR_MSG("drmModeAddFB2 failed: %s", strerror(errno));
+		ERROR_MSG("HW cursor: drmModeAddFB2 failed: %s", strerror(errno));
 		armsoc_bo_unreference(cursor->bo);
 		free(cursor);
 		drmModeFreePlane(ovr);
@@ -556,8 +556,27 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 	INFO_MSG("HW cursor initialized");
 	drmmode->cursor = cursor;
+	drmModeFreePlaneResources(plane_resources);
 	return TRUE;
 }
+
+void drmmode_cursor_fini(ScreenPtr pScreen)
+{
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	drmmode_ptr drmmode = drmmode_from_scrn(pScrn);
+	drmmode_cursor_ptr cursor = drmmode->cursor;
+
+	if(!cursor ) {
+		return;
+	}
+	drmmode->cursor = NULL;
+	xf86_cursors_fini(pScreen);
+	drmModeRmFB(drmmode->fd, cursor->fb_id);
+	armsoc_bo_unreference(cursor->bo);
+	drmModeFreePlane(cursor->ovr);
+	free(cursor);
+}
+
 
 #if 1==ARMSOC_SUPPORT_GAMMA
 static void
