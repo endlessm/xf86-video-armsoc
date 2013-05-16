@@ -13,10 +13,10 @@ armsoc \- Arm SoC graphics
 .fi
 .SH DESCRIPTION
 .B armsoc
-is an __xservername__ driver for Arm Mali & TI OMAP SoCs.
+is an __xservername__ driver for Arm Mali SoCs.
 .SH SUPPORTED HARDWARE
 .B armsoc
-supports the OMAP3430, OMAP3630, OMAP4430, OMAP4460, OMAP5430, OMAP5432, Mali-T400 & Mali-T60x
+supports the Mali-T400 & Mali-T60x
 
 .SH CONFIGURATION DETAILS
 Please refer to __xconfigfile__(__filemansuffix__) for general configuration
@@ -31,21 +31,6 @@ are supported
 Enable debug logging.
 .IP
 Default: Debug logging is Disabled
-.TP
-.BI "Option \*qDRI\*q \*q" boolean \*q
-Enable DRI2.
-.IP
-Default: DRI2 is Enabled
-.TP
-.BI "Option \*qNoAccel\*q \*q" boolean \*q
-Disable hw acceleration.
-.IP
-Default: HW acceleration is Enabled
-.TP
-.BI "Option \*qHWcursor\*q \*q" boolean \*q
-Enable HW mouse cursor.
-.IP
-Default: HW cursor is Enabled
 .TP
 .BI "Option \*qNoFlip\*q \*q" boolean \*q
 Disable buffer flipping.
@@ -81,9 +66,8 @@ example, or statically configure an extended desktop monitor layout.
 .SH MULTIHEAD CONFIGURATIONS
 
 The number of independent outputs is dictated by the number of CRTCs
-(in X parlance) a given chip supports.  OMAP3xxx supports up to two,
-while OMAP4xxx supports up to three displays.  The actual number of
-displays supported will depend on the board.  But a built-in LCD and
+(in X parlance) a given chip supports. The actual number of displays
+supported will depend on the board.  But a built-in LCD and
 external HDMI are a common configuration. 
 
 You can use the "xrandr" tool, or various desktop utilities, to change

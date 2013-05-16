@@ -16,7 +16,7 @@
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.  IN NO EVENT SHALL
-# ADAM JACKSON BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# ARM BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
@@ -42,9 +42,9 @@ m4_ifndef([XORG_MACROS_VERSION],
 XORG_MACROS_VERSION(1.4)
 XORG_DEFAULT_OPTIONS
 
+# Initialize libtool
+LT_INIT([disable-static])
 # Checks for programs.
-AC_DISABLE_STATIC
-AC_PROG_LIBTOOL
 AC_PROG_CC
 
 AC_CHECK_HEADERS([sys/ioctl.h])
@@ -53,14 +53,14 @@ AC_CHECK_HEADERS([stdint.h])
 AH_TOP([#include "xorg-server.h"])
 
 AC_ARG_WITH(xorg-module-dir,
-            AC_HELP_STRING([--with-xorg-module-dir=DIR],
+            AS_HELP_STRING([--with-xorg-module-dir=DIR],
                            [Default xorg module directory [[default=$libdir/xorg/modules]]]),
             [moduledir="$withval"],
             [moduledir="$libdir/xorg/modules"])
 
 AC_MSG_CHECKING([which DRM driver to use])
 AC_ARG_WITH(drmmode,
-            AC_HELP_STRING([--with-drmmode],
+            AS_HELP_STRING([--with-drmmode],
                            [Which DRM driver to use (see README)]),
             [drmmode=$withval],
             AC_MSG_FAILURE([You must specify which DRM driver to build for - see README]))

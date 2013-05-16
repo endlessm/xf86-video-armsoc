@@ -31,7 +31,7 @@ HW Cursor plane configuration
 ------------------------------
 
 The cursor plane format needs to be modified to select the format that the platform expects. This can
-be done by setting DRM_CURSOR_PLANE_FORMAT define to the desired format in omap_dumb.h.
+be done by setting DRM_CURSOR_PLANE_FORMAT define to the desired format in armsoc_dumb.h.
 
 Currently available options are:
 
