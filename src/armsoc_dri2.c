@@ -231,10 +231,6 @@ fail:
 
 /**
  * Destroy Buffer
- *
- * TODO: MIDEGL-1464: Depending on how flipping ends up working, we may need a refcnt or
- * something like this to defer destroying a buffer that is currently being
- * scanned out..
  */
 static void
 ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
