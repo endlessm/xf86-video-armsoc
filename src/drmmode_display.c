@@ -311,10 +311,10 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		drmmode_output_dpms(output, DPMSModeOn);
 	}
 
-	// TODO: MIDEGL-1436: Only call this if we are not using sw cursor.. ie. bad to call this
-	// if we haven't called xf86InitCursor()!!
-	//	if (pScrn->pScreen)
-	//		xf86_reload_cursors(pScrn->pScreen);
+	/* if hw cursor is initialized, reload it */
+	if(drmmode->cursor) {
+		xf86_reload_cursors(pScrn->pScreen);
+	}
 
 done:
 	if (output_ids) {
