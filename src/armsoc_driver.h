@@ -146,8 +146,6 @@ struct ARMSOCRec {
 
 	/** Flips we are waiting for: */
 	int					pending_flips;
-	/* For invalidating backbuffers on Hotplug */
-	Bool				has_resized;
 
 	/* Identify which CRTC to use. -1 uses all CRTCs */
 	int					crtcNum;

@@ -444,7 +444,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 	int src_fb_id, dst_fb_id;
 	struct ARMSOCPixmapPrivRec *src_priv, *dst_priv;
-	int new_canflip, ret;
+	int new_canflip, ret, do_flip;
 
 	if (!cmd)
 		return FALSE;
@@ -477,9 +477,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	new_canflip = canflip(pDraw);
 	if ((src->previous_canflip != -1 &&
 			src->previous_canflip != new_canflip) ||
-		(dst->previous_canflip != -1 &&
-				dst->previous_canflip != new_canflip) ||
-		(pARMSOC->has_resized))	{
+			(dst->previous_canflip != -1 &&
+			dst->previous_canflip != new_canflip)) {
 		/* The drawable has transitioned between being flippable and
 		 * non-flippable or vice versa. Bump the serial number to force
 		 * the DRI2 buffers to be re-allocated during the next frame so
@@ -488,10 +487,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		 *        (if drawable is now flippable), or
 		 * - It is not taking up possibly scarce scanout-able memory
 		 *        (if drawable is now not flippable)
-		 *
-		 * has_resized: On hotplugging back buffer needs to be
-		 * invalidated as well, as Xserver invalidates only the
-		 * front buffer.
 		 */
 
 		PixmapPtr pPix = pScreen->GetWindowPixmap((WindowPtr)pDraw);
@@ -503,12 +498,21 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	armsoc_bo_reference(src_priv->bo);
 	armsoc_bo_reference(dst_priv->bo);
-	if (src_fb_id && dst_fb_id && canflip(pDraw) &&
-			!(pARMSOC->has_resized)) {
-		/* has_resized: On hotplug the fb size and crtc sizes aren't
-		 * updated hence on this event we do a copyb but flip from the
-		 * next frame when the sizes are updated.
-		 */
+
+	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
+
+	/* After a resolution change the back buffer (src) will still be of the original size.
+	 * We can't sensibly flip to a framebuffer of a different size to the current resolution
+	 * (it will look corrupted), so we must do a copy for this frame (which will clip the
+	 * contents as expected).
+	 *
+	 * Once the client calls DRI2GetBuffers again, it will receive a new back buffer of the
+	 * same size as the new resolution, and subsequent DRI2SwapBuffers will result in a flip.
+	 */
+	do_flip = do_flip && (armsoc_bo_width(src_priv->bo) == armsoc_bo_width(dst_priv->bo));
+	do_flip = do_flip && (armsoc_bo_height(src_priv->bo) == armsoc_bo_height(dst_priv->bo));
+
+	if (do_flip) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
@@ -561,7 +565,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		ARMSOCDRI2CopyRegion(pDraw, &region, pDstBuffer, pSrcBuffer);
 		cmd->type = DRI2_BLIT_COMPLETE;
 		ARMSOCDRI2SwapComplete(cmd);
-		pARMSOC->has_resized = FALSE;
 	}
 
 	return TRUE;

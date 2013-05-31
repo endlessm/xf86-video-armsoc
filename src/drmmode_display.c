@@ -1181,7 +1181,6 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 			/* use new scanout buffer */
 			set_scanout_bo(pScrn, new_scanout);
 		}
-		pARMSOC->has_resized = TRUE;
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
 	} else
 		pitch = armsoc_bo_pitch(pARMSOC->scanout);
@@ -1193,6 +1192,17 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 				pScrn->virtualX, pScrn->virtualY,
 				pScrn->depth, pScrn->bitsPerPixel, pitch,
 				armsoc_bo_map(pARMSOC->scanout));
+
+		/* Bump the serial number to ensure that all existing DRI2 buffers
+		 * are invalidated.
+		 *
+		 * This is particularly required for when the resolution is changed
+		 * and then reverted to the original size without a DRI2 client/s
+		 * getting a new buffer. Without this, the drawable is the same
+		 * size and serial number so the old DRI2Buffer will be returned,
+		 * even though the backing buffer has been deleted.
+		 */
+		rootPixmap->drawable.serialNumber = NEXT_SERIAL_NUMBER;
 	}
 
 	/* Framebuffer needs to be reset on all CRTCs, not just
