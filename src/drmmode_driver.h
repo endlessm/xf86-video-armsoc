@@ -27,7 +27,11 @@
 
 #include <stdint.h>
 
+#include "xorg-server.h"
+#include "xf86Crtc.h"
+
 struct drmmode_interface {
+
 	/* Flags value to pass to DRM_IOCTL_MODE_CREATE_DUMB to allocate a scanout-capable
 	 * buffer. A buffer allocated with these flags must be able to be wrapped in a
 	 * DRM framebuffer (via DRM_IOCTL_MODE_ADDFB or DRM_IOCTL_MODE_ADDFB2).
@@ -46,6 +50,15 @@ struct drmmode_interface {
 	 */
 	int use_page_flip_events;
 
+	/* The cursor width */
+	int cursor_width;
+
+	/* The cursor height */
+	int cursor_height;
+
+	/* A padding column of pixels of this width is added to either side of the image */
+	int cursor_padding;
+
 	/* (Optional) Initialize the given plane for use as a hardware cursor.
 	 *
 	 * This function should do any initialization necessary, for example setting the
@@ -56,6 +69,18 @@ struct drmmode_interface {
 	 * @return 0 on success, non-zero on failure
 	 */
 	int (*init_plane_for_cursor)(int drm_fd, uint32_t plane_id);
+
+	/* (Mandatory) Set the cursor image from an ARGB image
+	 *
+	 * If the cursor image is ARGB this is a straight copy, otherwise it must perform
+	 * any necessary conversion from ARGB to the cursor format.
+	 *
+	 * @param       crtc  The CRTC in use
+	 * @param [out] d     Pointer to the destination cursor image
+	 * @param [in]  s     Pointer to the source for the cursor image
+	 */
+	void (*set_cursor_image)( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s );
+
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd);

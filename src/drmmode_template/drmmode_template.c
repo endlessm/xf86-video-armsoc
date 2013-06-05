@@ -24,20 +24,40 @@
 
 #include "../drmmode_driver.h"
 
+/* Cursor dimensions
+ * Technically we probably don't have any size limit.. since we
+ * are just using an overlay... but xserver will always create
+ * cursor images in the max size, so don't use width/height values
+ * that are too big
+ */
+#define CURSORW   (64)  /* width */
+#define CURSORH   (64)  /* height */
+#define CURSORPAD (0)	/* Padding added down each side of cursor image */
+
 /* Optional function */
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 {
 	return 0;
 }
 
+static void set_cursor_image( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s )
+{
+	/* provide a method of setting the cursor image here */
+}
+
 struct drmmode_interface template_interface = {
 	0x00000000 /* dumb_scanout_flags */,
 	0x00000000 /* dumb_no_scanout_flags */,
 	1 /* use_page_flip_events */,
-	init_plane_for_cursor /* init_plane_for_cursor */
+	CURSORW               /* cursor width */,
+	CURSORH               /* cursor_height */,
+	CURSORPAD             /* cursor padding */,
+	init_plane_for_cursor /* init_plane_for_cursor */,
+	set_cursor_image      /* set cursor image */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)
 {
 	return &template_interface;
 }
+

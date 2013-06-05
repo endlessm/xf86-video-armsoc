@@ -26,18 +26,6 @@
 
 #include <stdint.h>
 
-#define HW_CURSOR_ARGB		(0)
-#define HW_CURSOR_PL111		(1)
-
-
-/*
- * HARDWARE CURSOR SUPORT CONFIGURATION
- */
-
-#define DRM_CURSOR_PLANE_FORMAT	HW_CURSOR_PL111
-/**/
-
-
 struct armsoc_bo;
 struct armsoc_device;
 

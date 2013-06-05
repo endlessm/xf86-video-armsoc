@@ -522,7 +522,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			 */
 			cmd->flags |= ARMSOC_SWAP_FAIL;
 
-			if (pARMSOC->drmmode->use_page_flip_events)
+			if (pARMSOC->drmmode_interface->use_page_flip_events)
 				cmd->swapCount = -(ret + 1);
 			else
 				cmd->swapCount = 0;
@@ -536,7 +536,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			if (ret == 0)
 				cmd->flags |= ARMSOC_SWAP_FAKE_FLIP;
 
-			if (pARMSOC->drmmode->use_page_flip_events)
+			if (pARMSOC->drmmode_interface->use_page_flip_events)
 				cmd->swapCount = ret;
 			else
 				cmd->swapCount = 0;

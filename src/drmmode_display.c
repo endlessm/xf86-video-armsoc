@@ -356,20 +356,27 @@ drmmode_show_cursor(xf86CrtcPtr crtc)
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	drmmode_cursor_ptr cursor = drmmode->cursor;
-	int crtc_x, crtc_y, src_x, src_y, w, h;
+	int crtc_x, crtc_y, src_x, src_y;
+	int w, h, pad;
+	ScrnInfoPtr pScrn = crtc->scrn;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!cursor)
 		return;
 
 	drmmode_crtc->cursor_visible = TRUE;
 
-	w = CURSORW;
-	h = CURSORH;
-	crtc_x = cursor->x;
+	w = pARMSOC->drmmode_interface->cursor_width;
+	h = pARMSOC->drmmode_interface->cursor_height;
+	pad = pARMSOC->drmmode_interface->cursor_padding;
+
+	w = w + 2 * pad; 			/* get padded width */
+	crtc_x = cursor->x - pad;	/* get x of padded cursor */
 	crtc_y = cursor->y;
 	src_x = 0;
 	src_y = 0;
 
+	/* calculate clipped x, y, w & h if cursor is off edges */
 	if (crtc_x < 0) {
 		src_x += -crtc_x;
 		w -= -crtc_x;
@@ -421,6 +428,8 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	drmmode_cursor_ptr cursor = drmmode->cursor;
 	int visible;
+	ScrnInfoPtr pScrn = crtc->scrn;
+	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!cursor)
 		return;
@@ -439,13 +448,9 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 		return;
 	}
 
-#if ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_ARGB )
-	memcpy(d, image, armsoc_bo_size(cursor->bo));
-#elif ( DRM_CURSOR_PLANE_FORMAT == HW_CURSOR_PL111 )
-	drmmode_argb_cursor_to_pl111_lbbp(crtc, d, image, armsoc_bo_size(cursor->bo) );
-#else
-	#error Please provide a method to set your cursor image.
-#endif
+	/* set_cursor_image is a mandatory function */
+	assert( pARMSOC->drmmode_interface->set_cursor_image );
+	pARMSOC->drmmode_interface->set_cursor_image(crtc, d, image);
 
 	if (visible)
 		drmmode_show_cursor(crtc);
@@ -460,13 +465,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	drmmode_cursor_ptr cursor;
 	drmModePlaneRes *plane_resources;
 	drmModePlane *ovr;
-
-	/* technically we probably don't have any size limit.. since we
-	 * are just using an overlay... but xserver will always create
-	 * cursor images in the max size, so don't use width/height values
-	 * that are too big
-	 */
-	int w = CURSORW, h = CURSORH;
+	int w, h, pad;
 	uint32_t handles[4], pitches[4], offsets[4]; /* we only use [0] */
 
 	if (drmmode->cursor) {
@@ -502,8 +501,8 @@ drmmode_cursor_init(ScreenPtr pScreen)
 		return FALSE;
 	}
 
-	if (pARMSOC->drmmode->init_plane_for_cursor &&
-	    pARMSOC->drmmode->init_plane_for_cursor(drmmode->fd, ovr->plane_id)) {
+	if (pARMSOC->drmmode_interface->init_plane_for_cursor &&
+	    pARMSOC->drmmode_interface->init_plane_for_cursor(drmmode->fd, ovr->plane_id)) {
 		ERROR_MSG("Failed driver-specific cursor initialization");
 		drmModeFreePlaneResources(plane_resources);
 		return FALSE;
@@ -518,7 +517,13 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	}
 
 	cursor->ovr = ovr;
-	cursor->bo  = armsoc_bo_new_with_dim(pARMSOC->dev, w, h, 0, 32, ARMSOC_BO_SCANOUT );
+
+	w = pARMSOC->drmmode_interface->cursor_width;
+	h = pARMSOC->drmmode_interface->cursor_height;
+	pad = pARMSOC->drmmode_interface->cursor_padding;
+
+	/* allow for cursor padding in the bo */
+	cursor->bo  = armsoc_bo_new_with_dim(pARMSOC->dev, w + 2 * pad, h, 0, 32, ARMSOC_BO_SCANOUT );
 
 	if (!cursor->bo) {
 		ERROR_MSG("HW cursor: buffer allocation failed");
@@ -532,7 +537,8 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	pitches[0] = armsoc_bo_pitch(cursor->bo);
 	offsets[0] = 0;
 
-	if (drmModeAddFB2(drmmode->fd, w, h, DRM_FORMAT_ARGB8888,
+	/* allow for cursor padding in the fb */
+	if (drmModeAddFB2(drmmode->fd, w + 2 * pad, h, DRM_FORMAT_ARGB8888,
 			handles, pitches, offsets, &cursor->fb_id, 0)) {
 		ERROR_MSG("HW cursor: drmModeAddFB2 failed: %s", strerror(errno));
 		armsoc_bo_unreference(cursor->bo);
@@ -626,8 +632,6 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 			drmmode->mode_res->crtcs[num]);
 	drmmode_crtc->drmmode = drmmode;
 	INFO_MSG("Got CRTC: %d",num);
-
-	// TODO: MIDEGL-1438: Potentially add code to allocate a HW cursor here.
 
 	crtc->driver_private = drmmode_crtc;
 
@@ -1313,7 +1317,7 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 	int ret, i, failed = 0, num_flipped = 0;
 	unsigned int flags = 0;
 
-	if (pARMSOC->drmmode->use_page_flip_events)
+	if (pARMSOC->drmmode_interface->use_page_flip_events)
 		flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
 	/* if we can flip, we must be fullscreen.. so flip all CRTC's.. */

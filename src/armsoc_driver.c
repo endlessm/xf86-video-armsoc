@@ -468,14 +468,14 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 		goto fail;
 	}
 
-	pARMSOC->drmmode = drmmode_interface_get_implementation(pARMSOC->drmFD);
-	if (!pARMSOC->drmmode)
+	pARMSOC->drmmode_interface = drmmode_interface_get_implementation(pARMSOC->drmFD);
+	if (!pARMSOC->drmmode_interface)
 		goto fail2;
 
 	/* create DRM device instance: */
 	pARMSOC->dev = armsoc_device_new(pARMSOC->drmFD,
-			pARMSOC->drmmode->dumb_scanout_flags,
-			pARMSOC->drmmode->dumb_no_scanout_flags);
+			pARMSOC->drmmode_interface->dumb_scanout_flags,
+			pARMSOC->drmmode_interface->dumb_no_scanout_flags);
 
 	/* find matching chipset name: */
 	for (i = 0; ARMSOCChipsets[i].name; i++) {

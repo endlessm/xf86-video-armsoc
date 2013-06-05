@@ -62,14 +62,11 @@
 #include "armsoc_exa.h"
 
 
-#define ARMSOC_VERSION		1000	/* Apparently not used by X server */
+#define ARMSOC_VERSION		1000		/* Apparently not used by X server */
 #define ARMSOC_NAME			"ARMSOC"	/* Name used to prefix messages */
 #define ARMSOC_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
 
 #define ARMSOC_SUPPORT_GAMMA 0
-
-#define CURSORW  (64)
-#define CURSORH  (64)
 
 /**
  * This controls whether debug statements (and function "trace" enter/exit)
@@ -126,7 +123,8 @@ typedef struct _ARMSOCRec
 
 	char 				*deviceName;
 
-	struct drmmode_interface *drmmode;
+	/** interface to hardware specific functionality */
+	struct drmmode_interface *drmmode_interface;
 
 	/** DRM device instance */
 	struct armsoc_device	*dev;
@@ -204,11 +202,6 @@ Bool drmmode_cursor_init(ScreenPtr pScreen);
 void drmmode_cursor_fini(ScreenPtr pScreen);
 
 
-/* 
- * pl111 cursor helper functions..
- */
-void drmmode_argb_cursor_to_pl111_lbbp( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s, uint32_t size);
-
 /**
  * DRI2 functions..
  */
@@ -220,7 +213,6 @@ void ARMSOCDRI2SwapComplete(ARMSOCDRISwapCmd *cmd);
 /**
  * DRI2 util functions..
  */
-
 void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo);
 
 #endif /* __ARMSOC_DRV_H__ */
