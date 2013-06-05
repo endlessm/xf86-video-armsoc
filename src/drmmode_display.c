@@ -32,42 +32,7 @@
 #include "config.h"
 #endif
 
-/* TODO: MIDEGL-1430: cleanup #includes, remove unnecessary ones */
-
-#include "xorg-server.h"
-#include "xorgVersion.h"
-
-#include <sys/stat.h>
-
-#include <string.h>
-#include <math.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-/* All drivers should typically include these */
-#include "xf86.h"
-#include "xf86_OSproc.h"
-#define PPC_MMIO_IS_BE
-#include "compiler.h"
-#include "mipointer.h"
-
-#include "micmap.h"
-
 #include "xf86DDC.h"
-
-#include "xf86RandR12.h"
-#include "dixstruct.h"
-#include "scrnintstr.h"
-#include "fb.h"
-#include "xf86cmap.h"
-
-#include "xf86Cursor.h"
-#include "xf86DDC.h"
-
-#include "region.h"
-
-#include <X11/extensions/randr.h>
 
 #ifdef HAVE_XEXTPROTO_71
 #include <X11/extensions/dpmsconst.h>
@@ -78,14 +43,11 @@
 
 #include "armsoc_driver.h"
 
-#include "xf86Crtc.h"
-
 #include "xf86drmMode.h"
 #include "drm_fourcc.h"
 #include "X11/Xatom.h"
 
 #include <libudev.h>
-
 #include "drmmode_driver.h"
 
 typedef struct {

@@ -36,6 +36,12 @@
 #endif
 
 #include "armsoc_driver.h"
+
+#include "micmap.h"
+
+#include "xf86cmap.h"
+#include "xf86RandR12.h"
+
 #include "compat-api.h"
 
 #include "drmmode_driver.h"

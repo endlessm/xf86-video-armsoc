@@ -30,37 +30,14 @@
 #ifndef __ARMSOC_DRV_H__
 #define __ARMSOC_DRV_H__
 
-/* All drivers need the following headers: */
-#include "xorg-server.h"
 #include "xf86.h"
-#include "xf86_OSproc.h"
-
-/* XXX - Perhaps, the following header files will only be used temporarily
- * (i.e. so we can use fbdevHW, SW cursor, etc):
- * XXX - figure out what can be removed..
- */
-#include "mipointer.h"
-#include "micmap.h"
-#include "colormapst.h"
-#include "xf86cmap.h"
-#include "shadow.h"
-/* for visuals */
-#include "fb.h"
 #if GET_ABI_MAJOR(ABI_VIDEODRV_VERSION) < 6
 #include "xf86Resources.h"
 #include "xf86RAC.h"
 #endif
-#include "xf86Crtc.h"
-#include "xf86RandR12.h"
 #include "xf86drm.h"
-#include "dri2.h"
-
-#include "armsoc_dumb.h"
-
 #include <errno.h>
-
 #include "armsoc_exa.h"
-
 
 #define ARMSOC_VERSION		1000		/* Apparently not used by X server */
 #define ARMSOC_NAME			"ARMSOC"	/* Name used to prefix messages */
