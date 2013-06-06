@@ -163,8 +163,6 @@ typedef struct _ARMSOCRec
 #ifndef ARRAY_SIZE
 #  define ARRAY_SIZE(a)  (sizeof(a) / sizeof(a[0]))
 #endif
-#define ALIGN(val, align)	(((val) + (align) - 1) & ~((align) - 1))
-
 
 /**
  * drmmode functions..

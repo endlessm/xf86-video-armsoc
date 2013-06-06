@@ -645,7 +645,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmmode_output_private_ptr drmmode_output = output->driver_private;
 	drmModeConnectorPtr koutput = drmmode_output->mode_output;
 	drmmode_ptr drmmode = drmmode_output->drmmode;
-	DisplayModePtr Modes = NULL, Mode;
+	DisplayModePtr modes = NULL;
 	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
@@ -680,14 +680,12 @@ drmmode_output_get_modes(xf86OutputPtr output)
 
 	/* modes should already be available */
 	for (i = 0; i < koutput->count_modes; i++) {
-		Mode = xnfalloc(sizeof(DisplayModeRec));
+		DisplayModePtr mode = xnfalloc(sizeof(DisplayModeRec));
 
-		drmmode_ConvertFromKMode(pScrn, &koutput->modes[i],
-				Mode);
-		Modes = xf86ModesAdd(Modes, Mode);
-
+		drmmode_ConvertFromKMode(pScrn, &koutput->modes[i], mode);
+		modes = xf86ModesAdd(modes, mode);
 	}
-	return Modes;
+	return modes;
 }
 
 static void
@@ -768,16 +766,15 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		return;
 
 	drmmode_output->num_props = 0;
-	for (i = 0, j = 0; i < mode_output->count_props; i++) {
+	for (i = 0; i < mode_output->count_props; i++) {
 		drmmode_prop = drmModeGetProperty(drmmode->fd, mode_output->props[i]);
 		if (drmmode_property_ignore(drmmode_prop)) {
 			drmModeFreeProperty(drmmode_prop);
 			continue;
 		}
-		drmmode_output->props[j].mode_prop = drmmode_prop;
-		drmmode_output->props[j].index = i;
+		drmmode_output->props[drmmode_output->num_props].mode_prop = drmmode_prop;
+		drmmode_output->props[drmmode_output->num_props].index = i;
 		drmmode_output->num_props++;
-		j++;
 	}
 
 	for (i = 0; i < drmmode_output->num_props; i++) {

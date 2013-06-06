@@ -620,7 +620,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 		ERROR_MSG("Cannot allocate scanout buffer\n");
 		goto fail1;
 	}
-	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / (pScrn->bitsPerPixel / 8);
+	pScrn->displayWidth = armsoc_bo_pitch(pARMSOC->scanout) / ((pScrn->bitsPerPixel+7) / 8);
 	xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
 	/* need to point to new screen on server regeneration */

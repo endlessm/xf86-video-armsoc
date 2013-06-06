@@ -152,6 +152,7 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
+    /* Only modify specified fields, keeping all others intact. */
 	if (pPixData)
 		pPixmap->devPrivate.ptr = pPixData;
 

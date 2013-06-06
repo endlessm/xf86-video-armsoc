@@ -34,6 +34,8 @@
 #include "armsoc_dumb.h"
 #include "drmmode_driver.h"
 
+#define ALIGN(val, align)	(((val) + (align) - 1) & ~((align) - 1))
+
 struct armsoc_device {
 	int fd;
 	uint32_t dumb_scanout_flags;
@@ -263,13 +265,6 @@ uint32_t armsoc_bo_bpp(struct armsoc_bo *bo)
 	return bo->bpp;
 }
 
-/* Bytes per pixel */
-uint32_t armsoc_bo_Bpp(struct armsoc_bo *bo)
-{
-	assert(bo->refcnt > 0);
-	return (bo->bpp + 7) / 8;
-}
-
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo)
 {
 	assert(bo->refcnt > 0);
@@ -410,10 +405,10 @@ int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width, uint32_t new_heig
 		   bo->width, bo->height, new_width, new_height);
 
 	/* TODO: MIDEGL-1563: Get pitch from DRM as only DRM knows the ideal pitch and alignment requirements */
-	new_pitch  = new_width * armsoc_bo_Bpp(bo);
+	new_pitch  = new_width * ((armsoc_bo_bpp(bo)+7)/8);
 	/* Align pitch to 64 byte */
-	new_pitch  = ((new_pitch + 63) & ~(63));
-	new_size   = (((new_height-1) * new_pitch) + (new_width * armsoc_bo_Bpp(bo) ));
+	new_pitch  = ALIGN(new_pitch, 64);
+	new_size   = (((new_height-1) * new_pitch) + (new_width * ((armsoc_bo_bpp(bo)+7)/8)));
 
 	if( new_size <= bo->original_size )
 	{
