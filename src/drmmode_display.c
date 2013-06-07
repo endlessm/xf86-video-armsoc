@@ -1256,8 +1256,15 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 		return FALSE;
 	}
 
-	for (i = 0; i < drmmode->mode_res->count_connectors; i++)
-		drmmode_output_init(pScrn, drmmode, i);
+	if(ARMSOCPTR(pScrn)->crtcNum != -1) {
+		if (ARMSOCPTR(pScrn)->crtcNum < drmmode->mode_res->count_connectors)
+			drmmode_output_init(pScrn, drmmode, ARMSOCPTR(pScrn)->crtcNum);
+		else
+			return FALSE;
+	} else {
+		for (i = 0; i < drmmode->mode_res->count_connectors; i++)
+			drmmode_output_init(pScrn, drmmode, i);
+	}
 
 	xf86InitialConfiguration(pScrn, TRUE);
 
