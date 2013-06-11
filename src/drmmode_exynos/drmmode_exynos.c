@@ -61,25 +61,26 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
  * of the destination image. This is a workaround for a bug causing
  * corruption when the cursor reaches the screen edges.
  */
-static void set_cursor_image( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s )
+static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 {
 	int row;
-	void* dst;
-	const char* src_row;
-	char* dst_row;
+	void *dst;
+	const char *src_row;
+	char *dst_row;
 
 	dst = d;
 	for (row = 0; row < CURSORH; row += 1) {
 		/* we're operating with ARGB data (4 bytes per pixel) */
-		src_row = (const char*)s + row * 4 * CURSORW;
-		dst_row = (char*)dst + row * 4 * (CURSORW + 2 * CURSORPAD);
+		src_row = (const char *)s + row * 4 * CURSORW;
+		dst_row = (char *)dst + row * 4 * (CURSORW + 2 * CURSORPAD);
 
 		/* set first CURSORPAD pixels in row to 0 */
 		memset(dst_row, 0, (4 * CURSORPAD));
 		/* copy cursor image pixel row across */
 		memcpy(dst_row + (4 * CURSORPAD), src_row, 4 * CURSORW);
 		/* set last CURSORPAD pixels in row to 0 */
-		memset(dst_row + 4 * (CURSORPAD + CURSORW ), 0, (4 * CURSORPAD));
+		memset(dst_row + 4 * (CURSORPAD + CURSORW),
+				0, (4 * CURSORPAD));
 	}
 }
 

@@ -34,12 +34,12 @@
 #include "armsoc_driver.h"
 
 /* keep this here, instead of static-inline so submodule doesn't
- * need to know layout of ARMSOCPtr..
+ * need to know layout of ARMSOCRec.
  */
-_X_EXPORT ARMSOCEXAPtr
+_X_EXPORT struct ARMSOCEXARec *
 ARMSOCEXAPTR(ScrnInfoPtr pScrn)
 {
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	return pARMSOC->pARMSOCEXA;
 }
 
@@ -53,23 +53,20 @@ ARMSOCEXAPTR(ScrnInfoPtr pScrn)
 void
 ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b)
 {
-	ARMSOCPixmapPrivPtr apriv = exaGetPixmapDriverPrivate(a);
-	ARMSOCPixmapPrivPtr bpriv = exaGetPixmapDriverPrivate(b);
+	struct ARMSOCPixmapPrivRec *apriv = exaGetPixmapDriverPrivate(a);
+	struct ARMSOCPixmapPrivRec *bpriv = exaGetPixmapDriverPrivate(b);
 	exchange(apriv->priv, bpriv->priv);
 	exchange(apriv->bo, bpriv->bo);
 
 	/* Ensure neither pixmap has a dmabuf fd attached to the bo if the
 	 * ext_access_cnt refcount is 0, as it will never be cleared. */
-	if (armsoc_bo_has_dmabuf(apriv->bo) && !apriv->ext_access_cnt)
-	{
+	if (armsoc_bo_has_dmabuf(apriv->bo) && !apriv->ext_access_cnt) {
 		armsoc_bo_clear_dmabuf(apriv->bo);
 
 		/* Should only have to clear one dmabuf fd, otherwise the
 		 * refcount is wrong */
 		assert(!armsoc_bo_has_dmabuf(bpriv->bo));
-	}
-	else if (armsoc_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt)
-	{
+	} else if (armsoc_bo_has_dmabuf(bpriv->bo) && !bpriv->ext_access_cnt) {
 		armsoc_bo_clear_dmabuf(bpriv->bo);
 
 		assert(!armsoc_bo_has_dmabuf(apriv->bo));
@@ -77,34 +74,29 @@ ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b)
 }
 
 _X_EXPORT void *
-ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
+ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
 {
-	ARMSOCPixmapPrivPtr priv = calloc(sizeof(ARMSOCPixmapPrivRec), 1);
+	struct ARMSOCPixmapPrivRec *priv =
+				calloc(sizeof(struct ARMSOCPixmapPrivRec), 1);
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
-	if(!priv)
-	{
+	if (!priv)
 		return NULL;
-	}
 
 	if (usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
-	{
 		buf_type = ARMSOC_BO_SCANOUT;
-	}
 
-	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0)
-	{
+	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0) {
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width,
 				height,
 				depth,
 				bitsPerPixel, buf_type);
-		if (!priv->bo)
-		{
+		if (!priv->bo) {
 			ERROR_MSG("failed to allocate %dx%d bo, buf_type = %d",
 					width, height, buf_type);
 			free(priv);
@@ -113,11 +105,11 @@ ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 		*new_fb_pitch = armsoc_bo_pitch(priv->bo);
 	}
 
-	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is not
-	 * set to the usage_hint parameter passed to CreatePixmap.
-	 * It does appear to be set here so we stash it in the private structure.
-	 * However as we do not fully understand the uses of this parameter
-	 * beware of any unexpected values!
+	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is
+	 * not set to the usage_hint parameter passed to CreatePixmap.
+	 * It does appear to be set here so we stash it in the private
+	 * structure. However as we do not fully understand the uses of this
+	 * parameter, beware of any unexpected values!
 	 */
 	priv->usage_hint = usage_hint;
 
@@ -127,14 +119,13 @@ ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
 _X_EXPORT void
 ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
-	ARMSOCPixmapPrivPtr priv = driverPriv;
+	struct ARMSOCPixmapPrivRec *priv = driverPriv;
 
 	assert(!priv->ext_access_cnt);
 
 	/* If ModifyPixmapHeader failed, it's possible we don't have a bo
 	 * backing this pixmap. */
-	if (priv->bo)
-	{
+	if (priv->bo) {
 		assert(!armsoc_bo_has_dmabuf(priv->bo));
 		armsoc_bo_unreference(priv->bo);
 	}
@@ -147,9 +138,9 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
     /* Only modify specified fields, keeping all others intact. */
@@ -178,9 +169,7 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		priv->bo = pARMSOC->scanout;
 
 	if (priv->usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
-	{
 		buf_type = ARMSOC_BO_SCANOUT;
-	}
 
 	if (depth > 0)
 		pPixmap->drawable.depth = depth;
@@ -289,27 +278,30 @@ static inline enum armsoc_gem_op idx2op(int index)
 _X_EXPORT Bool
 ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	pPixmap->devPrivate.ptr = armsoc_bo_map(priv->bo);
 	if (!pPixmap->devPrivate.ptr) {
-		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __FUNCTION__);
+		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __func__);
 		return FALSE;
 	}
 
-	/* Attach dmabuf fd to bo to synchronise access if pixmap wrapped by DRI2 */
-	if (priv->ext_access_cnt && !armsoc_bo_has_dmabuf(priv->bo))
-	{
-		if(armsoc_bo_set_dmabuf(priv->bo)) {
-			xf86DrvMsg(-1, X_ERROR, "%s: Unable to get dma_buf fd for bo, "
-					"to enable synchronised CPU access.\n", __FUNCTION__);
+	/* Attach dmabuf fd to bo to synchronise access if
+	 * pixmap wrapped by DRI2
+	 */
+	if (priv->ext_access_cnt && !armsoc_bo_has_dmabuf(priv->bo)) {
+		if (armsoc_bo_set_dmabuf(priv->bo)) {
+			xf86DrvMsg(-1, X_ERROR,
+				"%s: Unable to get dma_buf fd for bo, to enable synchronised CPU access.\n",
+				__func__);
 			return FALSE;
 		}
 	}
 
 	if (armsoc_bo_cpu_prep(priv->bo, idx2op(index))) {
-		xf86DrvMsg(-1, X_ERROR, "%s: armsoc_bo_cpu_prep failed - "
-				"unable to synchronise access.\n", __FUNCTION__);
+		xf86DrvMsg(-1, X_ERROR,
+			"%s: armsoc_bo_cpu_prep failed - unable to synchronise access.\n",
+			__func__);
 		return FALSE;
 	}
 
@@ -329,7 +321,7 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 _X_EXPORT void
 ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	pPixmap->devPrivate.ptr = NULL;
 
@@ -348,46 +340,44 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
  * @param pPix the pixmap
  * @return TRUE if the given drawable is in framebuffer memory.
  *
- * exaPixmapHasGpuCopy() is used to determine if a pixmap is in offscreen
- * memory, meaning that acceleration could probably be done to it, and that it
- * will need to be wrapped by PrepareAccess()/FinishAccess() when accessing it
- * with the CPU.
+ * exaPixmapHasGpuCopy() is used to determine if a pixmap is in
+ * offscreen memory, meaning that acceleration could probably be done
+ * to it, and that it will need to be wrapped by PrepareAccess()/
+ * FinishAccess() when accessing it from the CPU.
  */
 _X_EXPORT Bool
 ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap)
 {
-	/* offscreen means in 'gpu accessible memory', not that it's off the
-	 * visible screen.  We currently have no special constraints, since
-	 * compatible ARM CPUS have a flat memory model
-	 * (no separate GPU memory).  Ifindividual EXA implementation has
-	 * additional constraints, like buffer size or mapping in GPU MMU, it
-	 * should wrap this function.
+	/* offscreen means in 'gpu accessible memory', not that it's off
+	 * the visible screen.  We currently have no special constraints,
+	 * since compatible ARM CPUS have a flat memory model (no separate
+	 * GPU memory). If an individual EXA implementation has additional
+	 * constraints, like buffer size or mapping in GPU MMU, it should
+	 * wrap this function.
 	 */
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	return priv && priv->bo;
 }
 
 void ARMSOCRegisterExternalAccess(PixmapPtr pPixmap)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	priv->ext_access_cnt++;
 }
 
 void ARMSOCDeregisterExternalAccess(PixmapPtr pPixmap)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 
 	assert(priv->ext_access_cnt > 0);
 	priv->ext_access_cnt--;
 
-	if (priv->ext_access_cnt == 0)
-	{
-		/* No DRI2 buffers wrapping the pixmap, so no need for synchronisation
-		 * with dma_buf */
-		if(armsoc_bo_has_dmabuf(priv->bo))
-		{
+	if (priv->ext_access_cnt == 0) {
+		/* No DRI2 buffers wrapping the pixmap, so no
+		 * need for synchronisation with dma_buf
+		 */
+		if (armsoc_bo_has_dmabuf(priv->bo))
 			armsoc_bo_clear_dmabuf(priv->bo);
-		}
 	}
 }

@@ -40,19 +40,22 @@ enum armsoc_buf_type {
 	ARMSOC_BO_NON_SCANOUT
 };
 
-struct armsoc_device *armsoc_device_new(int fd, uint32_t dumb_scanout_flags, uint32_t dumb_no_scanout_flags);
+struct armsoc_device *armsoc_device_new(int fd, uint32_t dumb_scanout_flags,
+			uint32_t dumb_no_scanout_flags);
 void armsoc_device_del(struct armsoc_device *dev);
 int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name);
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo);
 void *armsoc_bo_map(struct armsoc_bo *bo);
-int armsoc_get_param(struct armsoc_device *dev, uint64_t param, uint64_t *value);
+int armsoc_get_param(struct armsoc_device *dev, uint64_t param,
+			uint64_t *value);
 int armsoc_bo_add_fb(struct armsoc_bo *bo);
 uint32_t armsoc_bo_get_fb(struct armsoc_bo *bo);
 int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op);
 int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op);
 uint32_t armsoc_bo_size(struct armsoc_bo *bo);
 
-struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev, uint32_t width,
+struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
+			uint32_t width,
 			uint32_t height, uint8_t depth, uint8_t bpp,
 			enum armsoc_buf_type buf_type);
 uint32_t armsoc_bo_width(struct armsoc_bo *bo);
@@ -63,13 +66,16 @@ uint32_t armsoc_bo_pitch(struct armsoc_bo *bo);
 void armsoc_bo_reference(struct armsoc_bo *bo);
 void armsoc_bo_unreference(struct armsoc_bo *bo);
 
-/* When dmabuf is set on a bo, armsoc_bo_cpu_prep() waits for KDS shared access */
+/* When dmabuf is set on a bo, armsoc_bo_cpu_prep()
+ *  waits for KDS shared access
+ */
 int armsoc_bo_set_dmabuf(struct armsoc_bo *bo);
 void armsoc_bo_clear_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_has_dmabuf(struct armsoc_bo *bo);
 int armsoc_bo_clear(struct armsoc_bo *bo);
 int armsoc_bo_rm_fb(struct armsoc_bo *bo);
-int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width, uint32_t new_height);
+int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width,
+						uint32_t new_height);
 
 
 #endif /* ARMSOC_DUMB_H_ */

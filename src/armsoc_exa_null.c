@@ -42,12 +42,11 @@
  * not installed.
  */
 
-typedef struct {
-	ARMSOCEXARec base;
+struct ARMSOCNullEXARec {
+	struct ARMSOCEXARec base;
 	ExaDriverPtr exa;
 	/* add any other driver private data here.. */
-} ARMSOCNullEXARec, *ARMSOCNullEXAPtr;
-
+};
 
 static Bool
 PrepareSolidFail(PixmapPtr pPixmap, int alu, Pixel planemask, Pixel fill_colour)
@@ -71,7 +70,8 @@ CheckCompositeFail(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 
 static Bool
 PrepareCompositeFail(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
-		PicturePtr pDstPicture, PixmapPtr pSrc, PixmapPtr pMask, PixmapPtr pDst)
+		PicturePtr pDstPicture, PixmapPtr pSrc,
+		PixmapPtr pMask, PixmapPtr pDst)
 {
 	return FALSE;
 }
@@ -84,17 +84,17 @@ static Bool
 CloseScreen(CLOSE_SCREEN_ARGS_DECL)
 {
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	exaDriverFini(pScreen);
-	free( ((ARMSOCNullEXAPtr)pARMSOC->pARMSOCEXA)->exa);
+	free(((struct ARMSOCNullEXARec *)pARMSOC->pARMSOCEXA)->exa);
 	free(pARMSOC->pARMSOCEXA);
 	pARMSOC->pARMSOCEXA = NULL;
 
 	return TRUE;
 }
 
-/* FreeScreen() is called on an error during PreInit and 
+/* FreeScreen() is called on an error during PreInit and
  * should clean up anything initialised before InitNullEXA()
  * (which currently is nothing)
  *
@@ -104,25 +104,23 @@ FreeScreen(FREE_SCREEN_ARGS_DECL)
 {
 }
 
-
-ARMSOCEXAPtr
+struct ARMSOCEXARec *
 InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 {
-	ARMSOCNullEXAPtr null_exa = calloc(sizeof (*null_exa), 1);
-	ARMSOCEXAPtr armsoc_exa;
+	struct ARMSOCNullEXARec *null_exa = calloc(sizeof(*null_exa), 1);
+	struct ARMSOCEXARec *armsoc_exa;
 	ExaDriverPtr exa;
 
 	INFO_MSG("Soft EXA mode");
 
-	if(!null_exa) {
+	if (!null_exa)
 		return NULL;
-	}
-	armsoc_exa = (ARMSOCEXAPtr)null_exa;
+
+	armsoc_exa = (struct ARMSOCEXARec *)null_exa;
 
 	exa = exaDriverAlloc();
-	if (!exa) {
+	if (!exa)
 		goto fail;
-	}
 
 	null_exa->exa = exa;
 
@@ -146,13 +144,13 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	exa->FinishAccess = ARMSOCFinishAccess;
 	exa->PixmapIsOffscreen = ARMSOCPixmapIsOffscreen;
 
-	// Always fallback for software operations
+	/* Always fallback for software operations */
 	exa->PrepareCopy = PrepareCopyFail;
 	exa->PrepareSolid = PrepareSolidFail;
 	exa->CheckComposite = CheckCompositeFail;
 	exa->PrepareComposite = PrepareCompositeFail;
 
-	if (! exaDriverInit(pScreen, exa)) {
+	if (!exaDriverInit(pScreen, exa)) {
 		ERROR_MSG("exaDriverInit failed");
 		goto fail;
 	}
@@ -163,12 +161,12 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	return armsoc_exa;
 
 fail:
-	if(exa) {
+	if (exa)
 		free(exa);
-	}
-	if (null_exa) {
+
+	if (null_exa)
 		free(null_exa);
-	}
+
 	return NULL;
 }
 

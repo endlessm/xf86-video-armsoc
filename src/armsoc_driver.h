@@ -39,9 +39,12 @@
 #include <errno.h>
 #include "armsoc_exa.h"
 
-#define ARMSOC_VERSION		1000		/* Apparently not used by X server */
-#define ARMSOC_NAME			"ARMSOC"	/* Name used to prefix messages */
-#define ARMSOC_DRIVER_NAME	"armsoc"	/* Driver name as used in config file */
+/* Apparently not used by X server */
+#define ARMSOC_VERSION		1000
+/* Name used to prefix messages */
+#define ARMSOC_NAME			"ARMSOC"
+/* Driver name as used in config file */
+#define ARMSOC_DRIVER_NAME	"armsoc"
 
 #define ARMSOC_SUPPORT_GAMMA 0
 
@@ -56,14 +59,23 @@ extern _X_EXPORT Bool armsocDebug;
  * sub-modules:
  */
 #define TRACE_ENTER() \
-		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Entering\n",\
-				__FUNCTION__, __LINE__); } while (0)
+		do { if (armsocDebug) \
+			xf86DrvMsg(pScrn->scrnIndex, \
+				X_INFO, "%s:%d: Entering\n",\
+				__func__, __LINE__);\
+		} while (0)
 #define TRACE_EXIT() \
-		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d: Exiting\n",\
-				__FUNCTION__, __LINE__); } while (0)
+		do { if (armsocDebug) \
+			xf86DrvMsg(pScrn->scrnIndex, \
+				X_INFO, "%s:%d: Exiting\n",\
+				__func__, __LINE__); \
+		} while (0)
 #define DEBUG_MSG(fmt, ...) \
-		do { if (armsocDebug) xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%s:%d " fmt "\n",\
-				__FUNCTION__, __LINE__, ##__VA_ARGS__); } while (0)
+		do { if (armsocDebug) \
+			xf86DrvMsg(pScrn->scrnIndex, \
+				X_INFO, "%s:%d " fmt "\n",\
+				__func__, __LINE__, ##__VA_ARGS__); \
+		} while (0)
 #define INFO_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, X_INFO, fmt "\n",\
 				##__VA_ARGS__); } while (0)
@@ -71,23 +83,27 @@ extern _X_EXPORT Bool armsocDebug;
 		do { xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, fmt "\n",\
 				##__VA_ARGS__); } while (0)
 #define WARNING_MSG(fmt, ...) \
-		do { xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "WARNING: " fmt "\n",\
-				##__VA_ARGS__); } while (0)
+		do { xf86DrvMsg(pScrn->scrnIndex, \
+				X_WARNING, "WARNING: " fmt "\n",\
+				##__VA_ARGS__); \
+		} while (0)
 #define ERROR_MSG(fmt, ...) \
-		do { xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "ERROR: " fmt "\n",\
-				##__VA_ARGS__); } while (0)
+		do { xf86DrvMsg(pScrn->scrnIndex, \
+				X_ERROR, "ERROR: " fmt "\n",\
+				##__VA_ARGS__); \
+		} while (0)
 #define EARLY_ERROR_MSG(fmt, ...) \
 		do { xf86Msg(X_ERROR, "ERROR: " fmt "\n",\
-				##__VA_ARGS__); } while (0)
+				##__VA_ARGS__); \
+		} while (0)
 
 /** The driver's Screen-specific, "private" data structure. */
-typedef struct _ARMSOCRec
-{
+struct ARMSOCRec {
 	/**
 	 * Pointer to a structure used to communicate and coordinate with an
 	 * external EXA library (if loaded).
 	 */
-	ARMSOCEXAPtr			pARMSOCEXA;
+	struct ARMSOCEXARec	*pARMSOCEXA;
 
 	/** record if ARMSOCDRI2ScreenInit() was successful */
 	Bool				dri;
@@ -98,7 +114,7 @@ typedef struct _ARMSOCRec
 	/** File descriptor of the connection with the DRM. */
 	int					drmFD;
 
-	char 				*deviceName;
+	char				*deviceName;
 
 	/** interface to hardware specific functionality */
 	struct drmmode_interface *drmmode_interface;
@@ -128,30 +144,30 @@ typedef struct _ARMSOCRec
 	/* Identify which CRTC to use. -1 uses all CRTCs */
 	int					crtcNum;
 
-} ARMSOCRec, *ARMSOCPtr;
+};
 
 /*
  * Misc utility macros:
  */
 
 /** Return a pointer to the driver's private structure. */
-#define ARMSOCPTR(p) ((ARMSOCPtr)((p)->driverPrivate))
+#define ARMSOCPTR(p) ((struct ARMSOCRec *)((p)->driverPrivate))
 #define ARMSOCPTR_FROM_SCREEN(pScreen) \
-	((ARMSOCPtr)(xf86Screens[(pScreen)->myNum])->driverPrivate);
+	((struct ARMSOCRec *)(xf86Screens[(pScreen)->myNum])->driverPrivate);
 
 #define wrap(priv, real, mem, func) {\
-    priv->Saved##mem = real->mem; \
-    real->mem = func; \
+		priv->Saved##mem = real->mem; \
+		real->mem = func; \
 }
 
 #define unwrap(priv, real, mem) {\
-    real->mem = priv->Saved##mem; \
+		real->mem = priv->Saved##mem; \
 }
 
 #define swap(priv, real, mem) {\
-    void *tmp = priv->Saved##mem; \
-    priv->Saved##mem = real->mem; \
-    real->mem = tmp; \
+		void *tmp = priv->Saved##mem; \
+		priv->Saved##mem = real->mem; \
+		real->mem = tmp; \
 }
 
 #define exchange(a, b) {\
@@ -180,10 +196,10 @@ void drmmode_cursor_fini(ScreenPtr pScreen);
 /**
  * DRI2 functions..
  */
-typedef struct _ARMSOCDRISwapCmd ARMSOCDRISwapCmd;
+struct ARMSOCDRISwapCmd;
 Bool ARMSOCDRI2ScreenInit(ScreenPtr pScreen);
 void ARMSOCDRI2CloseScreen(ScreenPtr pScreen);
-void ARMSOCDRI2SwapComplete(ARMSOCDRISwapCmd *cmd);
+void ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd);
 
 /**
  * DRI2 util functions..

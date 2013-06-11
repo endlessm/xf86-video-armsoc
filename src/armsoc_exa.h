@@ -43,8 +43,7 @@
  * A per-Screen structure used to communicate and coordinate between the
  * ARMSOC X driver and an external EXA sub-module (if loaded).
  */
-typedef struct _ARMSOCEXARec
-{
+struct ARMSOCEXARec {
 	/**
 	 * Called by X driver's CloseScreen() function at the end of each server
 	 * generation to free per-Screen data structures (except those held by
@@ -53,24 +52,23 @@ typedef struct _ARMSOCEXARec
 	Bool (*CloseScreen)(CLOSE_SCREEN_ARGS_DECL);
 
 	/**
-	 * Called by X driver's FreeScreen() function at the end of each server
-	 * lifetime to free per-ScrnInfoRec data structures, to close any external
-	 * connections (e.g. with PVR2D, DRM), etc.
+	 * Called by X driver's FreeScreen() function at the end of each
+	 * server lifetime to free per-ScrnInfoRec data structures, to close
+	 * any external connections (e.g. with PVR2D, DRM), etc.
 	 */
 	void (*FreeScreen)(FREE_SCREEN_ARGS_DECL);
 
 	/* add new fields here at end, to preserve ABI */
 
-} ARMSOCEXARec, *ARMSOCEXAPtr;
-
+};
 
 /**
  * Fallback EXA implementation
  */
-ARMSOCEXAPtr InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
+struct ARMSOCEXARec *InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd);
 
 
-ARMSOCEXAPtr ARMSOCEXAPTR(ScrnInfoPtr pScrn);
+struct ARMSOCEXARec *ARMSOCEXAPTR(ScrnInfoPtr pScrn);
 
 static inline ScrnInfoPtr
 pix2scrn(PixmapPtr pPixmap)
@@ -81,13 +79,12 @@ pix2scrn(PixmapPtr pPixmap)
 static inline PixmapPtr
 draw2pix(DrawablePtr pDraw)
 {
-	if (!pDraw) {
+	if (!pDraw)
 		return NULL;
-	} else if (pDraw->type == DRAWABLE_WINDOW) {
+	else if (pDraw->type == DRAWABLE_WINDOW)
 		return pDraw->pScreen->GetWindowPixmap((WindowPtr)pDraw);
-	} else {
+	else
 		return (PixmapPtr)pDraw;
-	}
 }
 
 /* Common ARMSOC EXA functions, mostly related to pixmap/buffer allocation.
@@ -96,19 +93,23 @@ draw2pix(DrawablePtr pDraw)
  * can use ARMSOCPrixmapPrivPtr#priv for their own private data.
  */
 
-typedef struct {
-	void *priv;			/* EXA submodule private data */
-	int ext_access_cnt; /* Ref-count of DRI2Buffers that wrap the Pixmap,
-	                       that allow external access to the underlying
-	                       buffer. When >0 CPU access must be synchronised. */
+struct ARMSOCPixmapPrivRec {
+	/* EXA submodule private data */
+	void *priv;
+	/* Ref-count of DRI2Buffers that wrap the Pixmap,
+	 * that allow external access to the underlying
+	 * buffer. When >0 CPU access must be synchronised.
+	 */
+	int ext_access_cnt;
 	struct armsoc_bo *bo;
 	int usage_hint;
-} ARMSOCPixmapPrivRec, *ARMSOCPixmapPrivPtr;
+};
+
 
 #define ARMSOC_CREATE_PIXMAP_SCANOUT 0x80000000
 
 
-void * ARMSOCCreatePixmap2 (ScreenPtr pScreen, int width, int height,
+void *ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch);
 void ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv);
@@ -123,7 +124,7 @@ Bool ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap);
 static inline struct armsoc_bo *
 ARMSOCPixmapBo(PixmapPtr pPixmap)
 {
-	ARMSOCPixmapPrivPtr priv = exaGetPixmapDriverPrivate(pPixmap);
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	return priv->bo;
 }
 

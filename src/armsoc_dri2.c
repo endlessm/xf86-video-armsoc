@@ -42,7 +42,7 @@
 
 #include "drmmode_driver.h"
 
-typedef struct {
+struct ARMSOCDRI2BufferRec {
 	DRI2BufferRec base;
 
 	/**
@@ -76,20 +76,19 @@ typedef struct {
 	 */
 	int previous_canflip;
 
-} ARMSOCDRI2BufferRec, *ARMSOCDRI2BufferPtr;
+};
 
-#define ARMSOCBUF(p)	((ARMSOCDRI2BufferPtr)(p))
+#define ARMSOCBUF(p)	((struct ARMSOCDRI2BufferRec *)(p))
 #define DRIBUF(p)	((DRI2BufferPtr)(&(p)->base))
 
 
 static inline DrawablePtr
 dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 {
-	if (buf->attachment == DRI2BufferFrontLeft) {
+	if (buf->attachment == DRI2BufferFrontLeft)
 		return pDraw;
-	} else {
+	else
 		return &(ARMSOCBUF(buf)->pPixmap->drawable);
-	}
 }
 
 static Bool
@@ -97,12 +96,12 @@ canflip(DrawablePtr pDraw)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
-	if( pARMSOC->NoFlip )	{
+	if (pARMSOC->NoFlip) {
 		/* flipping is disabled by user option */
 		return FALSE;
-	} else 	{
+	} else {
 		return (pDraw->type == DRAWABLE_WINDOW) &&
 				DRI2CanFlip(pDraw);
 	}
@@ -114,7 +113,7 @@ exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 	PixmapPtr aPix = draw2pix(dri2draw(pDraw, a));
 	PixmapPtr bPix = draw2pix(dri2draw(pDraw, b));
 
-	ARMSOCPixmapExchange(aPix,bPix);
+	ARMSOCPixmapExchange(aPix, bPix);
 	exchange(a->name, b->name);
 	return TRUE;
 }
@@ -144,7 +143,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCDRI2BufferPtr buf = calloc(1, sizeof(*buf));
+	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
 	PixmapPtr pPixmap = NULL;
 	struct armsoc_bo *bo;
 	int ret;
@@ -164,17 +163,16 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		pPixmap = createpix(pDraw);
 	}
 
-	if (!pPixmap)
-	{
+	if (!pPixmap) {
 		assert(attachment != DRI2BufferFrontLeft);
 		ERROR_MSG("Failed to create back buffer for window");
 		goto fail;
 	}
 
 	bo = ARMSOCPixmapBo(pPixmap);
-	if (!bo)
-	{
-		ERROR_MSG("Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
+	if (!bo) {
+		ERROR_MSG(
+				"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
 		goto fail;
 	}
 
@@ -193,8 +191,8 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
-	/* Q: how to know across ARMSOC generations what formats that the display
-	 * can support directly?
+	/* Q: how to know across ARMSOC generations what formats the display
+	 *    can support directly?
 	 * A: attempt to create a drm_framebuffer, and if that fails then the
 	 * hw must not support.. then fall back to blitting
 	 */
@@ -213,16 +211,11 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	return DRIBUF(buf);
 
 fail:
-	if (pPixmap != NULL)
-	{
+	if (pPixmap != NULL) {
 		if (attachment != DRI2BufferFrontLeft)
-		{
 			pScreen->DestroyPixmap(pPixmap);
-		}
 		else
-		{
 			pPixmap->refcnt--;
-		}
 	}
 	free(buf);
 
@@ -235,7 +228,7 @@ fail:
 static void
 ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 {
-	ARMSOCDRI2BufferPtr buf = ARMSOCBUF(buffer);
+	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
 	/* Note: pDraw may already be deleted, so use the pPixmap here
 	 * instead (since it is at least refcntd)
 	 */
@@ -257,7 +250,7 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 static void
 ARMSOCDRI2ReferenceBuffer(DRI2BufferPtr buffer)
 {
-	ARMSOCDRI2BufferPtr buf = ARMSOCBUF(buffer);
+	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
 	buf->refcnt++;
 }
 
@@ -279,9 +272,8 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 			pDraw, pDstBuffer, pSrcDraw, pSrcBuffer, pDstDraw);
 
 	pGC = GetScratchGC(pDstDraw->depth, pScreen);
-	if (!pGC) {
+	if (!pGC)
 		return;
-	}
 
 	pCopyClip = REGION_CREATE(pScreen, NULL, 0);
 	RegionCopy(pCopyClip, pRegion);
@@ -311,7 +303,7 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	drmVBlank vbl = { .request = {
 		.type = DRM_VBLANK_RELATIVE,
 		.sequence = 0,
@@ -322,18 +314,19 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 	if (ret) {
 		static int limit = 5;
 		if (limit) {
-			ERROR_MSG("get vblank counter failed: %s", strerror(errno));
+			ERROR_MSG("get vblank counter failed: %s",
+				strerror(errno));
 			limit--;
 		}
 		return FALSE;
 	}
 
-	if (ust) {
-		*ust = ((CARD64)vbl.reply.tval_sec * 1000000) + vbl.reply.tval_usec;
-	}
-	if (msc) {
+	if (ust)
+		*ust = ((CARD64)vbl.reply.tval_sec * 1000000)
+			+ vbl.reply.tval_usec;
+
+	if (msc)
 		*msc = vbl.reply.sequence;
-	}
 
 	return TRUE;
 }
@@ -341,7 +334,7 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 #define ARMSOC_SWAP_FAKE_FLIP (1 << 0)
 #define ARMSOC_SWAP_FAIL      (1 << 1)
 
-struct _ARMSOCDRISwapCmd {
+struct ARMSOCDRISwapCmd {
 	int type;
 	ClientPtr client;
 	ScreenPtr pScreen;
@@ -357,50 +350,57 @@ struct _ARMSOCDRISwapCmd {
 	void *data;
 };
 
-static const char *swap_names[] = {
+static const char * const swap_names[] = {
 		[DRI2_EXCHANGE_COMPLETE] = "exchange",
 		[DRI2_BLIT_COMPLETE] = "blit",
 		[DRI2_FLIP_COMPLETE] = "flip,"
 };
 
 void
-ARMSOCDRI2SwapComplete(ARMSOCDRISwapCmd *cmd)
+ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 {
 	ScreenPtr pScreen = cmd->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
-	ARMSOCPixmapPrivPtr src_priv, dst_priv;
+	struct ARMSOCPixmapPrivRec *src_priv, *dst_priv;
 	struct armsoc_bo *old_src_bo, *old_dst_bo;
 
 	if (--cmd->swapCount > 0)
 		return;
 
 	/* Save the old source bo for unreference below */
-	src_priv = exaGetPixmapDriverPrivate(ARMSOCBUF(cmd->pSrcBuffer)->pPixmap);
-	dst_priv = exaGetPixmapDriverPrivate(ARMSOCBUF(cmd->pDstBuffer)->pPixmap);
+	src_priv = exaGetPixmapDriverPrivate(
+		ARMSOCBUF(cmd->pSrcBuffer)->pPixmap);
+	dst_priv = exaGetPixmapDriverPrivate(
+		ARMSOCBUF(cmd->pDstBuffer)->pPixmap);
 	old_src_bo = src_priv->bo;
 	old_dst_bo = dst_priv->bo;
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
-				cmd->pSrcBuffer->attachment, cmd->pDstBuffer->attachment);
+			cmd->pSrcBuffer->attachment,
+			cmd->pDstBuffer->attachment);
 
 		status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
 				M_ANY, DixWriteAccess);
 
 		if (status == Success) {
-			if (cmd->type != DRI2_BLIT_COMPLETE && (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
+			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				exchangebufs(pDraw, cmd->pSrcBuffer, cmd->pDstBuffer);
+				exchangebufs(pDraw, cmd->pSrcBuffer,
+							cmd->pDstBuffer);
 			}
 
 			DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
 					cmd->func, cmd->data);
 
-			if (cmd->type != DRI2_BLIT_COMPLETE && (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
-				dst_priv = exaGetPixmapDriverPrivate(draw2pix(dri2draw(pDraw, cmd->pDstBuffer)));
+			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
+				dst_priv = exaGetPixmapDriverPrivate(draw2pix(
+					dri2draw(pDraw, cmd->pDstBuffer)));
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				set_scanout_bo(pScrn, dst_priv->bo);
 			}
@@ -438,18 +438,16 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
-	ARMSOCDRI2BufferPtr src = ARMSOCBUF(pSrcBuffer);
-	ARMSOCDRI2BufferPtr dst = ARMSOCBUF(pDstBuffer);
-	ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
+	struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(pDstBuffer);
+	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 	int src_fb_id, dst_fb_id;
-	ARMSOCPixmapPrivPtr src_priv, dst_priv;
+	struct ARMSOCPixmapPrivRec *src_priv, *dst_priv;
 	int new_canflip, ret;
 
-	if(!cmd)
-	{
+	if (!cmd)
 		return FALSE;
-	}
 
 	cmd->client = client;
 	cmd->pScreen = pScreen;
@@ -477,19 +475,23 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	dst_fb_id = armsoc_bo_get_fb(dst_priv->bo);
 
 	new_canflip = canflip(pDraw);
-	if ((src->previous_canflip != -1 && src->previous_canflip != new_canflip) ||
-	    (dst->previous_canflip != -1 && dst->previous_canflip != new_canflip) ||
-	    (pARMSOC->has_resized))
-	{
-		/* The drawable has transitioned between being flippable and non-flippable
-		 * or vice versa. Bump the serial number to force the DRI2 buffers to be
-		 * re-allocated during the next frame so that:
-		 * - It is able to be scanned out (if drawable is now flippable), or
-		 * - It is not taking up possibly scarce scanout-able memory (if drawable
-		 * is now not flippable)
+	if ((src->previous_canflip != -1 &&
+			src->previous_canflip != new_canflip) ||
+		(dst->previous_canflip != -1 &&
+				dst->previous_canflip != new_canflip) ||
+		(pARMSOC->has_resized))	{
+		/* The drawable has transitioned between being flippable and
+		 * non-flippable or vice versa. Bump the serial number to force
+		 * the DRI2 buffers to be re-allocated during the next frame so
+		 * that:
+		 * - It is able to be scanned out
+		 *        (if drawable is now flippable), or
+		 * - It is not taking up possibly scarce scanout-able memory
+		 *        (if drawable is now not flippable)
 		 *
-		 * has_resized: On hotplugging back buffer needs to be invalidates as well
-		 * as Xsever invalidates only the front buffer.
+		 * has_resized: On hotplugging back buffer needs to be
+		 * invalidated as well, as Xserver invalidates only the
+		 * front buffer.
 		 */
 
 		PixmapPtr pPix = pScreen->GetWindowPixmap((WindowPtr)pDraw);
@@ -501,20 +503,23 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	armsoc_bo_reference(src_priv->bo);
 	armsoc_bo_reference(dst_priv->bo);
-	if (src_fb_id && dst_fb_id && canflip(pDraw) && !(pARMSOC->has_resized)) {
-		/* has_resized: On hotplug the fb size and crtc sizes arent updated
-		* hence on this event we do a copyb but flip from the next frame
-		* when the sizes are updated.
-		*/
+	if (src_fb_id && dst_fb_id && canflip(pDraw) &&
+			!(pARMSOC->has_resized)) {
+		/* has_resized: On hotplug the fb size and crtc sizes aren't
+		 * updated hence on this event we do a copyb but flip from the
+		 * next frame when the sizes are updated.
+		 */
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
-		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is only partially successful
+		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
+		 * only partially successful
 		 */
 		ret = drmmode_page_flip(pDraw, src_fb_id, cmd);
 
-		/* If using page flip events, we'll trigger an immediate completion in
-		 * the case that no CRTCs were enabled to be flipped.  If not using page
-		 * flip events, trigger immediate completion unconditionally.
+		/* If using page flip events, we'll trigger an immediate
+		 * completion in the case that no CRTCs were enabled to be
+		 * flipped. If not using page flip events, trigger immediate
+		 * completion unconditionally.
 		 */
 		if (ret < 0) {
 			/*
@@ -528,9 +533,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				cmd->swapCount = 0;
 
 			if (cmd->swapCount == 0)
-			{
 				ARMSOCDRI2SwapComplete(cmd);
-			}
+
 			return FALSE;
 		} else {
 			if (ret == 0)
@@ -542,9 +546,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				cmd->swapCount = 0;
 
 			if (cmd->swapCount == 0)
-			{
 				ARMSOCDRI2SwapComplete(cmd);
-			}
 		}
 	} else {
 		/* fallback to blit: */
@@ -572,8 +574,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
  * we receive it.
  */
 static int
-ARMSOCDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw, CARD64 target_msc,
-		CARD64 divisor, CARD64 remainder)
+ARMSOCDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw,
+	CARD64 target_msc, CARD64 divisor, CARD64 remainder)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
@@ -589,25 +591,24 @@ Bool
 ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DRI2InfoRec info = {
-			.version			= 5,
-			.fd 				= pARMSOC->drmFD,
-			.driverName			= "armsoc",
-			.deviceName			= pARMSOC->deviceName,
-			.CreateBuffer		= ARMSOCDRI2CreateBuffer,
-			.DestroyBuffer		= ARMSOCDRI2DestroyBuffer,
-			.CopyRegion			= ARMSOCDRI2CopyRegion,
-			.ScheduleSwap		= ARMSOCDRI2ScheduleSwap,
-			.ScheduleWaitMSC	= ARMSOCDRI2ScheduleWaitMSC,
-			.GetMSC				= ARMSOCDRI2GetMSC,
-			.AuthMagic			= drmAuthMagic,
+		.version         = 5,
+		.fd              = pARMSOC->drmFD,
+		.driverName      = "armsoc",
+		.deviceName      = pARMSOC->deviceName,
+		.CreateBuffer    = ARMSOCDRI2CreateBuffer,
+		.DestroyBuffer   = ARMSOCDRI2DestroyBuffer,
+		.CopyRegion      = ARMSOCDRI2CopyRegion,
+		.ScheduleSwap    = ARMSOCDRI2ScheduleSwap,
+		.ScheduleWaitMSC = ARMSOCDRI2ScheduleWaitMSC,
+		.GetMSC          = ARMSOCDRI2GetMSC,
+		.AuthMagic       = drmAuthMagic,
 	};
 	int minor = 1, major = 0;
 
-	if (xf86LoaderCheckSymbol("DRI2Version")) {
+	if (xf86LoaderCheckSymbol("DRI2Version"))
 		DRI2Version(&major, &minor);
-	}
 
 	if (minor < 1) {
 		WARNING_MSG("DRI2 requires DRI2 module version 1.1.0 or later");
@@ -624,7 +625,7 @@ void
 ARMSOCDRI2CloseScreen(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-	ARMSOCPtr pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	while (pARMSOC->pending_flips > 0) {
 		DEBUG_MSG("waiting..");
 		drmmode_wait_for_event(pScrn);

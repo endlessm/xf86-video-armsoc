@@ -30,9 +30,12 @@
  * cursor images in the max size, so don't use width/height values
  * that are too big
  */
-#define CURSORW   (64)  /* width */
-#define CURSORH   (64)  /* height */
-#define CURSORPAD (0)	/* Padding added down each side of cursor image */
+/* width */
+#define CURSORW   (64)
+/* height */
+#define CURSORH   (64)
+/* Padding added down each side of cursor image */
+#define CURSORPAD (0)
 
 /* Optional function */
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
@@ -40,7 +43,7 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 	return 0;
 }
 
-static void set_cursor_image( xf86CrtcPtr crtc, uint32_t * d, CARD32 *s )
+static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 {
 	/* provide a method of setting the cursor image here */
 }
