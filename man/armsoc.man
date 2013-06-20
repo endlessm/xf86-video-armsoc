@@ -36,8 +36,49 @@ Default: Debug logging is Disabled
 Disable buffer flipping.
 .IP
 Default: Flipping is Enabled
+.TP
+.BI "Option \*qDriverName\*q \*q" string \*q
+The name of the drm driver to use.
+.IP
+Default: NULL
+.TP
+.BI "Option \*qBusID\*q \*q" string \*q
+The Bus ID of the drm device to use.
+.IP
+Default: NULL
+.TP
+.BI "Option \*qDRICard\*q \*q" integer \*q
+Select which dri card to use.
+.IP
+Default: 0
+
+.SH DRM DEVICE SELECTION
+
+Either the DRM driver name or bus ID can be specified using e.g.
+
+.nf
+.B "Section \*qDevice\*q"
+.BI "  Driver \*qarmsoc\*q"
+.BI "  Option \*qDriverName\*q \*qpl111_drm\*q"
+.B "EndSection"
+
+or
+
+.B "Section \*qDevice\*q"
+.BI "  Driver \*qarmsoc\*q"
+.BI "  Option \*qBusID\*q      \*qplatform:pl111_drm:00\*q"
+.B "EndSection"
+
+If neither of these are set then /dev/dri/card0 is used. In this case
+the card number can be set using the \*qDRICard\*q option.
+
+.B "Section \*qDevice\*q"
+.BI "  Driver \*qarmsoc\*q"
+.BI "  Option \*qDRICard\*q      \*q1\*q"
+.B "EndSection"
 
 .SH OUTPUT CONFIGURATION
+
 The driver supports runtime configuration of detected outputs.  You can use the
 .B xrandr
 tool to control outputs on the command line as follows:

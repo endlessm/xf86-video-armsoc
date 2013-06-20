@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -46,7 +47,7 @@
 
 #include "drmmode_driver.h"
 
-#define DRM_DEVICE "/dev/dri/card0"
+#define DRM_DEVICE "/dev/dri/card%d"
 
 Bool armsocDebug;
 
@@ -106,26 +107,32 @@ static SymTabRec ARMSOCChipsets[] = {
 enum {
 	OPTION_DEBUG,
 	OPTION_NO_FLIP,
-	/* TODO: MIDEGL-1453: probably need to add an option
-	 * to let user specify bus-id
-	 */
+	OPTION_CARD_NUM,
+	OPTION_BUSID,
+	OPTION_DRIVERNAME,
 };
 
 /** Supported options. */
 static const OptionInfoRec ARMSOCOptions[] = {
-	{ OPTION_DEBUG,   "Debug",  OPTV_BOOLEAN, {0}, FALSE },
-	{ OPTION_NO_FLIP, "NoFlip", OPTV_BOOLEAN, {0}, FALSE },
-	{ -1,             NULL,     OPTV_NONE,    {0}, FALSE }
+	{ OPTION_DEBUG,      "Debug",      OPTV_BOOLEAN, {0}, FALSE },
+	{ OPTION_NO_FLIP,    "NoFlip",     OPTV_BOOLEAN, {0}, FALSE },
+	{ OPTION_CARD_NUM,   "DRICard",    OPTV_INTEGER, {0}, FALSE },
+	{ OPTION_BUSID,      "BusID",      OPTV_STRING,  {0}, FALSE },
+	{ OPTION_DRIVERNAME, "DriverName", OPTV_STRING,  {0}, FALSE },
+	{ -1,                NULL,         OPTV_NONE,    {0}, FALSE }
 };
 
 /**
  * Helper functions for sharing a DRM connection across screens.
  */
 static struct ARMSOCConnection {
+	char *driver_name;
+	char *bus_id;
+	unsigned int card_num;
 	int fd;
 	int open_count;
 	int master_count;
-} connection = {-1, 0, 0};
+} connection = {NULL, NULL, 0, -1, 0, 0};
 
 static int
 ARMSOCSetDRMMaster(void)
@@ -160,6 +167,116 @@ ARMSOCDropDRMMaster(void)
 	return ret;
 }
 
+static void
+ARMSOCShowDriverInfo(int fd)
+{
+	char *bus_id;
+	drmVersionPtr version;
+	char *deviceName;
+
+	EARLY_INFO_MSG("Opened DRM");
+	deviceName = drmGetDeviceNameFromFd(fd);
+	EARLY_INFO_MSG("   DeviceName is [%s]",
+			deviceName ? deviceName : "NULL");
+	drmFree(deviceName);
+	bus_id = drmGetBusid(fd);
+	EARLY_INFO_MSG("   bus_id is [%s]",
+			bus_id ? bus_id : "NULL");
+	drmFreeBusid(bus_id);
+	version = drmGetVersion(fd);
+	if (version) {
+		EARLY_INFO_MSG("   DriverName is [%s]",
+					version->name);
+		EARLY_INFO_MSG("   version is [%d.%d.%d]",
+					version->version_major,
+					version->version_minor,
+					version->version_patchlevel);
+		drmFreeVersion(version);
+	} else {
+		EARLY_INFO_MSG("   version is [NULL]");
+	}
+	return;
+}
+
+static int
+ARMSOCOpenDRMCard(void)
+{
+	int fd;
+
+	if ((connection.bus_id) || (connection.driver_name)) {
+		/* user specified bus ID or driver name - pass to drmOpen */
+		EARLY_INFO_MSG("Opening driver [%s], bus_id [%s]",
+			connection.driver_name ?
+					connection.driver_name : "NULL",
+			connection.bus_id ?
+					connection.bus_id : "NULL");
+		fd = drmOpen(connection.driver_name, connection.bus_id);
+		if (-1 == fd)
+			goto fail2;
+	} else {
+		char filename[32];
+		int err;
+		drmSetVersion sv;
+		char *bus_id, *bus_id_copy;
+
+		/* open with card_num */
+		snprintf(filename, sizeof(filename),
+				DRM_DEVICE, connection.card_num);
+		EARLY_INFO_MSG(
+				"No BusID or DriverName specified - opening %s",
+				filename);
+		fd = open(filename, O_RDWR, 0);
+		if (-1 == fd)
+			goto fail2;
+		/* Set interface version to initialise bus id */
+		sv.drm_di_major = 1;
+		sv.drm_di_minor = 1;
+		sv.drm_dd_major = -1;
+		sv.drm_dd_minor = -1;
+		err = drmSetInterfaceVersion(fd, &sv);
+		if (err) {
+			EARLY_ERROR_MSG(
+				"Cannot set the DRM interface version.");
+			goto fail1;
+		}
+		/* get the bus id */
+		bus_id = drmGetBusid(fd);
+		if (!bus_id) {
+			EARLY_ERROR_MSG("Couldn't get BusID from %s",
+							filename);
+			goto fail1;
+		}
+		EARLY_INFO_MSG("Got BusID %s", bus_id);
+		bus_id_copy = malloc(strlen(bus_id)+1);
+		if (!bus_id_copy) {
+			EARLY_ERROR_MSG("Memory alloc failed");
+			goto fail1;
+		}
+		strcpy(bus_id_copy, bus_id);
+		drmFreeBusid(bus_id);
+		err = close(fd);
+		if (err) {
+			free(bus_id_copy);
+			EARLY_ERROR_MSG("Couldn't close %s - %s",
+					filename, strerror(errno));
+			goto fail2;
+		}
+		/* use bus_id to open driver */
+		fd = drmOpen(NULL, bus_id_copy);
+		free(bus_id_copy);
+		if (-1 == fd)
+			goto fail2;
+	}
+	ARMSOCShowDriverInfo(fd);
+	return fd;
+
+fail1:
+	close(fd);
+fail2:
+	EARLY_ERROR_MSG("Cannot open a connection with the DRM");
+	return -1;
+}
+
 static Bool
 ARMSOCOpenDRM(ScrnInfoPtr pScrn)
 {
@@ -170,11 +287,9 @@ ARMSOCOpenDRM(ScrnInfoPtr pScrn)
 	if (-1 == connection.fd) {
 		assert(!connection.open_count);
 		assert(!connection.master_count);
-		pARMSOC->drmFD = open(DRM_DEVICE, O_RDWR, 0);
-		if (pARMSOC->drmFD == -1) {
-			ERROR_MSG("Cannot open a connection with the DRM.");
+		pARMSOC->drmFD = ARMSOCOpenDRMCard();
+		if (-1 == pARMSOC->drmFD)
 			return FALSE;
-		}
 		/* Check that what we are or can become drm master by
 		 * attempting a drmSetInterfaceVersion(). If successful
 		 * this leaves us as master.
@@ -332,8 +447,68 @@ ARMSOCProbe(DriverPtr drv, int flags)
 	}
 
 	for (i = 0; i < numDevSections; i++) {
-		int fd = open(DRM_DEVICE, O_RDWR, 0);
-		if (fd != -1) {
+		int fd;
+
+		if (devSections) {
+			char *busIdStr, *driverNameStr, *cardNumStr;
+
+			/* get the Bus ID */
+			busIdStr = xf86FindOptionValue(
+						devSections[i]->options,
+						"BusID");
+
+			/* get the DriverName */
+			driverNameStr = xf86FindOptionValue(
+					devSections[i]->options,
+					"DriverName");
+
+			/* get the card_num from xorg.conf if present */
+			cardNumStr = xf86FindOptionValue(
+						devSections[i]->options,
+						"DRICard");
+
+			if (busIdStr && driverNameStr) {
+					EARLY_WARNING_MSG(
+						"Option DriverName ignored (BusID is specified)");
+			}
+			if (busIdStr || driverNameStr) {
+				if (cardNumStr) {
+					EARLY_WARNING_MSG(
+						"Option DRICard ignored (BusID or DriverName are specified)");
+				}
+			}
+
+			if (busIdStr) {
+				if (0 == strlen(busIdStr)) {
+					EARLY_ERROR_MSG(
+						"Missing value for Option BusID");
+					return FALSE;
+				}
+				connection.bus_id = busIdStr;
+			} else if (driverNameStr) {
+				if (0 == strlen(driverNameStr)) {
+					EARLY_ERROR_MSG(
+						"Missing value for Option DriverName");
+					return FALSE;
+				}
+				connection.driver_name =driverNameStr;
+			} else if (cardNumStr) {
+				char *endptr;
+				errno = 0;
+				connection.card_num = strtol(cardNumStr,
+						&endptr, 10);
+				if (('\0' == *cardNumStr) ||
+					('\0' != *endptr) ||
+					(errno != 0)) {
+					EARLY_ERROR_MSG(
+							"Bad Option DRICard value : %s",
+							cardNumStr);
+					return FALSE;
+				}
+			}
+		}
+		fd = ARMSOCOpenDRMCard();
+		if (-1 != fd) {
 			struct ARMSOCRec *pARMSOC;
 
 			/* Allocate the ScrnInfoRec */
@@ -353,7 +528,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 				return FALSE;
 
 			pARMSOC = ARMSOCPTR(pScrn);
-			/* intially mark to use all DRM crtcs */
+			/* initially mark to use all DRM crtcs */
 			pARMSOC->crtcNum = -1;
 
 			if (flags & PROBE_DETECT) {

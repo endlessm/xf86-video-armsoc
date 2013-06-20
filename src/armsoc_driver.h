@@ -76,8 +76,12 @@ extern _X_EXPORT Bool armsocDebug;
 				X_INFO, "%s:%d " fmt "\n",\
 				__func__, __LINE__, ##__VA_ARGS__); \
 		} while (0)
+
 #define INFO_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, X_INFO, fmt "\n",\
+				##__VA_ARGS__); } while (0)
+#define EARLY_INFO_MSG(fmt, ...) \
+		do { xf86Msg(X_INFO, fmt "\n",\
 				##__VA_ARGS__); } while (0)
 #define CONFIG_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, fmt "\n",\
@@ -85,6 +89,10 @@ extern _X_EXPORT Bool armsocDebug;
 #define WARNING_MSG(fmt, ...) \
 		do { xf86DrvMsg(pScrn->scrnIndex, \
 				X_WARNING, "WARNING: " fmt "\n",\
+				##__VA_ARGS__); \
+		} while (0)
+#define EARLY_WARNING_MSG(fmt, ...) \
+		do { xf86Msg(X_WARNING, "WARNING: " fmt "\n",\
 				##__VA_ARGS__); \
 		} while (0)
 #define ERROR_MSG(fmt, ...) \
