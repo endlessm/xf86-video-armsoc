@@ -126,8 +126,8 @@ static const OptionInfoRec ARMSOCOptions[] = {
  * Helper functions for sharing a DRM connection across screens.
  */
 static struct ARMSOCConnection {
-	char *driver_name;
-	char *bus_id;
+	const char *driver_name;
+	const char *bus_id;
 	unsigned int card_num;
 	int fd;
 	int open_count;
@@ -451,7 +451,9 @@ ARMSOCProbe(DriverPtr drv, int flags)
 		int fd;
 
 		if (devSections) {
-			char *busIdStr, *driverNameStr, *cardNumStr;
+			const char *busIdStr;
+			const char *driverNameStr;
+			const char *cardNumStr;
 
 			/* get the Bus ID */
 			busIdStr = xf86FindOptionValue(
@@ -492,7 +494,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 						"Missing value for Option DriverName");
 					return FALSE;
 				}
-				connection.driver_name =driverNameStr;
+				connection.driver_name = driverNameStr;
 			} else if (cardNumStr) {
 				char *endptr;
 				errno = 0;
