@@ -211,7 +211,7 @@ ARMSOCOpenDRMCard(void)
 			connection.bus_id ?
 					connection.bus_id : "NULL");
 		fd = drmOpen(connection.driver_name, connection.bus_id);
-		if (-1 == fd)
+		if (fd < 0)
 			goto fail2;
 	} else {
 		char filename[32];
@@ -257,14 +257,13 @@ ARMSOCOpenDRMCard(void)
 		err = close(fd);
 		if (err) {
 			free(bus_id_copy);
-			EARLY_ERROR_MSG("Couldn't close %s - %s",
-					filename, strerror(errno));
+			EARLY_ERROR_MSG("Couldn't close %s", filename);
 			goto fail2;
 		}
 		/* use bus_id to open driver */
 		fd = drmOpen(NULL, bus_id_copy);
 		free(bus_id_copy);
-		if (-1 == fd)
+		if (fd < 0)
 			goto fail2;
 	}
 	ARMSOCShowDriverInfo(fd);
@@ -273,7 +272,9 @@ ARMSOCOpenDRMCard(void)
 fail1:
 	close(fd);
 fail2:
-	EARLY_ERROR_MSG("Cannot open a connection with the DRM");
+	EARLY_ERROR_MSG(
+		"Cannot open a connection with the DRM - %s",
+		strerror(errno));
 	return -1;
 }
 
@@ -284,11 +285,11 @@ ARMSOCOpenDRM(ScrnInfoPtr pScrn)
 	drmSetVersion sv;
 	int err;
 
-	if (-1 == connection.fd) {
+	if (connection.fd < 0) {
 		assert(!connection.open_count);
 		assert(!connection.master_count);
 		pARMSOC->drmFD = ARMSOCOpenDRMCard();
-		if (-1 == pARMSOC->drmFD)
+		if (pARMSOC->drmFD < 0)
 			return FALSE;
 		/* Check that what we are or can become drm master by
 		 * attempting a drmSetInterfaceVersion(). If successful
@@ -508,7 +509,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			}
 		}
 		fd = ARMSOCOpenDRMCard();
-		if (-1 != fd) {
+		if (fd >= 0) {
 			struct ARMSOCRec *pARMSOC;
 
 			/* Allocate the ScrnInfoRec */
@@ -793,6 +794,9 @@ static Bool
 ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 {
 	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+#ifndef XF86_SCRN_INTERFACE
+	int scrnIndex = pScrn->scrnIndex;
+#endif
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	VisualPtr visual;
 	xf86CrtcConfigPtr xf86_config;
@@ -982,8 +986,7 @@ fail5:
 
 	if (pARMSOC->pARMSOCEXA)
 		if (pARMSOC->pARMSOCEXA->CloseScreen)
-			pARMSOC->pARMSOCEXA->CloseScreen(pScrn->scrnIndex,
-						pScreen);
+			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 fail4:
 	/* Call the CloseScreen functions for fbInitScreen,  miDCInitialize,
 	 * exaDriverInit & xf86CrtcScreenInit as appropriate via their
@@ -992,7 +995,7 @@ fail4:
 	 * set up the key for this before it gets called.
 	 */
 	dixSetPrivate(&pScreen->devPrivates, xf86ScreenKey, pScrn);
-	(*pScreen->CloseScreen)(pScrn->scrnIndex, pScreen);
+	(*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 
 fail3:
 	/* reset the visual list */
