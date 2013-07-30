@@ -1058,10 +1058,17 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 {
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	Bool ret;
 
 	TRACE_ENTER();
 
 	drmmode_screen_fini(pScrn);
+
+	unwrap(pARMSOC, pScreen, CloseScreen);
+	unwrap(pARMSOC, pScreen, BlockHandler);
+	unwrap(pARMSOC, pScreen, CreateScreenResources);
+
+	ret = (*pScreen->CloseScreen)(scrnIndex, pScreen);
 
 	if (pARMSOC->dri)
 		ARMSOCDRI2CloseScreen(pScreen);
@@ -1080,13 +1087,9 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 
 	pScrn->vtSema = FALSE;
 
-	unwrap(pARMSOC, pScreen, CloseScreen);
-	unwrap(pARMSOC, pScreen, BlockHandler);
-	unwrap(pARMSOC, pScreen, CreateScreenResources);
-
 	TRACE_EXIT();
 
-	return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
+	return ret;
 }
 
 
