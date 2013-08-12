@@ -49,14 +49,15 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 }
 
 struct drmmode_interface template_interface = {
-	0x00000000 /* dumb_scanout_flags */,
-	0x00000000 /* dumb_no_scanout_flags */,
-	1 /* use_page_flip_events */,
+	0x00000000            /* dumb_scanout_flags */,
+	0x00000000            /* dumb_no_scanout_flags */,
+	1                     /* use_page_flip_events */,
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
 	CURSORPAD             /* cursor padding */,
 	init_plane_for_cursor /* init_plane_for_cursor */,
 	set_cursor_image      /* set cursor image */,
+	0                     /* vblank_query_supported */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

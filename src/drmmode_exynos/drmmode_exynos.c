@@ -92,7 +92,8 @@ struct drmmode_interface exynos_interface = {
 	CURSORH               /* cursor_height */,
 	CURSORPAD             /* cursor padding */,
 	init_plane_for_cursor /* init_plane_for_cursor */,
-	set_cursor_image      /* set cursor image */
+	set_cursor_image      /* set cursor image */,
+	0                     /* vblank_query_supported */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

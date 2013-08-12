@@ -86,6 +86,10 @@ struct drmmode_interface {
 	 */
 	void (*set_cursor_image)(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s);
 
+	/* Boolean value indicating whether the DRM supports
+	 * vblank timestamp query
+	 */
+	int vblank_query_supported;
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd);

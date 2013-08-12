@@ -359,14 +359,12 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 	} };
 	int ret;
 
+	if (!pARMSOC->drmmode_interface->vblank_query_supported)
+		return FALSE;
+
 	ret = drmWaitVBlank(pARMSOC->drmFD, &vbl);
 	if (ret) {
-		static int limit = 5;
-		if (limit) {
-			ERROR_MSG("get vblank counter failed: %s",
-				strerror(errno));
-			limit--;
-		}
+		ERROR_MSG("get vblank counter failed: %s", strerror(errno));
 		return FALSE;
 	}
 
@@ -663,16 +661,20 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
 
-	/* After a resolution change the back buffer (src) will still be of the original size.
-	 * We can't sensibly flip to a framebuffer of a different size to the current resolution
-	 * (it will look corrupted), so we must do a copy for this frame (which will clip the
-	 * contents as expected).
+	/* After a resolution change the back buffer (src) will still be
+	 * of the original size. We can't sensibly flip to a framebuffer of
+	 * a different size to the current resolution (it will look corrupted)
+	 * so we must do a copy for this frame (which will clip the contents
+	 * as expected).
 	 *
-	 * Once the client calls DRI2GetBuffers again, it will receive a new back buffer of the
-	 * same size as the new resolution, and subsequent DRI2SwapBuffers will result in a flip.
+	 * Once the client calls DRI2GetBuffers again, it will receive a new
+	 * back buffer of the same size as the new resolution, and subsequent
+	 * DRI2SwapBuffers will result in a flip.
 	 */
-	do_flip = do_flip && (armsoc_bo_width(src_bo) == armsoc_bo_width(dst_bo));
-	do_flip = do_flip && (armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo));
+	do_flip = do_flip &&
+			(armsoc_bo_width(src_bo) == armsoc_bo_width(dst_bo));
+	do_flip = do_flip &&
+			(armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo));
 
 	if (do_flip) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
