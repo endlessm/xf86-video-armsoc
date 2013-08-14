@@ -80,7 +80,7 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 {
 	struct ARMSOCPixmapPrivRec *priv =
 				calloc(sizeof(struct ARMSOCPixmapPrivRec), 1);
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 

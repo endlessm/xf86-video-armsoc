@@ -160,7 +160,7 @@ struct ARMSOCRec {
 /** Return a pointer to the driver's private structure. */
 #define ARMSOCPTR(p) ((struct ARMSOCRec *)((p)->driverPrivate))
 #define ARMSOCPTR_FROM_SCREEN(pScreen) \
-	((struct ARMSOCRec *)(xf86Screens[(pScreen)->myNum])->driverPrivate)
+	((struct ARMSOCRec *)(xf86ScreenToScrn(pScreen))->driverPrivate)
 
 #define wrap(priv, real, mem, func) {\
 		priv->Saved##mem = real->mem; \

@@ -116,7 +116,7 @@ static Bool
 canflip(DrawablePtr pDraw)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (pARMSOC->NoFlip) {
@@ -163,7 +163,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		unsigned int format)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	PixmapPtr pPixmap = NULL;
@@ -272,7 +272,7 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 * instead (since it is at least refcntd)
 	 */
 	ScreenPtr pScreen = buf->pPixmaps[0]->drawable.pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	int numBuffers, i;
 
@@ -311,7 +311,7 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 		DRI2BufferPtr pDstBuffer, DRI2BufferPtr pSrcBuffer)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	DrawablePtr pSrcDraw = dri2draw(pDraw, pSrcBuffer);
 	DrawablePtr pDstDraw = dri2draw(pDraw, pDstBuffer);
 	RegionPtr pCopyClip;
@@ -351,7 +351,7 @@ static int
 ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	drmVBlank vbl = { .request = {
 		.type = DRM_VBLANK_RELATIVE,
@@ -406,7 +406,7 @@ static const char * const swap_names[] = {
 static Bool allocNextBuffer(DrawablePtr pDraw, PixmapPtr *ppPixmap,
 		uint32_t *name) {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct armsoc_bo *bo;
 	PixmapPtr pPixmap;
 	int ret;
@@ -465,7 +465,7 @@ error:
 static void nextBuffer(DrawablePtr pDraw, struct ARMSOCDRI2BufferRec *backBuf)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (pARMSOC->driNumBufs <= 2) {
@@ -521,7 +521,7 @@ void
 ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 {
 	ScreenPtr pScreen = cmd->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
@@ -597,7 +597,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		DRI2SwapEventPtr func, void *data)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
 	struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(pDstBuffer);
@@ -745,7 +745,7 @@ ARMSOCDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw,
 	CARD64 target_msc, CARD64 divisor, CARD64 remainder)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 
 	ERROR_MSG("not implemented");
 	return FALSE;
@@ -757,7 +757,7 @@ ARMSOCDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw,
 Bool
 ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DRI2InfoRec info = {
 		.version         = 5,
@@ -791,7 +791,7 @@ ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 void
 ARMSOCDRI2CloseScreen(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	while (pARMSOC->pending_flips > 0) {
 		DEBUG_MSG("waiting..");

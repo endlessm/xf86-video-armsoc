@@ -793,7 +793,7 @@ fail:
 static void
 ARMSOCAccelInit(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!pARMSOC->pARMSOCEXA)
@@ -814,7 +814,7 @@ ARMSOCAccelInit(ScreenPtr pScreen)
 static Bool
 ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 #ifndef XF86_SCRN_INTERFACE
 	int scrnIndex = pScrn->scrnIndex;
 #endif
@@ -1103,7 +1103,7 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 static Bool
 ARMSOCCreateScreenResources(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	swap(pARMSOC, pScreen, CreateScreenResources);

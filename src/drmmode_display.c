@@ -501,7 +501,7 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 Bool
 drmmode_cursor_init(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	struct drmmode_rec *drmmode = drmmode_from_scrn(pScrn);
 	struct drmmode_cursor_rec *cursor;
@@ -617,7 +617,7 @@ drmmode_cursor_init(ScreenPtr pScreen)
 
 void drmmode_cursor_fini(ScreenPtr pScreen)
 {
-	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct drmmode_rec *drmmode = drmmode_from_scrn(pScrn);
 	struct drmmode_cursor_rec *cursor = drmmode->cursor;
 
@@ -1425,7 +1425,8 @@ static drmEventContext event_context = {
 int
 drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 {
-	ScrnInfoPtr pScrn = xf86Screens[draw->pScreen->myNum];
+	ScreenPtr pScreen = draw->pScreen;
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
 	struct drmmode_crtc_private_rec *crtc = config->crtc[0]->driver_private;
@@ -1499,7 +1500,7 @@ drmmode_handle_uevents(int fd, void *closure)
 
 	if (memcmp(&s.st_rdev, &udev_devnum, sizeof(dev_t)) == 0 &&
 			hotplug && atoi(hotplug) == 1) {
-		RRGetInfo(screenInfo.screens[pScrn->scrnIndex], TRUE);
+		RRGetInfo(xf86ScrnToScreen(pScrn), TRUE);
 	}
 	udev_device_unref(dev);
 }
