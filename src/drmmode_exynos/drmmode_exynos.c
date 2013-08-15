@@ -48,12 +48,45 @@ struct drm_exynos_plane_set_zpos {
 
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 {
-	struct drm_exynos_plane_set_zpos data;
+	int res = -1;
+	drmModeObjectPropertiesPtr props;
+	props = drmModeObjectGetProperties(drm_fd, plane_id,
+			DRM_MODE_OBJECT_PLANE);
 
-	data.plane_id = plane_id;
-	data.zpos = 1;
+	if (props) {
+		int i;
 
-	return ioctl(drm_fd, DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS, &data);
+		for (i = 0; i < props->count_props; i++) {
+			drmModePropertyPtr this_prop;
+			this_prop = drmModeGetProperty(drm_fd, props->props[i]);
+
+			if (this_prop) {
+				if (!strncmp(this_prop->name, "zpos",
+							DRM_PROP_NAME_LEN)) {
+					res = drmModeObjectSetProperty(drm_fd,
+							plane_id,
+							DRM_MODE_OBJECT_PLANE,
+							this_prop->prop_id,
+							1);
+					drmModeFreeProperty(this_prop);
+					break;
+				}
+				drmModeFreeProperty(this_prop);
+			}
+		}
+		drmModeFreeObjectProperties(props);
+	}
+
+	if (res) {
+		/* Try the old method */
+		struct drm_exynos_plane_set_zpos data;
+		data.plane_id = plane_id;
+		data.zpos = 1;
+
+		res = ioctl(drm_fd, DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS, &data);
+	}
+
+	return res;
 }
 
 /* The cursor format is ARGB so the image can be copied straight over.
