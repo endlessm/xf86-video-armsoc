@@ -118,7 +118,7 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 }
 
 struct drmmode_interface exynos_interface = {
-	0x00000001            /* dumb_scanout_flags */,
+	0x00000000            /* dumb_scanout_flags */,
 	0x00000001            /* dumb_no_scanout_flags */,
 	1                     /* use_page_flip_events */,
 	CURSORW               /* cursor width */,
