@@ -25,6 +25,7 @@
 #include "../drmmode_driver.h"
 #include <stddef.h>
 #include <xf86drmMode.h>
+#include <xf86drm.h>
 #include <sys/ioctl.h>
 
 struct drm_exynos_plane_set_zpos {
@@ -45,6 +46,9 @@ struct drm_exynos_plane_set_zpos {
 #define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
 #define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
+
+#define EXYNOS_SCANOUT_FLAGS     0x00000000
+#define EXYNOS_NON_SCANOUT_FLAGS 0x00000001
 
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 {
@@ -117,9 +121,39 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 	}
 }
 
+static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
+{
+	struct drm_mode_create_dumb create_dumb;
+	int ret;
+
+	memset(&create_dumb, 0, sizeof(create_dumb));
+	create_dumb.height = create_gem->height;
+	create_dumb.width = create_gem->width;
+	create_dumb.bpp = create_gem->bpp;
+
+	assert((create_gem->buf_type == ARMSOC_BO_SCANOUT) ||
+			(create_gem->buf_type == ARMSOC_BO_NON_SCANOUT));
+	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
+		create_dumb.flags = EXYNOS_SCANOUT_FLAGS;
+	else
+		create_dumb.flags = EXYNOS_NON_SCANOUT_FLAGS;
+
+	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
+	if (ret)
+		return ret;
+
+	/* Convert custom create_dumb to generic create_gem */
+	create_gem->height = create_dumb.height;
+	create_gem->width = create_dumb.width;
+	create_gem->bpp = create_dumb.bpp;
+	create_gem->handle = create_dumb.handle;
+	create_gem->pitch = create_dumb.pitch;
+	create_gem->size = create_dumb.size;
+
+	return 0;
+}
+
 struct drmmode_interface exynos_interface = {
-	0x00000000            /* dumb_scanout_flags */,
-	0x00000001            /* dumb_no_scanout_flags */,
 	1                     /* use_page_flip_events */,
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
@@ -127,6 +161,7 @@ struct drmmode_interface exynos_interface = {
 	init_plane_for_cursor /* init_plane_for_cursor */,
 	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,
+	create_custom_gem     /* create_custom_gem */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

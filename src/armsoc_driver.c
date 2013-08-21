@@ -678,8 +678,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 
 	/* create DRM device instance: */
 	pARMSOC->dev = armsoc_device_new(pARMSOC->drmFD,
-			pARMSOC->drmmode_interface->dumb_scanout_flags,
-			pARMSOC->drmmode_interface->dumb_no_scanout_flags);
+			pARMSOC->drmmode_interface->create_custom_gem);
 
 	/* find matching chipset name: */
 	for (i = 0; ARMSOCChipsets[i].name; i++) {

@@ -24,6 +24,7 @@
 
 #include "../drmmode_driver.h"
 #include <stddef.h>
+#include <xf86drm.h>
 
 /* Cursor dimensions
  * Technically we probably don't have any size limit.. since we
@@ -49,6 +50,9 @@
 
 #define LBBP_WORDS_PER_LINE        (4)
 #define LBBP_PIXELS_PER_WORD       (16)
+
+#define PL111_SCANOUT_FLAGS   0x00000001
+#define PL111_NON_SCANOUT_FLAGS   0x00000000
 
 /* shift required to locate pixel into the correct position in
  * a cursor LBBP word, indexed by x mod 16.
@@ -132,9 +136,56 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 	}
 }
 
+/* TODO MIDEGL-1718: this should be included from kernel headers when pl111 is mainline */
+struct drm_pl111_gem_create {
+	uint32_t height;
+	uint32_t width;
+	uint32_t bpp;
+	uint32_t flags;
+	/* handle, pitch, size will be returned */
+	uint32_t handle;
+	uint32_t pitch;
+	uint64_t size;
+};
+
+#define DRM_PL111_GEM_CREATE		0x00
+#define DRM_IOCTL_PL111_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + \
+			DRM_PL111_GEM_CREATE, struct drm_pl111_gem_create)
+/***************************************************************************/
+
+static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
+{
+	struct drm_pl111_gem_create create_pl111;
+	int ret;
+
+	memset(&create_pl111, 0, sizeof(create_pl111));
+	create_pl111.height = create_gem->height;
+	create_pl111.width = create_gem->width;
+	create_pl111.bpp = create_gem->bpp;
+
+	assert((create_gem->buf_type == ARMSOC_BO_SCANOUT) ||
+			(create_gem->buf_type == ARMSOC_BO_NON_SCANOUT));
+	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
+		create_pl111.flags = PL111_SCANOUT_FLAGS;
+	else
+		create_pl111.flags = PL111_NON_SCANOUT_FLAGS;
+
+	ret = drmIoctl(fd, DRM_IOCTL_PL111_GEM_CREATE, &create_pl111);
+	if (ret)
+		return ret;
+
+	/* Convert custom create_pl111 to generic create_gem */
+	create_gem->height = create_pl111.height;
+	create_gem->width = create_pl111.width;
+	create_gem->bpp = create_pl111.bpp;
+	create_gem->handle = create_pl111.handle;
+	create_gem->pitch = create_pl111.pitch;
+	create_gem->size = create_pl111.size;
+
+	return 0;
+}
+
 struct drmmode_interface pl111_interface = {
-	0x00000001            /* dumb_scanout_flags */,
-	0x00000000            /* dumb_no_scanout_flags */,
 	0                     /* use_page_flip_events */,
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
@@ -142,6 +193,7 @@ struct drmmode_interface pl111_interface = {
 	NULL                  /* init_plane_for_cursor */,
 	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,
+	create_custom_gem     /* create_custom_gem */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

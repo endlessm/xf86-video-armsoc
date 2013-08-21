@@ -48,9 +48,16 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 	/* provide a method of setting the cursor image here */
 }
 
+static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
+{
+	/*
+	 * provide a method of creating both scanout and non-scanout GEM
+	 * objects here. This method is usually a custom ioctl() call to
+	 * the DRM driver.
+	 */
+}
+
 struct drmmode_interface template_interface = {
-	0x00000000            /* dumb_scanout_flags */,
-	0x00000000            /* dumb_no_scanout_flags */,
 	1                     /* use_page_flip_events */,
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
@@ -58,6 +65,7 @@ struct drmmode_interface template_interface = {
 	init_plane_for_cursor /* init_plane_for_cursor */,
 	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,
+	create_custom_gem     /* create_custom_gem */,
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd)

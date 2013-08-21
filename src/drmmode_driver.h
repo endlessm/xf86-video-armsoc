@@ -29,24 +29,9 @@
 
 #include "xorg-server.h"
 #include "xf86Crtc.h"
+#include "armsoc_dumb.h"
 
 struct drmmode_interface {
-
-	/* Flags value to pass to DRM_IOCTL_MODE_CREATE_DUMB to allocate
-	 * a scanout-capable buffer. A buffer allocated with these flags
-	 * must be able to be wrapped in a DRM framebuffer (via
-	 * DRM_IOCTL_MODE_ADDFB or DRM_IOCTL_MODE_ADDFB2).
-	 */
-	uint32_t dumb_scanout_flags;
-
-	/* Flags value to pass to DRM_IOCTL_MODE_CREATE_DUMB to allocate a
-	 * non-scanout-capable buffer. It is acceptable for the driver to
-	 * create a scanout-capable buffer when given this flag, this flag
-	 * is used to give the option of preserving scarce scanout-capable
-	 * memory if applicable.
-	 */
-	uint32_t dumb_no_scanout_flags;
-
 	/* Boolean value indicating whether DRM page flip events should
 	 * be requested and waited for during DRM_IOCTL_MODE_PAGE_FLIP.
 	 */
@@ -90,6 +75,17 @@ struct drmmode_interface {
 	 * vblank timestamp query
 	 */
 	int vblank_query_supported;
+
+	/* (Mandatory) Create new gem object
+	 *
+	 * A driver specific ioctl() is usually needed to create GEM objects
+	 * with particular features such as contiguous memory, uncached, etc...
+	 *
+	 * @param       fd             DRM device file descriptor
+	 * @param       create_gem     generic GEM description
+	 * @return 0 on success, non-zero on failure
+	 */
+	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem);
 };
 
 struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd);

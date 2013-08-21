@@ -38,8 +38,7 @@
 
 struct armsoc_device {
 	int fd;
-	uint32_t dumb_scanout_flags;
-	uint32_t dumb_no_scanout_flags;
+	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem);
 };
 
 struct armsoc_bo {
@@ -65,16 +64,16 @@ struct armsoc_bo {
 /* device related functions:
  */
 
-struct armsoc_device *armsoc_device_new(int fd, uint32_t dumb_scanout_flags,
-			uint32_t dumb_no_scanout_flags)
+struct armsoc_device *armsoc_device_new(int fd,
+			int (*create_custom_gem)(int fd,
+				struct armsoc_create_gem *create_gem))
 {
 	struct armsoc_device *new_dev = malloc(sizeof(*new_dev));
 	if (!new_dev)
 		return NULL;
 
 	new_dev->fd = fd;
-	new_dev->dumb_scanout_flags = dumb_scanout_flags;
-	new_dev->dumb_no_scanout_flags = dumb_no_scanout_flags;
+	new_dev->create_custom_gem = create_custom_gem;
 	return new_dev;
 }
 
@@ -126,7 +125,7 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 			uint32_t width, uint32_t height, uint8_t depth,
 			uint8_t bpp, enum armsoc_buf_type buf_type)
 {
-	struct drm_mode_create_dumb create_dumb;
+	struct armsoc_create_gem create_gem;
 	struct armsoc_bo *new_buf;
 	int res;
 
@@ -134,36 +133,30 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	if (!new_buf)
 		return NULL;
 
-	create_dumb.height = height;
-	create_dumb.width = width;
-	create_dumb.bpp = bpp;
-	assert((ARMSOC_BO_SCANOUT == buf_type) ||
-			(ARMSOC_BO_NON_SCANOUT == buf_type));
-	if (ARMSOC_BO_SCANOUT == buf_type)
-		create_dumb.flags = dev->dumb_scanout_flags;
-	else
-		create_dumb.flags = dev->dumb_no_scanout_flags;
-
-	res = drmIoctl(dev->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
+	create_gem.buf_type = buf_type;
+	create_gem.height = height;
+	create_gem.width = width;
+	create_gem.bpp = bpp;
+	res = dev->create_custom_gem(dev->fd, &create_gem);
 	if (res) {
 		free(new_buf);
 		xf86DrvMsg(-1, X_ERROR,
-			"_CREATE_DUMB({height: 0x%X, width: 0x%X, bpp: 0x%X, flags: 0x%X}) failed. errno:0x%X\n",
-				height, width, bpp, create_dumb.flags, errno);
+			"_CREATE_GEM({height: 0x%X, width: 0x%X, bpp: 0x%X, buf_type: 0x%X}) failed. errno:0x%X\n",
+				height, width, bpp, buf_type, errno);
 		return NULL;
 	}
 
 	new_buf->dev = dev;
-	new_buf->handle = create_dumb.handle;
-	new_buf->size = create_dumb.size;
+	new_buf->handle = create_gem.handle;
+	new_buf->size = create_gem.size;
 	new_buf->map_addr = NULL;
 	new_buf->fb_id = 0;
-	new_buf->pitch = create_dumb.pitch;
-	new_buf->width = create_dumb.width;
-	new_buf->height = create_dumb.height;
-	new_buf->original_size = create_dumb.size;
+	new_buf->pitch = create_gem.pitch;
+	new_buf->width = create_gem.width;
+	new_buf->height = create_gem.height;
+	new_buf->original_size = create_gem.size;
 	new_buf->depth = depth;
-	new_buf->bpp = create_dumb.bpp;
+	new_buf->bpp = create_gem.bpp;
 	new_buf->refcnt = 1;
 	new_buf->dmabuf = -1;
 	new_buf->name = 0;

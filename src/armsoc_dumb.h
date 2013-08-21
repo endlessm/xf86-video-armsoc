@@ -40,8 +40,24 @@ enum armsoc_buf_type {
 	ARMSOC_BO_NON_SCANOUT
 };
 
-struct armsoc_device *armsoc_device_new(int fd, uint32_t dumb_scanout_flags,
-			uint32_t dumb_no_scanout_flags);
+/*
+ * Generic GEM object information used to abstract custom GEM creation
+ * for every DRM driver.
+ */
+struct armsoc_create_gem {
+	/* parameters that will be provided  */
+	uint32_t height;
+	uint32_t width;
+	uint32_t bpp;
+	enum armsoc_buf_type buf_type;
+	/* handle, pitch, size will be returned */
+	uint32_t handle;
+	uint32_t pitch;
+	uint64_t size;
+};
+
+struct armsoc_device *armsoc_device_new(int fd,
+	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem));
 void armsoc_device_del(struct armsoc_device *dev);
 int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name);
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo);
