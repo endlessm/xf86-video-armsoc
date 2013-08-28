@@ -1462,8 +1462,9 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 
 /*
  * Hot Plug Event handling:
+ * TODO: MIDEGL-1441: Do we need to keep this handler, which
+ * Rob originally wrote?
  */
-
 static void
 drmmode_handle_uevents(int fd, void *closure)
 {
@@ -1479,17 +1480,17 @@ drmmode_handle_uevents(int fd, void *closure)
 	if (!dev)
 		return;
 
-	/* TODO: MIDEGL-1441: Do we need to keep this code, which
-	 * Rob originally wrote? (i.e. up thru the "if" statement)?
-	 */
-
 	/*
 	 * Check to make sure this event is directed at our
 	 * device (by comparing dev_t values), then make
 	 * sure it's a hotplug event (HOTPLUG=1)
 	 */
 	udev_devnum = udev_device_get_devnum(dev);
-	fstat(pARMSOC->drmFD, &s);
+	if (fstat(pARMSOC->drmFD, &s)) {
+		ERROR_MSG("fstat failed: %s", strerror(errno));
+		udev_device_unref(dev);
+		return;
+	}
 
 	hotplug = udev_device_get_property_value(dev, "HOTPLUG");
 
