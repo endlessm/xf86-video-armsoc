@@ -70,8 +70,6 @@ static Bool ARMSOCEnterVT(VT_FUNC_ARGS_DECL);
 static void ARMSOCLeaveVT(VT_FUNC_ARGS_DECL);
 static void ARMSOCFreeScreen(FREE_SCREEN_ARGS_DECL);
 
-
-
 /**
  * A structure used by the XFree86 code when loading this driver, so that it
  * can access the Probe() function, and other functions/info that it uses

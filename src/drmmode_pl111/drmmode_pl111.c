@@ -136,7 +136,8 @@ static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
 	}
 }
 
-/* TODO MIDEGL-1718: this should be included from kernel headers when pl111 is mainline */
+/* TODO MIDEGL-1718: this should be included
+ * from kernel headers when pl111 is mainline */
 struct drm_pl111_gem_create {
 	uint32_t height;
 	uint32_t width;
