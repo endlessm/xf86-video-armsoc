@@ -1068,7 +1068,7 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 	unwrap(pARMSOC, pScreen, BlockHandler);
 	unwrap(pARMSOC, pScreen, CreateScreenResources);
 
-	ret = (*pScreen->CloseScreen)(scrnIndex, pScreen);
+	ret = (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 
 	if (pARMSOC->dri)
 		ARMSOCDRI2CloseScreen(pScreen);
