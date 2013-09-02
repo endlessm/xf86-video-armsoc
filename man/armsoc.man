@@ -51,6 +51,19 @@ Default: NULL
 Select which dri card to use.
 .IP
 Default: 0
+.TP
+.BI "Option \*qInitFromFBDev\*q \*q" string \*q
+Specifies an fbdev device node (such as "/dev/fb0") to use to initialize the
+DRM scanout buffer. Specifying this option only makes sense (and is required)
+when X is started with the parameter "-background none".
+
+The InitFromFBDev functionality is limited to when the fbdev device pixel
+format matches the format of the X screen. This includes bits-per-pixel and RGB
+ordering and size. If the driver is unable to copy from the fbdev device then
+an error will be logged, and the -background none functionality will be
+disabled.
+.IP
+Default: NULL
 
 .SH DRM DEVICE SELECTION
 
