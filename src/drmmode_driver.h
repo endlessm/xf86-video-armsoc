@@ -31,6 +31,11 @@
 #include "xf86Crtc.h"
 #include "armsoc_dumb.h"
 
+enum hwcursor_api {
+	HWCURSOR_API_PLANE = 0,
+	HWCURSOR_API_STANDARD = 1,
+};
+
 struct drmmode_interface {
 	/* Boolean value indicating whether DRM page flip events should
 	 * be requested and waited for during DRM_IOCTL_MODE_PAGE_FLIP.
@@ -47,6 +52,12 @@ struct drmmode_interface {
 	 * side of the image
 	 */
 	int cursor_padding;
+
+	/* This specifies whether the DRM implements HW cursor support
+	 * using planes or the standard HW cursor API using drmModeSetCursor()
+	 * and drmModeMoveCursor().
+	 */
+	enum hwcursor_api cursor_api;
 
 	/* (Optional) Initialize the given plane for use as a hardware cursor.
 	 *

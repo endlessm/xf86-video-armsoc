@@ -158,6 +158,7 @@ struct drmmode_interface exynos_interface = {
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
 	CURSORPAD             /* cursor padding */,
+	HWCURSOR_API_PLANE    /* cursor_api */,
 	init_plane_for_cursor /* init_plane_for_cursor */,
 	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,

@@ -53,10 +53,13 @@
 
 struct drmmode_cursor_rec {
 	/* hardware cursor: */
-	drmModePlane *ovr;
 	struct armsoc_bo *bo;
-	uint32_t fb_id;
 	int x, y;
+	 /* These are used for HWCURSOR_API_PLANE */
+	drmModePlane *ovr;
+	uint32_t fb_id;
+	/* This is used for HWCURSOR_API_STANDARD */
+	uint32_t handle;
 };
 
 struct drmmode_rec {
@@ -371,20 +374,34 @@ drmmode_hide_cursor(xf86CrtcPtr crtc)
 	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
 	struct drmmode_rec *drmmode = drmmode_crtc->drmmode;
 	struct drmmode_cursor_rec *cursor = drmmode->cursor;
+	ScrnInfoPtr pScrn = crtc->scrn;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!cursor)
 		return;
 
 	drmmode_crtc->cursor_visible = FALSE;
 
-	/* set plane's fb_id to 0 to disable it */
-	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
-			drmmode_crtc->mode_crtc->crtc_id, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0);
+	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE) {
+		/* set plane's fb_id to 0 to disable it */
+		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
+				drmmode_crtc->mode_crtc->crtc_id, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0);
+	} else { /* HWCURSOR_API_STANDARD */
+		/* set handle to 0 to disable the cursor */
+		drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
+				 0, 0, 0);
+	}
 }
 
+/*
+ * The argument "update_image" controls whether the cursor image needs
+ * to be updated by the HW or not. This is ignored by HWCURSOR_API_PLANE
+ * which doesn't allow changing the cursor possition without updating
+ * the image too.
+ */
 static void
-drmmode_show_cursor(xf86CrtcPtr crtc)
+drmmode_show_cursor_image(xf86CrtcPtr crtc, Bool update_image)
 {
 	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
 	struct drmmode_rec *drmmode = drmmode_crtc->drmmode;
@@ -408,33 +425,50 @@ drmmode_show_cursor(xf86CrtcPtr crtc)
 	/* get x of padded cursor */
 	crtc_x = cursor->x - pad;
 	crtc_y = cursor->y;
-	src_x = 0;
-	src_y = 0;
 
-	/* calculate clipped x, y, w & h if cursor is off edges */
-	if (crtc_x < 0) {
-		src_x += -crtc_x;
-		w -= -crtc_x;
-		crtc_x = 0;
-	}
+	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE) {
+		src_x = 0;
+		src_y = 0;
 
-	if (crtc_y < 0) {
-		src_y += -crtc_y;
-		h -= -crtc_y;
-		crtc_y = 0;
-	}
+		/* calculate clipped x, y, w & h if cursor is off edges */
+		if (crtc_x < 0) {
+			src_x += -crtc_x;
+			w -= -crtc_x;
+			crtc_x = 0;
+		}
 
-	if ((crtc_x + w) > crtc->mode.HDisplay)
-		w = crtc->mode.HDisplay - crtc_x;
+		if (crtc_y < 0) {
+			src_y += -crtc_y;
+			h -= -crtc_y;
+			crtc_y = 0;
+		}
 
-	if ((crtc_y + h) > crtc->mode.VDisplay)
-		h = crtc->mode.VDisplay - crtc_y;
+		if ((crtc_x + w) > crtc->mode.HDisplay)
+			w = crtc->mode.HDisplay - crtc_x;
 
-	/* note src coords (last 4 args) are in Q16 format */
-	drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
+		if ((crtc_y + h) > crtc->mode.VDisplay)
+			h = crtc->mode.VDisplay - crtc_y;
+
+		/* note src coords (last 4 args) are in Q16 format */
+		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
 			drmmode_crtc->mode_crtc->crtc_id, cursor->fb_id, 0,
 			crtc_x, crtc_y, w, h, src_x<<16, src_y<<16,
 			w<<16, h<<16);
+	} else {
+		if (update_image)
+			drmModeSetCursor(drmmode->fd,
+					 drmmode_crtc->mode_crtc->crtc_id,
+					 cursor->handle, w, h);
+		drmModeMoveCursor(drmmode->fd,
+				  drmmode_crtc->mode_crtc->crtc_id,
+				  crtc_x, crtc_y);
+	}
+}
+
+static void
+drmmode_show_cursor(xf86CrtcPtr crtc)
+{
+	drmmode_show_cursor_image(crtc, TRUE);
 }
 
 static void
@@ -450,8 +484,12 @@ drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
 	cursor->x = x;
 	cursor->y = y;
 
-	if (drmmode_crtc->cursor_visible)
-		drmmode_show_cursor(crtc);
+	/*
+	 * Show the cursor at a different possition without updating the image
+	 * when possible (HWCURSOR_API_PLANE doesn't have a way to update
+	 * cursor position without updating the image too).
+	 */
+	drmmode_show_cursor_image(crtc, FALSE);
 }
 
 static void
@@ -478,7 +516,7 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
 			"load_cursor_argb map failure\n");
 		if (visible)
-			drmmode_show_cursor(crtc);
+			drmmode_show_cursor_image(crtc, TRUE);
 		return;
 	}
 
@@ -487,11 +525,11 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	pARMSOC->drmmode_interface->set_cursor_image(crtc, d, image);
 
 	if (visible)
-		drmmode_show_cursor(crtc);
+		drmmode_show_cursor_image(crtc, TRUE);
 }
 
-Bool
-drmmode_cursor_init(ScreenPtr pScreen)
+static Bool
+drmmode_cursor_init_plane(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
@@ -607,20 +645,95 @@ drmmode_cursor_init(ScreenPtr pScreen)
 	return TRUE;
 }
 
+static Bool
+drmmode_cursor_init_standard(ScreenPtr pScreen)
+{
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct drmmode_rec *drmmode = drmmode_from_scrn(pScrn);
+	struct drmmode_cursor_rec *cursor;
+	int w, h, pad;
+
+	if (drmmode->cursor) {
+		INFO_MSG("cursor already initialized");
+		return TRUE;
+	}
+
+	if (!xf86LoaderCheckSymbol("drmModeSetCursor") ||
+	    !xf86LoaderCheckSymbol("drmModeMoveCursor")) {
+		ERROR_MSG("standard HW cursor not supported "
+			  "(needs libdrm 2.4.3 or higher)");
+		return FALSE;
+	}
+
+	cursor = calloc(1, sizeof(struct drmmode_cursor_rec));
+	if (!cursor) {
+		ERROR_MSG("HW cursor (standard): calloc failed");
+		return FALSE;
+	}
+
+	w = pARMSOC->drmmode_interface->cursor_width;
+	h = pARMSOC->drmmode_interface->cursor_height;
+	pad = pARMSOC->drmmode_interface->cursor_padding;
+
+	/* allow for cursor padding in the bo */
+	cursor->bo  = armsoc_bo_new_with_dim(pARMSOC->dev,
+				w + 2 * pad, h,
+				0, 32, ARMSOC_BO_SCANOUT);
+
+	if (!cursor->bo) {
+		ERROR_MSG("HW cursor (standard): buffer allocation failed");
+		free(cursor);
+		return FALSE;
+	}
+
+	cursor->handle = armsoc_bo_handle(cursor->bo);
+
+	if (!xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB)) {
+		ERROR_MSG("xf86_cursors_init() failed");
+		if (drmModeRmFB(drmmode->fd, cursor->fb_id))
+			ERROR_MSG("drmModeRmFB() failed");
+
+		armsoc_bo_unreference(cursor->bo);
+		free(cursor);
+		return FALSE;
+	}
+
+	INFO_MSG("HW cursor initialized");
+	drmmode->cursor = cursor;
+	return TRUE;
+}
+
+Bool drmmode_cursor_init(ScreenPtr pScreen)
+{
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+
+	INFO_MSG("HW cursor init()");
+
+	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE)
+		return drmmode_cursor_init_plane(pScreen);
+	else /* HWCURSOR_API_STANDARD */
+		return drmmode_cursor_init_standard(pScreen);
+}
+
 void drmmode_cursor_fini(ScreenPtr pScreen)
 {
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct drmmode_rec *drmmode = drmmode_from_scrn(pScrn);
 	struct drmmode_cursor_rec *cursor = drmmode->cursor;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!cursor)
 		return;
 
 	drmmode->cursor = NULL;
 	xf86_cursors_fini(pScreen);
-	drmModeRmFB(drmmode->fd, cursor->fb_id);
+	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE)
+		drmModeRmFB(drmmode->fd, cursor->fb_id);
 	armsoc_bo_unreference(cursor->bo);
-	drmModeFreePlane(cursor->ovr);
+	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE)
+		drmModeFreePlane(cursor->ovr);
 	free(cursor);
 }
 
