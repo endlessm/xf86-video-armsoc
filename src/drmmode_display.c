@@ -182,6 +182,45 @@ drmmode_crtc_dpms(xf86CrtcPtr drmmode_crtc, int mode)
 	/* TODO: MIDEGL-1431: Implement this function */
 }
 
+static int
+drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
+{
+	ScrnInfoPtr pScrn = crtc->scrn;
+	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
+	uint32_t fb_id;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	drmModeModeInfo kmode;
+
+	if (!drmmode_crtc->last_good_mode) {
+		DEBUG_MSG("No last good values to use");
+		return FALSE;
+	}
+
+	/* revert to last good settings */
+	DEBUG_MSG("Reverting to last_good values");
+	if (!resize_scanout_bo(pScrn,
+			drmmode_crtc->last_good_mode->HDisplay,
+			drmmode_crtc->last_good_mode->VDisplay)) {
+		ERROR_MSG("Could not revert to last good mode");
+		return FALSE;
+	}
+
+	fb_id = armsoc_bo_get_fb(pARMSOC->scanout);
+	drmmode_ConvertToKMode(crtc->scrn, &kmode,
+			drmmode_crtc->last_good_mode);
+	drmModeSetCrtc(drmmode_crtc->drmmode->fd,
+			drmmode_crtc->mode_crtc->crtc_id,
+			fb_id,
+			drmmode_crtc->last_good_x,
+			drmmode_crtc->last_good_y,
+			output_ids, output_count, &kmode);
+
+	/* let RandR know we changed things */
+	xf86RandR12TellChanged(pScrn->pScreen);
+
+	return TRUE;
+}
+
 static Bool
 drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		Rotation rotation, int x, int y)
@@ -194,6 +233,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	uint32_t *output_ids = NULL;
 	int output_count = 0;
 	int ret = TRUE;
+	int err;
 	int i;
 	uint32_t fb_id;
 	drmModeModeInfo kmode;
@@ -207,8 +247,8 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		DEBUG_MSG("create framebuffer: %dx%d",
 				pScrn->virtualX, pScrn->virtualY);
 
-		ret = armsoc_bo_add_fb(pARMSOC->scanout);
-		if (ret) {
+		err = armsoc_bo_add_fb(pARMSOC->scanout);
+		if (err) {
 			ERROR_MSG(
 					"Failed to add framebuffer to the scanout buffer");
 			return FALSE;
@@ -230,7 +270,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		ERROR_MSG(
 				"memory allocation failed in drmmode_set_mode_major()");
 		ret = FALSE;
-		goto done;
+		goto cleanup;
 	}
 
 	for (i = 0; i < xf86_config->num_output; i++) {
@@ -250,7 +290,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		ERROR_MSG(
 				"failed to assign rotation in drmmode_set_mode_major()");
 		ret = FALSE;
-		goto done;
+		goto cleanup;
 	}
 
 	if (crtc->funcs->gamma_set)
@@ -259,82 +299,67 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	drmmode_ConvertToKMode(crtc->scrn, &kmode, mode);
 
-	ret = drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
+	err = drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
 			fb_id, x, y, output_ids, output_count, &kmode);
-	if (ret) {
+	if (err) {
 		ERROR_MSG(
-				"failed to set mode: %s", strerror(-ret));
+				"drm failed to set mode: %s", strerror(-err));
+
 		ret = FALSE;
-		goto done;
+		if (!drmmode_revert_mode(crtc, output_ids, output_count))
+			goto cleanup;
+		else
+			goto done_setting;
 	}
 
 	/* get the actual crtc info */
 	newcrtc = drmModeGetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id);
 	if (!newcrtc) {
 		ERROR_MSG("couldn't get actual mode back");
+
 		ret = FALSE;
-		goto done;
+		if (!drmmode_revert_mode(crtc, output_ids, output_count))
+			goto cleanup;
+		else
+			goto done_setting;
 	}
 
 	if (kmode.hdisplay != newcrtc->mode.hdisplay ||
 		kmode.vdisplay != newcrtc->mode.vdisplay) {
 
-		ret = FALSE;
 		ERROR_MSG(
-				"drm did not set requested mode! (requested %dx%d, actual %dx%d)",
-				kmode.hdisplay, kmode.vdisplay,
-				newcrtc->mode.hdisplay,
-				newcrtc->mode.vdisplay);
+			"drm did not set requested mode! (requested %dx%d, actual %dx%d)",
+			kmode.hdisplay, kmode.vdisplay,
+			newcrtc->mode.hdisplay,
+			newcrtc->mode.vdisplay);
 
-		if (!drmmode_crtc->last_good_mode) {
-			DEBUG_MSG("No last good values to use");
-			goto done;
-		}
-
-		/* revert to last good settings */
-		DEBUG_MSG("Reverting to last_good values");
-		if (!resize_scanout_bo(pScrn,
-				drmmode_crtc->last_good_mode->HDisplay,
-				drmmode_crtc->last_good_mode->VDisplay)) {
-			ERROR_MSG("Could not revert to last good mode");
-			goto done;
-		}
-
-		fb_id = armsoc_bo_get_fb(pARMSOC->scanout);
-		drmmode_ConvertToKMode(crtc->scrn, &kmode,
-				drmmode_crtc->last_good_mode);
-		drmModeSetCrtc(drmmode->fd,
-				drmmode_crtc->mode_crtc->crtc_id,
-				fb_id,
-				drmmode_crtc->last_good_x,
-				drmmode_crtc->last_good_y,
-				output_ids, output_count, &kmode);
-
-		/* let RandR know we changed things */
-		xf86RandR12TellChanged(pScrn->pScreen);
-
-	} else {
-		/* When called on a resize, crtc->mode already contains the
-		 * resized values so we can't use this for recovery.
-		 * We can't read it out of the crtc either as mode_valid is 0.
-		 * Instead we save the last good mode set here & fallback to
-		 * that on failure.
-		 */
-		DEBUG_MSG("Setting last good values");
-		drmmode_crtc->last_good_x = crtc->x;
-		drmmode_crtc->last_good_y = crtc->y;
-		drmmode_crtc->last_good_rotation = crtc->rotation;
-		if (drmmode_crtc->last_good_mode) {
-			if (drmmode_crtc->last_good_mode->name) {
-				free(drmmode_crtc->last_good_mode->name);
-			}
-			free(drmmode_crtc->last_good_mode);
-		}
-		drmmode_crtc->last_good_mode = xf86DuplicateMode(&crtc->mode);
-
-		ret = TRUE;
+		ret = FALSE;
+		if (!drmmode_revert_mode(crtc, output_ids, output_count))
+			goto cleanup;
+		else
+			goto done_setting;
 	}
 
+	/* When called on a resize, crtc->mode already contains the
+	 * resized values so we can't use this for recovery.
+	 * We can't read it out of the crtc either as mode_valid is 0.
+	 * Instead we save the last good mode set here & fallback to
+	 * that on failure.
+	 */
+	DEBUG_MSG("Saving last good values");
+	drmmode_crtc->last_good_x = crtc->x;
+	drmmode_crtc->last_good_y = crtc->y;
+	drmmode_crtc->last_good_rotation = crtc->rotation;
+	if (drmmode_crtc->last_good_mode) {
+		if (drmmode_crtc->last_good_mode->name)
+			free(drmmode_crtc->last_good_mode->name);
+		free(drmmode_crtc->last_good_mode);
+	}
+	drmmode_crtc->last_good_mode = xf86DuplicateMode(&crtc->mode);
+
+	ret = TRUE;
+
+done_setting:
 	/* Turn on any outputs on this crtc that may have been disabled: */
 	for (i = 0; i < xf86_config->num_output; i++) {
 		xf86OutputPtr output = xf86_config->output[i];
@@ -349,7 +374,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	if (drmmode->cursor)
 		xf86_reload_cursors(pScrn->pScreen);
 
-done:
+cleanup:
 	if (newcrtc)
 		drmModeFreeCrtc(newcrtc);
 
@@ -661,8 +686,8 @@ drmmode_cursor_init_standard(ScreenPtr pScreen)
 
 	if (!xf86LoaderCheckSymbol("drmModeSetCursor") ||
 	    !xf86LoaderCheckSymbol("drmModeMoveCursor")) {
-		ERROR_MSG("standard HW cursor not supported "
-			  "(needs libdrm 2.4.3 or higher)");
+		ERROR_MSG(
+				"Standard HW cursor not supported (needs libdrm 2.4.3 or higher)");
 		return FALSE;
 	}
 
@@ -1415,7 +1440,6 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 	xf86CrtcConfigPtr xf86_config;
 
 	TRACE_ENTER();
-
 	if (!resize_scanout_bo(pScrn, width, height))
 		return FALSE;
 

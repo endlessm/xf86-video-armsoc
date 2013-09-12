@@ -141,8 +141,9 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	if (res) {
 		free(new_buf);
 		xf86DrvMsg(-1, X_ERROR,
-			"_CREATE_GEM({height: 0x%X, width: 0x%X, bpp: 0x%X, buf_type: 0x%X}) failed. errno:0x%X\n",
-				height, width, bpp, buf_type, errno);
+			"_CREATE_GEM({height: %d, width: %d, bpp: %d buf_type: 0x%X}) failed. errno: %d - %s\n",
+				height, width, bpp, buf_type,
+				errno, strerror(errno));
 		return NULL;
 	}
 
