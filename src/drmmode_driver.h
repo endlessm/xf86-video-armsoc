@@ -70,18 +70,6 @@ struct drmmode_interface {
 	 */
 	int (*init_plane_for_cursor)(int drm_fd, uint32_t plane_id);
 
-	/* (Mandatory) Set the cursor image from an ARGB image
-	 *
-	 * If the cursor image is ARGB this is a straight copy, otherwise
-	 * it must perform any necessary conversion from ARGB to the
-	 * cursor format.
-	 *
-	 * @param       crtc  The CRTC in use
-	 * @param [out] d     Pointer to the destination cursor image
-	 * @param [in]  s     Pointer to the source for the cursor image
-	 */
-	void (*set_cursor_image)(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s);
-
 	/* Boolean value indicating whether the DRM supports
 	 * vblank timestamp query
 	 */

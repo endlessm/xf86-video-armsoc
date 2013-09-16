@@ -517,6 +517,41 @@ drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
 	drmmode_show_cursor_image(crtc, FALSE);
 }
 
+/*
+ * The cursor format is ARGB so the image can be copied straight over.
+ * Columns of CURSORPAD blank pixels are maintained down either side
+ * of the destination image. This is a workaround for a bug causing
+ * corruption when the cursor reaches the screen edges in some DRM
+ * drivers.
+ */
+static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
+{
+	ScrnInfoPtr pScrn = crtc->scrn;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	int row;
+	void *dst;
+	const char *src_row;
+	char *dst_row;
+	uint32_t cursorh = pARMSOC->drmmode_interface->cursor_height;
+	uint32_t cursorw = pARMSOC->drmmode_interface->cursor_width;
+	uint32_t cursorpad = pARMSOC->drmmode_interface->cursor_padding;
+
+	dst = d;
+	for (row = 0; row < cursorh; row += 1) {
+		/* we're operating with ARGB data (4 bytes per pixel) */
+		src_row = (const char *)s + row * 4 * cursorw;
+		dst_row = (char *)dst + row * 4 * (cursorw + 2 * cursorpad);
+
+		/* set first CURSORPAD pixels in row to 0 */
+		memset(dst_row, 0, (4 * cursorpad));
+		/* copy cursor image pixel row across */
+		memcpy(dst_row + (4 * cursorpad), src_row, 4 * cursorw);
+		/* set last CURSORPAD pixels in row to 0 */
+		memset(dst_row + 4 * (cursorpad + cursorw),
+				0, (4 * cursorpad));
+	}
+}
+
 static void
 drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 {
@@ -525,8 +560,6 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	struct drmmode_rec *drmmode = drmmode_crtc->drmmode;
 	struct drmmode_cursor_rec *cursor = drmmode->cursor;
 	int visible;
-	ScrnInfoPtr pScrn = crtc->scrn;
-	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	if (!cursor)
 		return;
@@ -545,9 +578,7 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 		return;
 	}
 
-	/* set_cursor_image is a mandatory function */
-	assert(pARMSOC->drmmode_interface->set_cursor_image);
-	pARMSOC->drmmode_interface->set_cursor_image(crtc, d, image);
+	set_cursor_image(crtc, d, image);
 
 	if (visible)
 		drmmode_show_cursor_image(crtc, TRUE);

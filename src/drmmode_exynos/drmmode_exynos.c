@@ -41,7 +41,12 @@ struct drm_exynos_plane_set_zpos {
  */
 #define CURSORW  (64)
 #define CURSORH  (64)
-#define CURSORPAD (16)	/* Padding added down each side of cursor image */
+
+/*
+ * Padding added down each side of cursor image. This is a workaround for a bug
+ * causing corruption when the cursor reaches the screen edges.
+ */
+#define CURSORPAD (16)
 
 #define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
 #define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
@@ -93,34 +98,6 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 	return res;
 }
 
-/* The cursor format is ARGB so the image can be copied straight over.
- * Columns of CURSORPAD blank pixels are maintained down either side
- * of the destination image. This is a workaround for a bug causing
- * corruption when the cursor reaches the screen edges.
- */
-static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
-{
-	int row;
-	void *dst;
-	const char *src_row;
-	char *dst_row;
-
-	dst = d;
-	for (row = 0; row < CURSORH; row += 1) {
-		/* we're operating with ARGB data (4 bytes per pixel) */
-		src_row = (const char *)s + row * 4 * CURSORW;
-		dst_row = (char *)dst + row * 4 * (CURSORW + 2 * CURSORPAD);
-
-		/* set first CURSORPAD pixels in row to 0 */
-		memset(dst_row, 0, (4 * CURSORPAD));
-		/* copy cursor image pixel row across */
-		memcpy(dst_row + (4 * CURSORPAD), src_row, 4 * CURSORW);
-		/* set last CURSORPAD pixels in row to 0 */
-		memset(dst_row + 4 * (CURSORPAD + CURSORW),
-				0, (4 * CURSORPAD));
-	}
-}
-
 static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 {
 	struct drm_mode_create_dumb create_dumb;
@@ -160,7 +137,6 @@ struct drmmode_interface exynos_interface = {
 	CURSORPAD             /* cursor padding */,
 	HWCURSOR_API_PLANE    /* cursor_api */,
 	init_plane_for_cursor /* init_plane_for_cursor */,
-	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,
 	create_custom_gem     /* create_custom_gem */,
 };

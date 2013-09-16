@@ -43,11 +43,6 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 	return 0;
 }
 
-static void set_cursor_image(xf86CrtcPtr crtc, uint32_t *d, CARD32 *s)
-{
-	/* provide a method of setting the cursor image here */
-}
-
 static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 {
 	/*
@@ -64,7 +59,6 @@ struct drmmode_interface template_interface = {
 	CURSORPAD             /* cursor padding */,
 	HWCURSOR_API_STANDARD /* cursor_api */,
 	init_plane_for_cursor /* init_plane_for_cursor */,
-	set_cursor_image      /* set cursor image */,
 	0                     /* vblank_query_supported */,
 	create_custom_gem     /* create_custom_gem */,
 };
