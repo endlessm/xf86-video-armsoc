@@ -221,7 +221,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->format = format;
 	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
-	buf->previous_canflip = -1;
+	buf->previous_canflip = canflip(pDraw);
 
 	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
@@ -635,10 +635,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
 
 	new_canflip = canflip(pDraw);
-	if ((src->previous_canflip != -1 &&
-			src->previous_canflip != new_canflip) ||
-			(dst->previous_canflip != -1 &&
-			dst->previous_canflip != new_canflip)) {
+	if ((src->previous_canflip != new_canflip) ||
+	    (dst->previous_canflip != new_canflip)) {
 		/* The drawable has transitioned between being flippable and
 		 * non-flippable or vice versa. Bump the serial number to force
 		 * the DRI2 buffers to be re-allocated during the next frame so
