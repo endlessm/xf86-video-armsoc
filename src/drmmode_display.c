@@ -73,7 +73,7 @@ struct drmmode_rec {
 
 struct drmmode_crtc_private_rec {
 	struct drmmode_rec *drmmode;
-	drmModeCrtcPtr mode_crtc;
+	uint32_t crtc_id;
 	int cursor_visible;
 	/* settings retained on last good modeset */
 	int last_good_x;
@@ -209,7 +209,7 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 	drmmode_ConvertToKMode(crtc->scrn, &kmode,
 			drmmode_crtc->last_good_mode);
 	drmModeSetCrtc(drmmode_crtc->drmmode->fd,
-			drmmode_crtc->mode_crtc->crtc_id,
+			drmmode_crtc->crtc_id,
 			fb_id,
 			drmmode_crtc->last_good_x,
 			drmmode_crtc->last_good_y,
@@ -299,7 +299,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 	drmmode_ConvertToKMode(crtc->scrn, &kmode, mode);
 
-	err = drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
+	err = drmModeSetCrtc(drmmode->fd, drmmode_crtc->crtc_id,
 			fb_id, x, y, output_ids, output_count, &kmode);
 	if (err) {
 		ERROR_MSG(
@@ -313,7 +313,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	}
 
 	/* get the actual crtc info */
-	newcrtc = drmModeGetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id);
+	newcrtc = drmModeGetCrtc(drmmode->fd, drmmode_crtc->crtc_id);
 	if (!newcrtc) {
 		ERROR_MSG("couldn't get actual mode back");
 
@@ -410,11 +410,11 @@ drmmode_hide_cursor(xf86CrtcPtr crtc)
 	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE) {
 		/* set plane's fb_id to 0 to disable it */
 		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
-				drmmode_crtc->mode_crtc->crtc_id, 0, 0,
+				drmmode_crtc->crtc_id, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0);
 	} else { /* HWCURSOR_API_STANDARD */
 		/* set handle to 0 to disable the cursor */
-		drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
+		drmModeSetCursor(drmmode->fd, drmmode_crtc->crtc_id,
 				 0, 0, 0);
 	}
 }
@@ -476,16 +476,16 @@ drmmode_show_cursor_image(xf86CrtcPtr crtc, Bool update_image)
 
 		/* note src coords (last 4 args) are in Q16 format */
 		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
-			drmmode_crtc->mode_crtc->crtc_id, cursor->fb_id, 0,
+			drmmode_crtc->crtc_id, cursor->fb_id, 0,
 			crtc_x, crtc_y, w, h, src_x<<16, src_y<<16,
 			w<<16, h<<16);
 	} else {
 		if (update_image)
 			drmModeSetCursor(drmmode->fd,
-					 drmmode_crtc->mode_crtc->crtc_id,
+					 drmmode_crtc->crtc_id,
 					 cursor->handle, w, h);
 		drmModeMoveCursor(drmmode->fd,
-				  drmmode_crtc->mode_crtc->crtc_id,
+				  drmmode_crtc->crtc_id,
 				  crtc_x, crtc_y);
 	}
 }
@@ -803,7 +803,7 @@ drmmode_gamma_set(xf86CrtcPtr crtc, CARD16 *red, CARD16 *green, CARD16 *blue,
 	struct drmmode_rec *drmmode = drmmode_crtc->drmmode;
 	int ret;
 
-	ret = drmModeCrtcSetGamma(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
+	ret = drmModeCrtcSetGamma(drmmode->fd, drmmode_crtc->crtc_id,
 			size, red, green, blue);
 	if (ret != 0) {
 		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
@@ -838,13 +838,12 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode, int num)
 		return;
 
 	drmmode_crtc = xnfcalloc(sizeof(struct drmmode_crtc_private_rec), 1);
-	drmmode_crtc->mode_crtc = drmModeGetCrtc(drmmode->fd,
-			drmmode->mode_res->crtcs[num]);
+	drmmode_crtc->crtc_id = drmmode->mode_res->crtcs[num];
 	drmmode_crtc->drmmode = drmmode;
 	drmmode_crtc->last_good_mode = NULL;
 
 	INFO_MSG("Got CRTC: %d (id: %d)",
-			num, drmmode_crtc->mode_crtc->crtc_id);
+			num, drmmode_crtc->crtc_id);
 	crtc->driver_private = drmmode_crtc;
 
 	TRACE_EXIT();
@@ -1617,7 +1616,7 @@ drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv)
 		if (!config->crtc[i]->enabled)
 			continue;
 
-		ret = drmModePageFlip(mode->fd, crtc->mode_crtc->crtc_id,
+		ret = drmModePageFlip(mode->fd, crtc->crtc_id,
 				fb_id, flags, priv);
 		if (ret) {
 			xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
