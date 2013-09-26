@@ -96,11 +96,13 @@ struct drmmode_prop_rec {
 struct drmmode_output_priv {
 	struct drmmode_rec *drmmode;
 	int output_id;
-	drmModeConnectorPtr mode_output;
-	drmModeEncoderPtr mode_encoder;
+	drmModeConnectorPtr connector;
+	drmModeEncoderPtr *encoders;
 	drmModePropertyBlobPtr edid_blob;
 	int num_props;
 	struct drmmode_prop_rec *props;
+	int enc_mask;   /* encoders present (mask of encoder indices) */
+	int enc_clones; /* encoder clones possible (mask of encoder indices) */
 };
 
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
@@ -282,7 +284,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 
 		drmmode_output = output->driver_private;
 		output_ids[output_count] =
-				drmmode_output->mode_output->connector_id;
+				drmmode_output->connector->connector_id;
 		output_count++;
 	}
 
@@ -857,13 +859,13 @@ drmmode_output_detect(xf86OutputPtr output)
 	struct drmmode_output_priv *drmmode_output = output->driver_private;
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	xf86OutputStatus status;
-	drmModeFreeConnector(drmmode_output->mode_output);
+	drmModeFreeConnector(drmmode_output->connector);
 
-	drmmode_output->mode_output =
+	drmmode_output->connector =
 			drmModeGetConnector(drmmode->fd,
 					drmmode_output->output_id);
 
-	switch (drmmode_output->mode_output->connection) {
+	switch (drmmode_output->connector->connection) {
 	case DRM_MODE_CONNECTED:
 		status = XF86OutputStatusConnected;
 		break;
@@ -893,7 +895,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 {
 	ScrnInfoPtr pScrn = output->scrn;
 	struct drmmode_output_priv *drmmode_output = output->driver_private;
-	drmModeConnectorPtr koutput = drmmode_output->mode_output;
+	drmModeConnectorPtr connector = drmmode_output->connector;
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	DisplayModePtr modes = NULL;
 	drmModePropertyPtr prop;
@@ -901,8 +903,8 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	int i;
 
 	/* look for an EDID property */
-	for (i = 0; i < koutput->count_props; i++) {
-		prop = drmModeGetProperty(drmmode->fd, koutput->props[i]);
+	for (i = 0; i < connector->count_props; i++) {
+		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
 		if (!prop)
 			continue;
 
@@ -913,7 +915,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 						drmmode_output->edid_blob);
 			drmmode_output->edid_blob =
 					drmModeGetPropertyBlob(drmmode->fd,
-						koutput->prop_values[i]);
+						connector->prop_values[i]);
 		}
 		drmModeFreeProperty(prop);
 	}
@@ -927,13 +929,13 @@ drmmode_output_get_modes(xf86OutputPtr output)
 		xf86SetDDCproperties(pScrn, ddc_mon);
 	}
 
-	DEBUG_MSG("count_modes: %d", koutput->count_modes);
+	DEBUG_MSG("count_modes: %d", connector->count_modes);
 
 	/* modes should already be available */
-	for (i = 0; i < koutput->count_modes; i++) {
+	for (i = 0; i < connector->count_modes; i++) {
 		DisplayModePtr mode = xnfalloc(sizeof(DisplayModeRec));
 
-		drmmode_ConvertFromKMode(pScrn, &koutput->modes[i], mode);
+		drmmode_ConvertFromKMode(pScrn, &connector->modes[i], mode);
 		modes = xf86ModesAdd(modes, mode);
 	}
 	return modes;
@@ -947,12 +949,19 @@ drmmode_output_destroy(xf86OutputPtr output)
 
 	if (drmmode_output->edid_blob)
 		drmModeFreePropertyBlob(drmmode_output->edid_blob);
+
 	for (i = 0; i < drmmode_output->num_props; i++) {
 		drmModeFreeProperty(drmmode_output->props[i].mode_prop);
 		free(drmmode_output->props[i].atoms);
 	}
 	free(drmmode_output->props);
-	drmModeFreeConnector(drmmode_output->mode_output);
+
+	for (i = 0; i < drmmode_output->connector->count_encoders; i++)
+		drmModeFreeEncoder(drmmode_output->encoders[i]);
+
+	free(drmmode_output->encoders);
+
+	drmModeFreeConnector(drmmode_output->connector);
 	free(drmmode_output);
 	output->driver_private = NULL;
 }
@@ -961,18 +970,18 @@ static void
 drmmode_output_dpms(xf86OutputPtr output, int mode)
 {
 	struct drmmode_output_priv *drmmode_output = output->driver_private;
-	drmModeConnectorPtr koutput = drmmode_output->mode_output;
+	drmModeConnectorPtr connector = drmmode_output->connector;
 	drmModePropertyPtr prop;
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	int mode_id = -1, i;
 
-	for (i = 0; i < koutput->count_props; i++) {
-		prop = drmModeGetProperty(drmmode->fd, koutput->props[i]);
+	for (i = 0; i < connector->count_props; i++) {
+		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
 		if (!prop)
 			continue;
 		if ((prop->flags & DRM_MODE_PROP_ENUM) &&
 		    !strcmp(prop->name, "DPMS")) {
-			mode_id = koutput->props[i];
+			mode_id = connector->props[i];
 			drmModeFreeProperty(prop);
 			break;
 		}
@@ -982,7 +991,7 @@ drmmode_output_dpms(xf86OutputPtr output, int mode)
 	if (mode_id < 0)
 		return;
 
-	drmModeConnectorSetProperty(drmmode->fd, koutput->connector_id,
+	drmModeConnectorSetProperty(drmmode->fd, connector->connector_id,
 			mode_id, mode);
 }
 
@@ -1006,22 +1015,22 @@ static void
 drmmode_output_create_resources(xf86OutputPtr output)
 {
 	struct drmmode_output_priv *drmmode_output = output->driver_private;
-	drmModeConnectorPtr mode_output = drmmode_output->mode_output;
+	drmModeConnectorPtr connector = drmmode_output->connector;
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	drmModePropertyPtr drmmode_prop;
 	uint32_t value;
 	int i, j, err;
 
 	drmmode_output->props =
-		calloc(mode_output->count_props,
+		calloc(connector->count_props,
 				sizeof(struct drmmode_prop_rec));
 	if (!drmmode_output->props)
 		return;
 
 	drmmode_output->num_props = 0;
-	for (i = 0; i < mode_output->count_props; i++) {
+	for (i = 0; i < connector->count_props; i++) {
 		drmmode_prop = drmModeGetProperty(drmmode->fd,
-					mode_output->props[i]);
+			connector->props[i]);
 		if (drmmode_property_ignore(drmmode_prop)) {
 			drmModeFreeProperty(drmmode_prop);
 			continue;
@@ -1036,7 +1045,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		struct drmmode_prop_rec *p = &drmmode_output->props[i];
 		drmmode_prop = p->mode_prop;
 
-		value = drmmode_output->mode_output->prop_values[p->index];
+		value = drmmode_output->connector->prop_values[p->index];
 
 		if (drmmode_prop->flags & DRM_MODE_PROP_RANGE) {
 			INT32 range[2];
@@ -1196,8 +1205,8 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 	int err, i;
 
 	if (output->scrn->vtSema) {
-		drmModeFreeConnector(drmmode_output->mode_output);
-		drmmode_output->mode_output =
+		drmModeFreeConnector(drmmode_output->connector);
+		drmmode_output->connector =
 				drmModeGetConnector(drmmode->fd,
 						drmmode_output->output_id);
 	}
@@ -1207,7 +1216,7 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 		if (p->atoms[0] != property)
 			continue;
 
-		value = drmmode_output->mode_output->prop_values[p->index];
+		value = drmmode_output->connector->prop_values[p->index];
 
 		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
 			err = RRChangeOutputProperty(output->randr_output,
@@ -1272,70 +1281,133 @@ static void
 drmmode_output_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode, int num)
 {
 	xf86OutputPtr output;
-	drmModeConnectorPtr koutput;
-	drmModeEncoderPtr kencoder;
+	drmModeConnectorPtr connector;
+	drmModeEncoderPtr *encoders = NULL;
 	struct drmmode_output_priv *drmmode_output;
 	char name[32];
+	int i;
 
 	TRACE_ENTER();
 
-	koutput = drmModeGetConnector(drmmode->fd,
-			drmmode->mode_res->connectors[num]);
-	if (!koutput)
-		return;
+	connector = drmModeGetConnector(drmmode->fd, drmmode->mode_res->connectors[num]);
+	if (!connector)
+		goto exit;
 
-	kencoder = drmModeGetEncoder(drmmode->fd, koutput->encoders[0]);
-	if (!kencoder) {
-		drmModeFreeConnector(koutput);
-		return;
+	encoders = calloc(sizeof(drmModeEncoderPtr), connector->count_encoders);
+	if (!encoders)
+		goto free_connector_exit;
+
+	for (i = 0; i < connector->count_encoders; i++) {
+		encoders[i] = drmModeGetEncoder(drmmode->fd, connector->encoders[i]);
+		if (!encoders[i])
+			goto free_encoders_exit;
 	}
 
-	if (koutput->connector_type >= NUM_OUTPUT_NAMES)
-		snprintf(name, 32, "Unknown%d-%d", koutput->connector_type,
-				koutput->connector_type_id);
+	if (connector->connector_type >= NUM_OUTPUT_NAMES)
+		snprintf(name, 32, "Unknown%d-%d", connector->connector_type, connector->connector_type_id);
 	else
-		snprintf(name, 32, "%s-%d",
-				output_names[koutput->connector_type],
-				koutput->connector_type_id);
+		snprintf(name, 32, "%s-%d", output_names[connector->connector_type], connector->connector_type_id);
 
 	output = xf86OutputCreate(pScrn, &drmmode_output_funcs, name);
-	if (!output) {
-		drmModeFreeEncoder(kencoder);
-		drmModeFreeConnector(koutput);
-		return;
-	}
+	if (!output)
+		goto free_encoders_exit;
 
 	drmmode_output = calloc(sizeof(struct drmmode_output_priv), 1);
 	if (!drmmode_output) {
 		xf86OutputDestroy(output);
-		drmModeFreeConnector(koutput);
-		drmModeFreeEncoder(kencoder);
-		return;
+		goto free_encoders_exit;
 	}
 
 	drmmode_output->output_id = drmmode->mode_res->connectors[num];
-	drmmode_output->mode_output = koutput;
-	drmmode_output->mode_encoder = kencoder;
+	drmmode_output->connector = connector;
+	drmmode_output->encoders = encoders;
 	drmmode_output->drmmode = drmmode;
 
-	output->mm_width = koutput->mmWidth;
-	output->mm_height = koutput->mmHeight;
+	output->mm_width = connector->mmWidth;
+	output->mm_height = connector->mmHeight;
 	output->driver_private = drmmode_output;
 
-	if (ARMSOCPTR(pScrn)->crtcNum >= 0) {
-		/* Only single crtc per screen - see if this output can use it*/
-		output->possible_crtcs =
-				(kencoder->possible_crtcs >>
-					(ARMSOCPTR(pScrn)->crtcNum)
-						)&1;
-	} else
-		output->possible_crtcs = kencoder->possible_crtcs;
+	/*
+	 * Determine which crtcs are supported by all the encoders which
+	 * are valid for the connector of this output.
+	 */
+	output->possible_crtcs = 0xffffffff;
+	for (i = 0; i < connector->count_encoders; i++)
+		output->possible_crtcs &= encoders[i]->possible_crtcs;
+	/*
+	 * output->possible_crtcs is a bitmask arranged by index of crtcs for this screen while
+	 * encoders->possible_crtcs covers all crtcs supported by the drm. If we have selected
+	 * one crtc per screen, it must be at index 0.
+	 */
+	if (ARMSOCPTR(pScrn)->crtcNum >= 0)
+		output->possible_crtcs = (output->possible_crtcs >> (ARMSOCPTR(pScrn)->crtcNum)) & 1;
 
-	output->possible_clones = kencoder->possible_clones;
+	output->possible_clones = 0; /* set after all outputs initialized */
 	output->interlaceAllowed = TRUE;
+	goto exit;
 
+free_encoders_exit:
+	for (i = 0; i < connector->count_encoders; i++)
+		drmModeFreeEncoder(encoders[i]);
+
+free_connector_exit:
+	drmModeFreeConnector(connector);
+
+exit:
 	TRACE_EXIT();
 	return;
+
+}
+static void
+drmmode_clones_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode)
+{
+	int i;
+	xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+
+	/* For each output generate enc_mask, a mask of encoders present,
+	 * and enc_clones, a mask of possible clone encoders
+	 */
+	for (i = 0; i < xf86_config->num_output; i++) {
+		xf86OutputPtr output = xf86_config->output[i];
+		struct drmmode_output_priv *drmmode_output = output->driver_private;
+		int j;
+
+		drmmode_output->enc_clones = 0xffffffff;
+		drmmode_output->enc_mask = 0;
+
+		for (j = 0; j < drmmode_output->connector->count_encoders; j++) {
+			int k;
+
+			/* set index ordered mask of encoders on this output */
+			for (k = 0; k < drmmode->mode_res->count_encoders; k++) {
+				if (drmmode->mode_res->encoders[k] == drmmode_output->encoders[j]->encoder_id)
+					drmmode_output->enc_mask |= (1 << k);
+			}
+			/* set mask for encoder clones possible with all encoders on this output */
+			drmmode_output->enc_clones &= drmmode_output->encoders[j]->possible_clones;
+		}
+	}
+
+	/* Output j is a possible clone of output i if the enc_mask for j matches the enc_clones for i */
+	for (i = 0; i < xf86_config->num_output; i++) {
+		xf86OutputPtr output = xf86_config->output[i];
+		struct drmmode_output_priv *drmmode_output = output->driver_private;
+		int j;
+
+		output->possible_clones = 0;
+		if (drmmode_output->enc_clones == 0)
+			continue;
+
+		for (j = 0; j < xf86_config->num_output; j++) {
+			struct drmmode_output_priv *clone = xf86_config->output[j]->driver_private;
+
+			if ((i != j) &&
+				(clone->enc_mask != 0) &&
+				(drmmode_output->enc_clones == clone->enc_mask))
+
+				output->possible_clones |= (1 << j);
+		}
+	}
 }
 
 void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo)
@@ -1557,6 +1629,7 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 		for (i = 0; i < drmmode->mode_res->count_connectors; i++)
 			drmmode_output_init(pScrn, drmmode, i);
 	}
+	drmmode_clones_init(pScrn, drmmode);
 
 	xf86InitialConfiguration(pScrn, TRUE);
 
