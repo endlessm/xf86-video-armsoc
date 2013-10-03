@@ -37,8 +37,22 @@
 /* Padding added down each side of cursor image */
 #define CURSORPAD (0)
 
-#define PL111_SCANOUT_FLAGS   0x00000001
-#define PL111_NON_SCANOUT_FLAGS   0x00000000
+/*
+ * Parameters for different buffer objects:
+ * bit [0]: backing storage
+ *	(0 -> DMA)
+ *	(1 -> SHM)
+ * bit [2:1]: kind of mapping
+ *	(0x0 -> uncached)
+ *	(0x1 -> write combine)
+ *	(0x2 -> cached)
+ */
+#define PL111_BOT_MASK		(0x7)
+#define PL111_BOT_SHM		(0x0 << 0)
+#define PL111_BOT_DMA		(0x1 << 0)
+#define PL111_BOT_UNCACHED	(0x0 << 1)
+#define PL111_BOT_WC		(0x1 << 1)
+#define PL111_BOT_CACHED	(0x2 << 1)
 
 /* TODO MIDEGL-1718: this should be included
  * from kernel headers when pl111 is mainline */
@@ -70,10 +84,11 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 
 	assert((create_gem->buf_type == ARMSOC_BO_SCANOUT) ||
 			(create_gem->buf_type == ARMSOC_BO_NON_SCANOUT));
+
 	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
-		create_pl111.flags = PL111_SCANOUT_FLAGS;
+		create_pl111.flags = PL111_BOT_DMA | PL111_BOT_UNCACHED;
 	else
-		create_pl111.flags = PL111_NON_SCANOUT_FLAGS;
+		create_pl111.flags = PL111_BOT_SHM | PL111_BOT_UNCACHED;
 
 	ret = drmIoctl(fd, DRM_IOCTL_PL111_GEM_CREATE, &create_pl111);
 	if (ret)
