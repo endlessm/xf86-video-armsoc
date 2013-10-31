@@ -27,11 +27,23 @@
 #include <xf86drmMode.h>
 #include <xf86drm.h>
 #include <sys/ioctl.h>
+#include <drm/exynos_drm.h>
 
+#ifndef DRM_EXYNOS_PLANE_SET_ZPOS
+/* DRM_EXYNOS_PLANE_SET_ZPOS is not defined in kernel version > 3.5 */
 struct drm_exynos_plane_set_zpos {
 	__u32 plane_id;
 	__s32 zpos;
 };
+#define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
+#define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
+		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
+#endif
+
+#ifndef EXYNOS_BO_CONTIG
+/* EXYNOS_BO_CONTIG is not defined in kernel version < 3.5 */
+#define EXYNOS_BO_CONTIG 0
+#endif
 
 /* Cursor dimensions
  * Technically we probably don't have any size limit.. since we
@@ -48,18 +60,7 @@ struct drm_exynos_plane_set_zpos {
  */
 #define CURSORPAD (16)
 
-#define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
-#define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
-		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
-
-/* TODO MIDEGL-1845: EXYNOS_SCANOUT_FLAGS should be defined as 0x00000000 but
- * this causes problems for chromebook. Leaving it at 0x00000001 here doesn't
- * adversely affect mainline exynos DRM as it effectively always uses
- * contiguous memory. See kernel file drivers/gpu/drm/exynos/exynos_drm_buf.c
- * function lowlevel_buffer_allocate().
- */
-#define EXYNOS_SCANOUT_FLAGS     0x00000001
-#define EXYNOS_NON_SCANOUT_FLAGS 0x00000001
+#define ALIGN(val, align)	(((val) + (align) - 1) & ~((align) - 1))
 
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 {
@@ -106,32 +107,30 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 
 static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 {
-	struct drm_mode_create_dumb create_dumb;
+	struct drm_exynos_gem_create create_exynos;
 	int ret;
+	unsigned int pitch;
 
-	memset(&create_dumb, 0, sizeof(create_dumb));
-	create_dumb.height = create_gem->height;
-	create_dumb.width = create_gem->width;
-	create_dumb.bpp = create_gem->bpp;
+	/* make pitch a multiple of 64 bytes for best performance */
+	pitch = ALIGN(create_gem->width * ((create_gem->bpp + 7) / 8), 64);
+	memset(&create_exynos, 0, sizeof(create_exynos));
+	create_exynos.size = create_gem->height * pitch;
 
 	assert((create_gem->buf_type == ARMSOC_BO_SCANOUT) ||
 			(create_gem->buf_type == ARMSOC_BO_NON_SCANOUT));
 	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
-		create_dumb.flags = EXYNOS_SCANOUT_FLAGS;
+		create_exynos.flags = EXYNOS_BO_CONTIG;
 	else
-		create_dumb.flags = EXYNOS_NON_SCANOUT_FLAGS;
+		create_exynos.flags = EXYNOS_BO_NONCONTIG;
 
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
+	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE, &create_exynos);
 	if (ret)
 		return ret;
 
-	/* Convert custom create_dumb to generic create_gem */
-	create_gem->height = create_dumb.height;
-	create_gem->width = create_dumb.width;
-	create_gem->bpp = create_dumb.bpp;
-	create_gem->handle = create_dumb.handle;
-	create_gem->pitch = create_dumb.pitch;
-	create_gem->size = create_dumb.size;
+	/* Convert custom create_exynos to generic create_gem */
+	create_gem->handle = create_exynos.handle;
+	create_gem->pitch = pitch;
+	create_gem->size = create_exynos.size;
 
 	return 0;
 }
