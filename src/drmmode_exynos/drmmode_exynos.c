@@ -52,7 +52,13 @@ struct drm_exynos_plane_set_zpos {
 #define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
 
-#define EXYNOS_SCANOUT_FLAGS     0x00000000
+/* TODO MIDEGL-1845: EXYNOS_SCANOUT_FLAGS should be defined as 0x00000000 but
+ * this causes problems for chromebook. Leaving it at 0x00000001 here doesn't
+ * adversely affect mainline exynos DRM as it effectively always uses
+ * contiguous memory. See kernel file drivers/gpu/drm/exynos/exynos_drm_buf.c
+ * function lowlevel_buffer_allocate().
+ */
+#define EXYNOS_SCANOUT_FLAGS     0x00000001
 #define EXYNOS_NON_SCANOUT_FLAGS 0x00000001
 
 static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
