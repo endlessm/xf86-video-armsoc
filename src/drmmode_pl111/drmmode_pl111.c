@@ -55,7 +55,7 @@
 #define PL111_BOT_CACHED	(0x2 << 1)
 
 /* TODO MIDEGL-1718: this should be included
- * from kernel headers when pl111 is mainline */
+ * from libdrm headers when pl111 is mainline */
 struct drm_pl111_gem_create {
 	uint32_t height;
 	uint32_t width;

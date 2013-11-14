@@ -27,10 +27,10 @@
 #include <xf86drmMode.h>
 #include <xf86drm.h>
 #include <sys/ioctl.h>
-#include <drm/exynos_drm.h>
 
-#ifndef DRM_EXYNOS_PLANE_SET_ZPOS
-/* DRM_EXYNOS_PLANE_SET_ZPOS is not defined in kernel version > 3.5 */
+/* Following ioctls should be included from libdrm exynos_drm.h but
+ * libdrm doesn't install this correctly so for now they are here.
+ */
 struct drm_exynos_plane_set_zpos {
 	__u32 plane_id;
 	__s32 zpos;
@@ -38,12 +38,19 @@ struct drm_exynos_plane_set_zpos {
 #define DRM_EXYNOS_PLANE_SET_ZPOS 0x06
 #define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
-#endif
 
-#ifndef EXYNOS_BO_CONTIG
-/* EXYNOS_BO_CONTIG is not defined in kernel version < 3.5 */
 #define EXYNOS_BO_CONTIG 0
-#endif
+#define EXYNOS_BO_NONCONTIG 1
+
+struct drm_exynos_gem_create {
+	uint64_t size;
+	unsigned int flags;
+	unsigned int handle;
+};
+
+#define DRM_EXYNOS_GEM_CREATE 0x00
+#define DRM_IOCTL_EXYNOS_GEM_CREATE DRM_IOWR(DRM_COMMAND_BASE + \
+		DRM_EXYNOS_GEM_CREATE, struct drm_exynos_gem_create)
 
 /* Cursor dimensions
  * Technically we probably don't have any size limit.. since we
@@ -118,10 +125,12 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 
 	assert((create_gem->buf_type == ARMSOC_BO_SCANOUT) ||
 			(create_gem->buf_type == ARMSOC_BO_NON_SCANOUT));
-	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
-		create_exynos.flags = EXYNOS_BO_CONTIG;
-	else
-		create_exynos.flags = EXYNOS_BO_NONCONTIG;
+
+	/* Contiguous allocations are not supported in some exynos drm versions.
+	 * When they are supported all allocations are effectively contiguous
+	 * anyway, so for simplicity we always request non contiguous buffers.
+	 */
+	create_exynos.flags = EXYNOS_BO_NONCONTIG;
 
 	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE, &create_exynos);
 	if (ret)
