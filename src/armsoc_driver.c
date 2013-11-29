@@ -96,15 +96,8 @@ _X_EXPORT DriverRec ARMSOC = {
 #endif
 };
 
-#define MALI_4XX_CHIPSET_ID (0x0400)
-#define MALI_T6XX_CHIPSET_ID (0x0600)
-
 /** Supported "chipsets." */
-static SymTabRec ARMSOCChipsets[] = {
-		{ MALI_4XX_CHIPSET_ID, "Mali-4XX" },
-		{ MALI_T6XX_CHIPSET_ID, "Mali-T6XX" },
-		{-1, NULL }
-};
+#define ARMSOC_CHIPSET_NAME "Mali"
 
 /** Supported options, as enum values. */
 enum {
@@ -547,20 +540,15 @@ ARMSOCAvailableOptions(int chipid, int busid)
 	return ARMSOCOptions;
 }
 
-
-
 /**
  * The mandatory Identify() function.  It is run before Probe(), and prints out
- * an identifying message, which includes the chipset(s) the driver supports.
+ * an identifying message.
  */
 static void
 ARMSOCIdentify(int flags)
 {
-	xf86PrintChipsets(ARMSOC_NAME, "Driver for ARM compatible chipsets",
-			ARMSOCChipsets);
+	xf86Msg(X_INFO, "%s: Driver for ARM Mali compatible chipsets\n", ARMSOC_NAME);
 }
-
-
 
 /**
  * The driver's Probe() function.  This function finds all instances of
@@ -744,7 +732,6 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	rgb defaultWeight = { 0, 0, 0 };
 	rgb defaultMask = { 0, 0, 0 };
 	Gamma defaultGamma = { 0.0, 0.0, 0.0 };
-	int i;
 	int driNumBufs;
 
 	TRACE_ENTER();
@@ -824,14 +811,8 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	pARMSOC->dev = armsoc_device_new(pARMSOC->drmFD,
 			pARMSOC->drmmode_interface->create_custom_gem);
 
-	/* find matching chipset name: */
-	for (i = 0; ARMSOCChipsets[i].name; i++) {
-		if (ARMSOCChipsets[i].token == MALI_T6XX_CHIPSET_ID) {
-			pScrn->chipset = (char *)ARMSOCChipsets[i].name;
-			break;
-		}
-	}
-
+	/* set chipset name: */
+	pScrn->chipset = (char *)ARMSOC_CHIPSET_NAME;
 	INFO_MSG("Chipset: %s", pScrn->chipset);
 
 	/*
