@@ -1807,7 +1807,8 @@ drmmode_uevent_fini(ScrnInfoPtr pScrn)
 static void
 drmmode_wakeup_handler(pointer data, int err, pointer p)
 {
-	int fd = (int)data;
+	struct ARMSOCRec *pARMSOC = (struct ARMSOCRec *)data;
+	int fd = pARMSOC->drmFD;
 	fd_set *read_mask = p;
 
 	if (err < 0)
@@ -1817,18 +1818,18 @@ drmmode_wakeup_handler(pointer data, int err, pointer p)
 		drmHandleEvent(fd, &event_context);
 }
 
-void drmmode_init_wakeup_handler(int fd)
+void drmmode_init_wakeup_handler(struct ARMSOCRec *pARMSOC)
 {
-	AddGeneralSocket(fd);
+	AddGeneralSocket(pARMSOC->drmFD);
 	RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
-			drmmode_wakeup_handler, (pointer)fd);
+			drmmode_wakeup_handler, pARMSOC);
 }
 
-void drmmode_fini_wakeup_handler(int fd)
+void drmmode_fini_wakeup_handler(struct ARMSOCRec *pARMSOC)
 {
 	RemoveBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
-			drmmode_wakeup_handler, (pointer)fd);
-	RemoveGeneralSocket(fd);
+			drmmode_wakeup_handler, pARMSOC);
+	RemoveGeneralSocket(pARMSOC->drmFD);
 }
 
 void
