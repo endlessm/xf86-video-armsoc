@@ -48,9 +48,21 @@ struct drm_exynos_gem_create {
 	unsigned int handle;
 };
 
+struct drm_exynos_gem_create2 {
+	uint64_t size;
+	unsigned int flags;
+	unsigned int handle;
+	uint32_t name;
+};
+
+
 #define DRM_EXYNOS_GEM_CREATE 0x00
 #define DRM_IOCTL_EXYNOS_GEM_CREATE DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_EXYNOS_GEM_CREATE, struct drm_exynos_gem_create)
+
+#define DRM_EXYNOS_GEM_CREATE2 0x0a
+#define DRM_IOCTL_EXYNOS_GEM_CREATE2 DRM_IOWR(DRM_COMMAND_BASE + \
+		DRM_EXYNOS_GEM_CREATE2, struct drm_exynos_gem_create2)
 
 /* Cursor dimensions
  * Technically we probably don't have any size limit.. since we
@@ -114,7 +126,7 @@ static int init_plane_for_cursor(int drm_fd, uint32_t plane_id)
 
 static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 {
-	struct drm_exynos_gem_create create_exynos;
+	struct drm_exynos_gem_create2 create_exynos;
 	int ret;
 	unsigned int pitch;
 
@@ -132,7 +144,7 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	 */
 	create_exynos.flags = EXYNOS_BO_NONCONTIG;
 
-	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE, &create_exynos);
+	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE2, &create_exynos);
 	if (ret)
 		return ret;
 
@@ -140,6 +152,7 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	create_gem->handle = create_exynos.handle;
 	create_gem->pitch = pitch;
 	create_gem->size = create_exynos.size;
+	create_gem->name = create_exynos.name;
 
 	return 0;
 }

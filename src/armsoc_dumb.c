@@ -136,6 +136,7 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	if (!new_buf)
 		return NULL;
 
+	create_gem.name = 0;
 	create_gem.buf_type = buf_type;
 	create_gem.height = height;
 	create_gem.width = width;
@@ -163,7 +164,11 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->bpp = create_gem.bpp;
 	new_buf->refcnt = 1;
 	new_buf->dmabuf = -1;
-	new_buf->name = 0;
+
+	if (create_gem.name)
+		new_buf->name = create_gem.name;
+	else
+		new_buf->name = 0;
 
 	return new_buf;
 }
