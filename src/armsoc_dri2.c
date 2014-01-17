@@ -573,7 +573,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
 	armsoc_bo_unreference(old_src_bo);
 	armsoc_bo_unreference(old_dst_bo);
-	pARMSOC->pending_flips--;
+	if (cmd->type == DRI2_FLIP_COMPLETE)
+		pARMSOC->pending_flips--;
 
 	free(cmd);
 }
@@ -626,7 +627,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	 */
 	ARMSOCDRI2ReferenceBuffer(pSrcBuffer);
 	ARMSOCDRI2ReferenceBuffer(pDstBuffer);
-	pARMSOC->pending_flips++;
 
 	src_bo = boFromBuffer(pSrcBuffer);
 	dst_bo = boFromBuffer(pDstBuffer);
@@ -680,6 +680,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
 		 * only partially successful
 		 */
+		pARMSOC->pending_flips++;
 		ret = drmmode_page_flip(pDraw, src_fb_id, cmd);
 
 		/* If using page flip events, we'll trigger an immediate
