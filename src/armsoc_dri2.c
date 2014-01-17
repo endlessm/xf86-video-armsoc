@@ -218,7 +218,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->attachment = attachment;
 	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
 	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
-	DRIBUF(buf)->format = format;
+	DRIBUF(buf)->format = format + 1; /* suppress DRI2 buffer reuse */
 	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
 	buf->previous_canflip = canflip(pDraw);
