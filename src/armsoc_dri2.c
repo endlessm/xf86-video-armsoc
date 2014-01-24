@@ -695,6 +695,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int ret, do_flip;
+	RegionRec region;
+	PixmapPtr pDstPixmap = draw2pix(dri2draw(pDraw, pDstBuffer));
 
 	if (!cmd)
 		return FALSE;
@@ -708,6 +710,13 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	cmd->flags = 0;
 	cmd->func = func;
 	cmd->data = data;
+
+	region.extents.x1 = region.extents.y1 = 0;
+	region.extents.x2 = pDstPixmap->drawable.width;
+	region.extents.y2 = pDstPixmap->drawable.height;
+	region.data = NULL;
+	DamageRegionAppend(&pDstPixmap->drawable, &region);
+	DamageRegionProcessPending(&pDstPixmap->drawable);
 
 	DEBUG_MSG("%d -> %d", pSrcBuffer->attachment, pDstBuffer->attachment);
 
