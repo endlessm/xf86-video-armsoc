@@ -34,6 +34,7 @@
 enum hwcursor_api {
 	HWCURSOR_API_PLANE = 0,
 	HWCURSOR_API_STANDARD = 1,
+	HWCURSOR_API_NONE = 2
 };
 
 struct drmmode_interface {
@@ -53,16 +54,21 @@ struct drmmode_interface {
 	 */
 	int cursor_padding;
 
-	/* This specifies whether the DRM implements HW cursor support
-	 * using planes or the standard HW cursor API using drmModeSetCursor()
-	 * and drmModeMoveCursor().
+	/* Specifies the hardware cursor api used by the DRM :
+	 *   HWCURSOR_API_PLANE    - Use planes.
+	 *   HWCURSOR_API_STANDARD - Use the standard API : drmModeSetCursor() & drmModeMoveCursor().
+	 *   HWCURSOR_API_NONE     - No hardware cursor - use a software cursor.
 	 */
 	enum hwcursor_api cursor_api;
 
-	/* (Optional) Initialize the given plane for use as a hardware cursor.
+	/* (Optional) Initialize the hardware cursor plane.
 	 *
-	 * This function should do any initialization necessary, for example
-	 * setting the z-order on the plane to appear above all other layers.
+	 * When cursor_api is HWCURSOR_API_PLANE, this function should do any
+	 * plane initialization necessary, for example setting the z-order on the
+	 * plane to appear above all other layers. If this function fails the driver
+	 * falls back to using a software cursor.
+	 *
+	 * If cursor_api is not HWCURSOR_API_PLANE this function should be omitted.
 	 *
 	 * @param drm_fd   The DRM device file
 	 * @param plane_id The plane to initialize

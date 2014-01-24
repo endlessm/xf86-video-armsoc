@@ -424,7 +424,7 @@ drmmode_hide_cursor(xf86CrtcPtr crtc)
 /*
  * The argument "update_image" controls whether the cursor image needs
  * to be updated by the HW or not. This is ignored by HWCURSOR_API_PLANE
- * which doesn't allow changing the cursor possition without updating
+ * which doesn't allow changing the cursor position without updating
  * the image too.
  */
 static void
@@ -512,7 +512,7 @@ drmmode_set_cursor_position(xf86CrtcPtr crtc, int x, int y)
 	cursor->y = y;
 
 	/*
-	 * Show the cursor at a different possition without updating the image
+	 * Show the cursor at a different position without updating the image
 	 * when possible (HWCURSOR_API_PLANE doesn't have a way to update
 	 * cursor position without updating the image too).
 	 */
@@ -769,10 +769,16 @@ Bool drmmode_cursor_init(ScreenPtr pScreen)
 
 	INFO_MSG("HW cursor init()");
 
-	if (pARMSOC->drmmode_interface->cursor_api == HWCURSOR_API_PLANE)
+	switch (pARMSOC->drmmode_interface->cursor_api) {
+	case HWCURSOR_API_PLANE:
 		return drmmode_cursor_init_plane(pScreen);
-	else /* HWCURSOR_API_STANDARD */
+	case HWCURSOR_API_STANDARD:
 		return drmmode_cursor_init_standard(pScreen);
+	case HWCURSOR_API_NONE:
+		return FALSE;
+	default:
+		assert(0);
+	}
 }
 
 void drmmode_cursor_fini(ScreenPtr pScreen)
@@ -1573,7 +1579,7 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 
 	TRACE_ENTER();
 
-	drmmode = calloc(1, sizeof *drmmode);
+	drmmode = calloc(1, sizeof(*drmmode));
 	if (!drmmode)
 		return FALSE;
 
