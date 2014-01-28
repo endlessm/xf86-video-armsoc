@@ -577,7 +577,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			 */
 			numDevSections = 1;
 		} else {
-			return FALSE;
+			goto out;
 		}
 	}
 
@@ -653,7 +653,8 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			if (!pScrn) {
 				EARLY_ERROR_MSG(
 						"Cannot allocate a ScrnInfoPtr");
-				return FALSE;
+				drmClose(fd);
+				goto free_sections;
 			}
 			/* Allocate the driver's Screen-specific, "private"
 			 * data structure and hook it into the ScrnInfoRec's
@@ -714,7 +715,10 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			drmClose(fd);
 		}
 	}
+free_sections:
 	free(devSections);
+
+out:
 	return foundScreen;
 }
 
