@@ -122,12 +122,7 @@ Bool ARMSOCPrepareAccess(PixmapPtr pPixmap, int index);
 void ARMSOCFinishAccess(PixmapPtr pPixmap, int index);
 Bool ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap);
 
-static inline struct armsoc_bo *
-ARMSOCPixmapBo(PixmapPtr pPixmap)
-{
-	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
-	return priv->bo;
-}
+struct armsoc_bo *ARMSOCPixmapBo(PixmapPtr pPixmap);
 
 void ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b);
 

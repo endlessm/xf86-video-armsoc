@@ -47,34 +47,6 @@ struct ARMSOCDRI2BufferRec {
 	DRI2BufferRec base;
 
 	/**
-	 * Pixmap(s) that are backing the buffer
-	 *
-	 * NOTE: don't track the pixmap ptr for the front buffer if it is
-	 * a window.. this could get reallocated from beneath us, so we should
-	 * always use draw2pix to be sure to have the correct one
-	 */
-	PixmapPtr *pPixmaps;
-
-	/**
-	 * Pixmap that corresponds to the DRI2BufferRec.name, so wraps
-	 * the buffer that will be used for DRI2GetBuffers calls and the
-	 * next DRI2SwapBuffers call.
-	 *
-	 * When using more than double buffering this (and the name) are updated
-	 * after a swap, before the next DRI2GetBuffers call.
-	 */
-	unsigned currentPixmap;
-
-	/**
-	 * Number of Pixmaps to use.
-	 *
-	 * This allows the number of back buffers used to be reduced, for
-	 * example when allocation fails. It cannot be changed to increase the
-	 * number of buffers as we would overflow the pPixmaps array.
-	 */
-	unsigned numPixmaps;
-
-	/**
 	 * The DRI2 buffers are reference counted to avoid crashyness when the
 	 * client detaches a dri2 drawable while we are still waiting for a
 	 * page_flip event.
@@ -96,22 +68,12 @@ struct ARMSOCDRI2BufferRec {
 	 */
 	int previous_canflip;
 
+	struct armsoc_bo *bo;
 };
 
 #define ARMSOCBUF(p)	((struct ARMSOCDRI2BufferRec *)(p))
 #define DRIBUF(p)	((DRI2BufferPtr)(&(p)->base))
 
-
-static inline DrawablePtr
-dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
-{
-	if (buf->attachment == DRI2BufferFrontLeft)
-		return pDraw;
-	else {
-		const unsigned curPix = ARMSOCBUF(buf)->currentPixmap;
-		return &(ARMSOCBUF(buf)->pPixmaps[curPix]->drawable);
-	}
-}
 
 static Bool
 canflip(DrawablePtr pDraw)
@@ -132,21 +94,66 @@ canflip(DrawablePtr pDraw)
 static inline Bool
 exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
-	PixmapPtr aPix = draw2pix(dri2draw(pDraw, a));
-	PixmapPtr bPix = draw2pix(dri2draw(pDraw, b));
-
-	ARMSOCPixmapExchange(aPix, bPix);
 	exchange(a->name, b->name);
 	return TRUE;
 }
 
-static PixmapPtr
-createpix(DrawablePtr pDraw)
+/* Migrate pixmap to UMP buffer */
+static struct armsoc_bo *
+MigratePixmapToGEM(struct ARMSOCRec *pARMSOC, DrawablePtr pDraw)
 {
-	ScreenPtr pScreen = pDraw->pScreen;
-	int flags = canflip(pDraw) ? ARMSOC_CREATE_PIXMAP_SCANOUT : 0;
-	return pScreen->CreatePixmap(pScreen,
-			pDraw->width, pDraw->height, pDraw->depth, flags);
+    PixmapPtr pPixmap = (PixmapPtr) pDraw;
+    ScreenPtr pScreen = pPixmap->drawable.pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    struct armsoc_bo *bo = armsoc_bo_from_drawable(pDraw);
+    uint32_t pitch;
+    unsigned char *addr;
+
+    if (bo) {
+        DEBUG_MSG("MigratePixmapToGEM %p, already exists = %p\n", pPixmap, bo);
+	armsoc_bo_reference(bo);
+        return bo;
+    }
+
+    /* create the GEM buffer */
+    bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+                                pDraw->width,
+                                pDraw->height,
+                                pDraw->depth,
+                                pDraw->bitsPerPixel,
+				ARMSOC_BO_NON_SCANOUT);
+    if (!bo) {
+        ErrorF("MigratePixmapToGEM: bo alloc failed\n");
+        return NULL;
+    }
+
+    addr = armsoc_bo_map(bo);
+    pitch = armsoc_bo_pitch(bo);
+
+    /* copy the pixel data to the new location */
+    if (pitch == pPixmap->devKind) {
+        memcpy(addr, pPixmap->devPrivate.ptr, armsoc_bo_size(bo));
+    } else {
+        int y;
+        unsigned char *data = pPixmap->devPrivate.ptr;
+        for (y = 0; y < pPixmap->drawable.height; y++) {
+            memcpy(addr + y * pitch, 
+                   data + y * pPixmap->devKind,
+                   pPixmap->devKind);
+        }
+    }
+
+    // FIXME Back these up?
+    //umpbuf->BackupDevKind = pPixmap->devKind;
+    //umpbuf->BackupDevPrivatePtr = pPixmap->devPrivate.ptr;
+
+    pPixmap->devKind = pitch;
+    pPixmap->devPrivate.ptr = addr;
+
+    armsoc_bo_set_drawable(bo, pDraw);
+
+    DEBUG_MSG("MigratePixmapToGEM %p, new buf = %p\n", pPixmap, bo);
+    return bo;
 }
 
 /**
@@ -167,9 +174,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	PixmapPtr pPixmap = NULL;
 	struct armsoc_bo *bo;
-	int ret;
 
 	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
 			pDraw, attachment, format);
@@ -179,56 +184,61 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		return NULL;
 	}
 
-	if (attachment == DRI2BufferFrontLeft) {
-		pPixmap = draw2pix(pDraw);
-		pPixmap->refcnt++;
-	} else {
-		pPixmap = createpix(pDraw);
-	}
-
-	if (!pPixmap) {
-		assert(attachment != DRI2BufferFrontLeft);
-		ERROR_MSG("Failed to create back buffer for window");
-		goto fail;
-	}
-
-	if (attachment == DRI2BufferBackLeft && pARMSOC->driNumBufs > 2) {
-		buf->pPixmaps = calloc(pARMSOC->driNumBufs-1,
-				sizeof(PixmapPtr));
-		buf->numPixmaps = pARMSOC->driNumBufs-1;
-	} else {
-		buf->pPixmaps = malloc(sizeof(PixmapPtr));
-		buf->numPixmaps = 1;
-	}
-
-	if (!buf->pPixmaps) {
-		ERROR_MSG("Failed to allocate PixmapPtr array for DRI2Buffer");
-		goto fail;
-	}
-
-	buf->pPixmaps[0] = pPixmap;
-	assert(buf->currentPixmap == 0);
-
-	bo = ARMSOCPixmapBo(pPixmap);
-	if (!bo) {
-		ERROR_MSG(
-				"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		goto fail;
-	}
-
-	DRIBUF(buf)->attachment = attachment;
-	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
-	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
-	DRIBUF(buf)->format = format + 1; /* suppress DRI2 buffer reuse */
-	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
 	buf->previous_canflip = canflip(pDraw);
+	DRIBUF(buf)->attachment = attachment;
+	DRIBUF(buf)->cpp = pDraw->bitsPerPixel / 8;
+	DRIBUF(buf)->format = format + 1; /* suppress DRI2 buffer reuse */
+	DRIBUF(buf)->flags = 0;
 
-	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
-	if (ret) {
-		ERROR_MSG("could not get buffer name: %d", ret);
-		goto fail;
+	/* If it is a pixmap, just migrate to a GEM buffer */
+	if (pDraw->type == DRAWABLE_PIXMAP)
+	{
+	    if (!(bo = MigratePixmapToGEM(pARMSOC, pDraw))) {
+	        ErrorF("ARMSOCDRI2CreateBuffer: MigratePixmapToUMP failed\n");
+	        free(buf);
+	        return NULL;
+	    }
+	    DRIBUF(buf)->pitch = armsoc_bo_pitch(bo);
+	    DRIBUF(buf)->name = armsoc_bo_name(bo);
+            buf->bo = bo;
+	    return DRIBUF(buf);
 	}
+
+	/* We are not interested in anything other than back buffer requests ... */
+	if (attachment != DRI2BufferBackLeft || pDraw->type != DRAWABLE_WINDOW) {
+		/* ... and just return some dummy UMP buffer */
+		bo = pARMSOC->scanout;
+		DRIBUF(buf)->pitch = armsoc_bo_pitch(bo);
+		DRIBUF(buf)->name = armsoc_bo_name(bo);
+		buf->bo = bo;
+		armsoc_bo_reference(bo);
+		return DRIBUF(buf);
+	}
+
+	bo = armsoc_bo_from_drawable(pDraw);
+	if (bo && armsoc_bo_width(bo) == pDraw->width && armsoc_bo_height(bo) == pDraw->height && armsoc_bo_bpp(bo) == pDraw->bitsPerPixel) {
+		// Reuse existing
+		DRIBUF(buf)->pitch = armsoc_bo_pitch(bo);
+		DRIBUF(buf)->name = armsoc_bo_name(bo);
+		buf->bo = bo;
+		armsoc_bo_reference(bo);
+		return DRIBUF(buf);
+	}
+
+	if (bo)
+		armsoc_bo_unreference(bo);
+	bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+                                pDraw->width,
+                                pDraw->height,
+                                pDraw->depth,
+                                pDraw->bitsPerPixel,
+				canflip(pDraw) ? ARMSOC_BO_SCANOUT : ARMSOC_BO_NON_SCANOUT);
+
+	armsoc_bo_set_drawable(bo, pDraw);
+	DRIBUF(buf)->name = armsoc_bo_name(bo);
+	DRIBUF(buf)->pitch = armsoc_bo_pitch(bo);
+	buf->bo = bo;
 
 	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
 		/* Create an fb around this buffer. This will fail and we will
@@ -245,21 +255,9 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 
 	/* Register Pixmap as having a buffer that can be accessed externally,
 	 * so needs synchronised access */
-	ARMSOCRegisterExternalAccess(pPixmap);
+	// FIXME ARMSOCRegisterExternalAccess(pPixmap);
 
 	return DRIBUF(buf);
-
-fail:
-	if (pPixmap != NULL) {
-		if (attachment != DRI2BufferFrontLeft)
-			pScreen->DestroyPixmap(pPixmap);
-		else
-			pPixmap->refcnt--;
-	}
-	free(buf->pPixmaps);
-	free(buf);
-
-	return NULL;
 }
 
 /**
@@ -269,31 +267,11 @@ static void
 ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 {
 	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
-	/* Note: pDraw may already be deleted, so use the pPixmap here
-	 * instead (since it is at least refcntd)
-	 */
-	ScreenPtr pScreen = buf->pPixmaps[0]->drawable.pScreen;
-	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	int numBuffers, i;
 
 	if (--buf->refcnt > 0)
 		return;
 
-	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
-
-	if (buffer->attachment == DRI2BufferBackLeft) {
-		assert(pARMSOC->driNumBufs > 1);
-		numBuffers = pARMSOC->driNumBufs-1;
-	} else
-		numBuffers = 1;
-
-	for (i = 0; i < numBuffers && buf->pPixmaps[i] != NULL; i++) {
-		ARMSOCDeregisterExternalAccess(buf->pPixmaps[i]);
-		pScreen->DestroyPixmap(buf->pPixmaps[i]);
-	}
-
-	free(buf->pPixmaps);
+	armsoc_bo_unreference(buf->bo);
 	free(buf);
 }
 
@@ -313,22 +291,22 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	DrawablePtr pSrcDraw = dri2draw(pDraw, pSrcBuffer);
-	DrawablePtr pDstDraw = dri2draw(pDraw, pDstBuffer);
 	RegionPtr pCopyClip;
 	GCPtr pGC;
+        PixmapPtr pScratchPixmap;
+        struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
 
-	DEBUG_MSG("pDraw=%p, pDstBuffer=%p (%p), pSrcBuffer=%p (%p)",
-			pDraw, pDstBuffer, pSrcDraw, pSrcBuffer, pDstDraw);
+	DEBUG_MSG("pDraw=%p, pDstBuffer=%p pSrcBuffer=%p",
+			pDraw, pDstBuffer, pSrcBuffer);
 
-	pGC = GetScratchGC(pDstDraw->depth, pScreen);
+	pGC = GetScratchGC(pDraw->depth, pScreen);
 	if (!pGC)
 		return;
 
 	pCopyClip = REGION_CREATE(pScreen, NULL, 0);
 	RegionCopy(pCopyClip, pRegion);
 	(*pGC->funcs->ChangeClip) (pGC, CT_REGION, pCopyClip, 0);
-	ValidateGC(pDstDraw, pGC);
+	ValidateGC(pDraw, pGC);
 
 	/* If the dst is the framebuffer, and we had a way to
 	 * schedule a deferred blit synchronized w/ vsync, that
@@ -338,9 +316,15 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 	 * here.
 	 */
 
-	pGC->ops->CopyArea(pSrcDraw, pDstDraw, pGC,
-			0, 0, pDraw->width, pDraw->height, 0, 0);
+        pScratchPixmap = GetScratchPixmapHeader(pScreen,
+		armsoc_bo_width(src->bo), armsoc_bo_height(src->bo),
+		armsoc_bo_depth(src->bo), armsoc_bo_bpp(src->bo) * 8,
+		armsoc_bo_pitch(src->bo), armsoc_bo_map(src->bo));
+		
 
+	pGC->ops->CopyArea((DrawablePtr) pScratchPixmap, pDraw, pGC,
+			0, 0, pDraw->width, pDraw->height, 0, 0);
+	FreeScratchPixmapHeader(pScratchPixmap);
 	FreeScratchGC(pGC);
 }
 
@@ -404,126 +388,14 @@ static const char * const swap_names[] = {
 		[DRI2_FLIP_COMPLETE] = "flip,"
 };
 
-static Bool allocNextBuffer(DrawablePtr pDraw, PixmapPtr *ppPixmap,
-		uint32_t *name) {
-	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct armsoc_bo *bo;
-	PixmapPtr pPixmap;
-	int ret;
-	uint32_t new_name;
-	Bool extRegistered = FALSE;
-
-	pPixmap = createpix(pDraw);
-
-	if (!pPixmap)
-		goto error;
-
-	bo = ARMSOCPixmapBo(pPixmap);
-	if (!bo) {
-		WARNING_MSG(
-			"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		goto error;
-	}
-
-	ARMSOCRegisterExternalAccess(pPixmap);
-	extRegistered = TRUE;
-
-	ret = armsoc_bo_get_name(bo, &new_name);
-	if (ret) {
-		ERROR_MSG("Could not get buffer name: %d", ret);
-		goto error;
-	}
-
-	if (!armsoc_bo_get_fb(bo)) {
-		ret = armsoc_bo_add_fb(bo);
-		/* Should always be able to add fb, as we only add more buffers
-		 * when flipping*/
-		if (ret) {
-			ERROR_MSG(
-				"Could not add framebuffer to additional back buffer");
-			goto error;
-		}
-	}
-
-	/* No errors, update pixmap and name */
-	*ppPixmap = pPixmap;
-	*name = new_name;
-
-	return TRUE;
-
-error:
-	/* revert to existing pixmap */
-	if (pPixmap) {
-		if (extRegistered)
-			ARMSOCDeregisterExternalAccess(pPixmap);
-		pScreen->DestroyPixmap(pPixmap);
-	}
-
-	return FALSE;
-}
-
-static void nextBuffer(DrawablePtr pDraw, struct ARMSOCDRI2BufferRec *backBuf)
-{
-	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-
-	if (pARMSOC->driNumBufs <= 2) {
-		/*Only using double buffering, leave the pixmap as-is */
-		return;
-	}
-
-	backBuf->currentPixmap++;
-	backBuf->currentPixmap %= backBuf->numPixmaps;
-
-	if (backBuf->pPixmaps[backBuf->currentPixmap]) {
-		/* Already allocated the next buffer - get the name and
-		 * early-out */
-		struct armsoc_bo *bo;
-		int ret;
-
-		bo = ARMSOCPixmapBo(backBuf->pPixmaps[backBuf->currentPixmap]);
-		assert(bo);
-		ret = armsoc_bo_get_name(bo, &DRIBUF(backBuf)->name);
-		assert(!ret);
-	} else {
-		Bool ret;
-		PixmapPtr * const curBackPix =
-			&backBuf->pPixmaps[backBuf->currentPixmap];
-		ret = allocNextBuffer(pDraw, curBackPix,
-			&DRIBUF(backBuf)->name);
-		if (!ret) {
-			/* can't have failed on the first buffer */
-			assert(backBuf->currentPixmap > 0);
-			/* Fall back to last buffer */
-			backBuf->currentPixmap--;
-			WARNING_MSG(
-				"Failed to use the requested %d-buffering due to an allocation failure.\n"
-				"Falling back to %d-buffering for this DRI2Drawable",
-				backBuf->numPixmaps+1,
-				backBuf->currentPixmap+2);
-			backBuf->numPixmaps = backBuf->currentPixmap+1;
-		}
-	}
-}
-
-static struct armsoc_bo *boFromBuffer(DRI2BufferPtr buf)
-{
-	PixmapPtr pPixmap;
-	struct ARMSOCPixmapPrivRec *priv;
-
-	pPixmap = ARMSOCBUF(buf)->pPixmaps[ARMSOCBUF(buf)->currentPixmap];
-	priv = exaGetPixmapDriverPrivate(pPixmap);
-	return priv->bo;
-}
-
 void
 ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 {
 	ScreenPtr pScreen = cmd->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+        struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(cmd->pSrcBuffer);
+        struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(cmd->pDstBuffer);
 	DrawablePtr pDraw = NULL;
 	int status;
 	struct armsoc_bo *old_src_bo, *old_dst_bo;
@@ -532,8 +404,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 		return;
 
 	/* Save the old source bo for unreference below */
-	old_src_bo = boFromBuffer(cmd->pSrcBuffer);
-	old_dst_bo = boFromBuffer(cmd->pDstBuffer);
+	old_src_bo = src->bo;
+	old_dst_bo = dst->bo;
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
@@ -549,11 +421,6 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				exchangebufs(pDraw, cmd->pSrcBuffer,
 							cmd->pDstBuffer);
-
-				if (cmd->pSrcBuffer->attachment ==
-						DRI2BufferBackLeft)
-					nextBuffer(pDraw,
-						ARMSOCBUF(cmd->pSrcBuffer));
 			}
 
 			DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
@@ -562,8 +429,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				set_scanout_bo(pScrn,
-					boFromBuffer(cmd->pDstBuffer));
+				set_scanout_bo(pScrn, old_dst_bo);
 			}
 		}
 	}
@@ -629,8 +495,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	ARMSOCDRI2ReferenceBuffer(pDstBuffer);
 	pARMSOC->pending_flips++;
 
-	src_bo = boFromBuffer(pSrcBuffer);
-	dst_bo = boFromBuffer(pDstBuffer);
+	src_bo = src->bo;
+	dst_bo = dst->bo;
 
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);

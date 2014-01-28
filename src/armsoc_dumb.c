@@ -33,6 +33,7 @@
 
 #include "armsoc_dumb.h"
 #include "drmmode_driver.h"
+#include "uthash.h"
 
 #define ALIGN(val, align)	(((val) + (align) - 1) & ~((align) - 1))
 
@@ -59,7 +60,24 @@ struct armsoc_bo {
 	 */
 	uint32_t original_size;
 	uint32_t name;
+	DrawablePtr pDraw;
+	UT_hash_handle hh;
 };
+
+static struct armsoc_bo *hash = NULL;
+
+struct armsoc_bo *armsoc_bo_from_drawable(DrawablePtr pDraw)
+{
+	struct armsoc_bo *ret;
+	HASH_FIND_PTR(hash, &pDraw, ret);
+	return ret;
+}
+
+void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw)
+{
+	bo->pDraw = pDraw;
+	HASH_ADD_PTR(hash, pDraw, bo);
+}
 
 /* device related functions:
  */
@@ -152,6 +170,7 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->handle = create_gem.handle;
 	new_buf->size = create_gem.size;
 	new_buf->map_addr = NULL;
+	new_buf->pDraw = NULL;
 	new_buf->fb_id = 0;
 	new_buf->pitch = create_gem.pitch;
 	new_buf->width = create_gem.width;
@@ -182,6 +201,9 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 
 	assert(bo->refcnt == 0);
 	assert(bo->dmabuf < 0);
+
+	if (bo->pDraw)
+		HASH_DEL(hash, bo);
 
 	if (bo->map_addr) {
 		/* always map/unmap the full buffer for consistency */
@@ -219,29 +241,10 @@ void armsoc_bo_reference(struct armsoc_bo *bo)
 	bo->refcnt++;
 }
 
-int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
+uint32_t armsoc_bo_name(struct armsoc_bo *bo)
 {
-	if (bo->name == 0) {
-		int ret;
-		struct drm_gem_flink flink;
-
-		assert(bo->refcnt > 0);
-		flink.handle = bo->handle;
-
-		ret = drmIoctl(bo->dev->fd, DRM_IOCTL_GEM_FLINK, &flink);
-		if (ret) {
-			xf86DrvMsg(-1, X_ERROR,
-					"_GEM_FLINK(handle:0x%X)failed. errno:0x%X\n",
-					flink.handle, errno);
-			return ret;
-		}
-
-		bo->name = flink.name;
-	}
-
-	*name = bo->name;
-
-	return 0;
+	assert(bo->refcnt > 0);
+	return bo->name;
 }
 
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo)
@@ -268,10 +271,16 @@ uint32_t armsoc_bo_height(struct armsoc_bo *bo)
 	return bo->height;
 }
 
-uint32_t armsoc_bo_bpp(struct armsoc_bo *bo)
+uint8_t armsoc_bo_bpp(struct armsoc_bo *bo)
 {
 	assert(bo->refcnt > 0);
 	return bo->bpp;
+}
+
+uint8_t armsoc_bo_depth(struct armsoc_bo *bo)
+{
+	assert(bo->refcnt > 0);
+	return bo->depth;
 }
 
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo)

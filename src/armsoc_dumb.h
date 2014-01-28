@@ -25,6 +25,7 @@
 #define ARMSOC_DUMB_H_
 
 #include <stdint.h>
+#include <xf86.h>
 
 struct armsoc_bo;
 struct armsoc_device;
@@ -57,10 +58,12 @@ struct armsoc_create_gem {
 	uint64_t size;
 };
 
+void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw);
+struct armsoc_bo *armsoc_bo_from_drawable(DrawablePtr pDraw);
 struct armsoc_device *armsoc_device_new(int fd,
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem));
 void armsoc_device_del(struct armsoc_device *dev);
-int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name);
+uint32_t armsoc_bo_name(struct armsoc_bo *bo);
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo);
 void *armsoc_bo_map(struct armsoc_bo *bo);
 int armsoc_get_param(struct armsoc_device *dev, uint64_t param,
@@ -77,7 +80,8 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 			enum armsoc_buf_type buf_type);
 uint32_t armsoc_bo_width(struct armsoc_bo *bo);
 uint32_t armsoc_bo_height(struct armsoc_bo *bo);
-uint32_t armsoc_bo_bpp(struct armsoc_bo *bo);
+uint8_t armsoc_bo_bpp(struct armsoc_bo *bo);
+uint8_t armsoc_bo_depth(struct armsoc_bo *bo);
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo);
 
 void armsoc_bo_reference(struct armsoc_bo *bo);

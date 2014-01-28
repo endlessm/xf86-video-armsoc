@@ -919,14 +919,7 @@ ARMSOCAccelInit(ScreenPtr pScreen)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
-	if (!pARMSOC->pARMSOCEXA)
-		pARMSOC->pARMSOCEXA = InitNullEXA(pScreen, pScrn,
-								pARMSOC->drmFD);
-
-	if (pARMSOC->pARMSOCEXA)
-		pARMSOC->dri = ARMSOCDRI2ScreenInit(pScreen);
-	else
-		pARMSOC->dri = FALSE;
+	pARMSOC->dri = ARMSOCDRI2ScreenInit(pScreen);
 }
 
 /**
