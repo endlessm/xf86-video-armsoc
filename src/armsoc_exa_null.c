@@ -107,20 +107,21 @@ FreeScreen(FREE_SCREEN_ARGS_DECL)
 struct ARMSOCEXARec *
 InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 {
-	struct ARMSOCNullEXARec *null_exa = calloc(sizeof(*null_exa), 1);
+	struct ARMSOCNullEXARec *null_exa;
 	struct ARMSOCEXARec *armsoc_exa;
 	ExaDriverPtr exa;
 
 	INFO_MSG("Soft EXA mode");
 
+	null_exa = calloc(1, sizeof(*null_exa));
 	if (!null_exa)
-		return NULL;
+		goto out;
 
 	armsoc_exa = (struct ARMSOCEXARec *)null_exa;
 
 	exa = exaDriverAlloc();
 	if (!exa)
-		goto fail;
+		goto free_null_exa;
 
 	null_exa->exa = exa;
 
@@ -152,7 +153,7 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 
 	if (!exaDriverInit(pScreen, exa)) {
 		ERROR_MSG("exaDriverInit failed");
-		goto fail;
+		goto free_exa;
 	}
 
 	armsoc_exa->CloseScreen = CloseScreen;
@@ -160,13 +161,11 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 
 	return armsoc_exa;
 
-fail:
-	if (exa)
-		free(exa);
-
-	if (null_exa)
-		free(null_exa);
-
+free_exa:
+	free(exa);
+free_null_exa:
+	free(null_exa);
+out:
 	return NULL;
 }
 

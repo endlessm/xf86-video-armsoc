@@ -68,7 +68,7 @@ struct armsoc_device *armsoc_device_new(int fd,
 			int (*create_custom_gem)(int fd,
 				struct armsoc_create_gem *create_gem))
 {
-	struct armsoc_device *new_dev = malloc(sizeof(*new_dev));
+	struct armsoc_device *new_dev = calloc(1, sizeof *new_dev);
 	if (!new_dev)
 		return NULL;
 

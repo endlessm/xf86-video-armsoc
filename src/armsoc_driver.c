@@ -663,7 +663,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			 * driverPrivate field.
 			 */
 			pScrn->driverPrivate =
-					calloc(1, sizeof(struct ARMSOCRec));
+					calloc(1, sizeof *pARMSOC);
 			if (!pScrn->driverPrivate)
 				return FALSE;
 
@@ -823,7 +823,7 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	 * Process the "xorg.conf" file options:
 	 */
 	xf86CollectOptions(pScrn, NULL);
-	pARMSOC->pOptionInfo = calloc(1, sizeof(ARMSOCOptions));
+	pARMSOC->pOptionInfo = malloc(sizeof(ARMSOCOptions));
 	if (!pARMSOC->pOptionInfo)
 		goto fail2;
 
