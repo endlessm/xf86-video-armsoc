@@ -75,8 +75,9 @@ struct armsoc_bo *armsoc_bo_from_drawable(DrawablePtr pDraw)
 
 void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw)
 {
+	struct armsoc_bo *replaced;
 	bo->pDraw = pDraw;
-	HASH_ADD_PTR(hash, pDraw, bo);
+	HASH_REPLACE_PTR(hash, pDraw, bo, replaced);
 }
 
 /* device related functions:

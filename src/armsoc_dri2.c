@@ -91,11 +91,14 @@ canflip(DrawablePtr pDraw)
 	}
 }
 
-static inline Bool
+static inline void
 exchangebufs(DrawablePtr pDraw, DRI2BufferPtr a, DRI2BufferPtr b)
 {
+	struct ARMSOCDRI2BufferRec *aa = ARMSOCBUF(a);
+	struct ARMSOCDRI2BufferRec *bb = ARMSOCBUF(b);
+
 	exchange(a->name, b->name);
-	return TRUE;
+	exchange(aa->bo, bb->bo);
 }
 
 /* Migrate pixmap to UMP buffer */
@@ -226,8 +229,6 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		return DRIBUF(buf);
 	}
 
-	if (bo)
-		armsoc_bo_unreference(bo);
 	bo = armsoc_bo_new_with_dim(pARMSOC->dev,
                                 pDraw->width,
                                 pDraw->height,
@@ -429,7 +430,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				set_scanout_bo(pScrn, old_dst_bo);
+				armsoc_bo_set_drawable(old_dst_bo, pDraw);
+				set_scanout_bo(pScrn, old_src_bo);
 			}
 		}
 	}

@@ -1413,11 +1413,15 @@ drmmode_clones_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode)
 void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo)
 {
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct armsoc_bo *old_bo = pARMSOC->scanout;
 
 	/* It had better have a framebuffer if we're scanning it out */
 	assert(armsoc_bo_get_fb(bo));
 
+	armsoc_bo_reference(bo);
 	pARMSOC->scanout = bo;
+	if (old_bo)
+		armsoc_bo_unreference(old_bo);
 }
 
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
@@ -1502,8 +1506,6 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 					return FALSE;
 				}
 			}
-			/* delete old scanout buffer */
-			armsoc_bo_unreference(pARMSOC->scanout);
 			/* use new scanout buffer */
 			set_scanout_bo(pScrn, new_scanout);
 		}

@@ -1008,6 +1008,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	}
 
 	/* Initialize some generic 2D drawing functions: */
+	armsoc_bo_reference(pARMSOC->scanout);
 	if (!fbScreenInit(pScreen, armsoc_bo_map(pARMSOC->scanout),
 			pScrn->virtualX, pScrn->virtualY,
 			pScrn->xDpi, pScrn->yDpi, pScrn->displayWidth,
