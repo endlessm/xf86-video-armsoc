@@ -319,7 +319,7 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 
         pScratchPixmap = GetScratchPixmapHeader(pScreen,
 		armsoc_bo_width(src->bo), armsoc_bo_height(src->bo),
-		armsoc_bo_depth(src->bo), armsoc_bo_bpp(src->bo) * 8,
+		armsoc_bo_depth(src->bo), armsoc_bo_bpp(src->bo),
 		armsoc_bo_pitch(src->bo), armsoc_bo_map(src->bo));
 		
 
