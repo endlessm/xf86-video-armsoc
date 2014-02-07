@@ -30,7 +30,6 @@
 #include "config.h"
 #endif
 
-#include <unistd.h>
 #include "armsoc_driver.h"
 #include "armsoc_exa.h"
 
@@ -574,14 +573,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		} else {
 			if (ret == 0)
 				cmd->flags |= ARMSOC_SWAP_FAKE_FLIP;
-			else {
-				int i;
-				/* Hack to wait for vblank, as it seems like
-				 * Mali reuses the old front buffer as soon
-				 * as ScheduleSwap returns. */
-				for (i = 0; i < 200; i++) usleep(1);
-				// FIXME should we exchangebufs here instead of later?
-			}
 
 			if (pARMSOC->drmmode_interface->use_page_flip_events)
 				cmd->swapCount = ret;
