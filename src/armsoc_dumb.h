@@ -60,6 +60,9 @@ struct armsoc_create_gem {
 
 void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw);
 struct armsoc_bo *armsoc_bo_from_drawable(DrawablePtr pDraw);
+void armsoc_bo_set_backup(struct armsoc_bo *bo, int devkind, void *ptr);
+void armsoc_bo_get_backup(struct armsoc_bo *bo, int *devkind, void **ptr);
+
 struct armsoc_device *armsoc_device_new(int fd,
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem));
 void armsoc_device_del(struct armsoc_device *dev);
@@ -86,6 +89,7 @@ uint32_t armsoc_bo_pitch(struct armsoc_bo *bo);
 
 void armsoc_bo_reference(struct armsoc_bo *bo);
 void armsoc_bo_unreference(struct armsoc_bo *bo);
+int armsoc_bo_refcnt(struct armsoc_bo *bo);
 
 /* When dmabuf is set on a bo, armsoc_bo_cpu_prep()
  *  waits for KDS shared access

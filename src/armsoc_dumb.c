@@ -60,6 +60,8 @@ struct armsoc_bo {
 	 */
 	uint32_t original_size;
 	uint32_t name;
+	int orig_dev_kind;
+	void *orig_devprivate_ptr;
 	DrawablePtr pDraw;
 	UT_hash_handle hh;
 };
@@ -78,6 +80,18 @@ void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw)
 	struct armsoc_bo *replaced;
 	bo->pDraw = pDraw;
 	HASH_REPLACE_PTR(hash, pDraw, bo, replaced);
+}
+
+void armsoc_bo_set_backup(struct armsoc_bo *bo, int dev_kind, void *ptr)
+{
+	bo->orig_dev_kind = dev_kind;
+	bo->orig_devprivate_ptr = ptr;
+}
+
+void armsoc_bo_get_backup(struct armsoc_bo *bo, int *dev_kind, void **ptr)
+{
+	*dev_kind = bo->orig_dev_kind;
+	*ptr = bo->orig_devprivate_ptr;
 }
 
 /* device related functions:
@@ -240,6 +254,11 @@ void armsoc_bo_reference(struct armsoc_bo *bo)
 {
 	assert(bo->refcnt > 0);
 	bo->refcnt++;
+}
+
+int armsoc_bo_refcnt(struct armsoc_bo *bo)
+{
+	return bo->refcnt;
 }
 
 uint32_t armsoc_bo_name(struct armsoc_bo *bo)

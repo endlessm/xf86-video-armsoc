@@ -145,10 +145,7 @@ MigratePixmapToGEM(struct ARMSOCRec *pARMSOC, DrawablePtr pDraw)
         }
     }
 
-    // FIXME Back these up?
-    //umpbuf->BackupDevKind = pPixmap->devKind;
-    //umpbuf->BackupDevPrivatePtr = pPixmap->devPrivate.ptr;
-
+    armsoc_bo_set_backup(bo, pPixmap->devKind, pPixmap->devPrivate.ptr);
     pPixmap->devKind = pitch;
     pPixmap->devPrivate.ptr = addr;
 
@@ -267,11 +264,21 @@ static void
 ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 {
 	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
+	struct armsoc_bo *bo;
 
 	if (--buf->refcnt > 0)
 		return;
 
-	armsoc_bo_unreference(buf->bo);
+	bo = buf->bo;
+	if (pDraw->type == DRAWABLE_PIXMAP && armsoc_bo_refcnt(bo) == 1) {
+		/* We're about to destroy the bo behind a migrated pixmap.
+		 * Restore original devKind/devPrivate.ptr.
+		 */
+		PixmapPtr pPixmap = (PixmapPtr) pDraw;
+		armsoc_bo_get_backup(bo, &pPixmap->devKind, &pPixmap->devPrivate.ptr);
+	}
+
+	armsoc_bo_unreference(bo);
 	free(buf);
 }
 
