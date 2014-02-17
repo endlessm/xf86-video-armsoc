@@ -1508,6 +1508,9 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 			}
 			/* use new scanout buffer */
 			set_scanout_bo(pScrn, new_scanout);
+			/* set_scanout_bo takes its own reference, we have
+			 * no other hold on this bo. */
+			armsoc_bo_unreference(new_scanout);
 		}
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
 	} else
@@ -1533,6 +1536,16 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 		 */
 		rootPixmap->drawable.serialNumber = NEXT_SERIAL_NUMBER;
 	}
+
+	/* Now that we've bound this bo to the root pixmap, we need to be
+	 * sure we tie its lifetime to that pixmap. The root pixmap is not
+	 * one of the ones we're typically asked to CreateBuffers for.
+	 * The best match I can find here is to assume it has taken over
+	 * the allocation provided to fbScreenInit. */
+	armsoc_bo_unreference(pARMSOC->fb_bo);
+	pARMSOC->fb_bo = pARMSOC->scanout;
+	armsoc_bo_reference(pARMSOC->fb_bo);
+
 	TRACE_EXIT();
 	return TRUE;
 }
