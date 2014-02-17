@@ -231,6 +231,11 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
                                 pDraw->depth,
                                 pDraw->bitsPerPixel,
 				canflip(pDraw) ? ARMSOC_BO_SCANOUT : ARMSOC_BO_NON_SCANOUT);
+	if (!bo) {
+	        ErrorF("ARMSOCDRI2CreateBuffer: BO alloc failed\n");
+		free(buf);
+		return NULL;
+	}
 
 	armsoc_bo_set_drawable(bo, pDraw);
 	DRIBUF(buf)->name = armsoc_bo_name(bo);
