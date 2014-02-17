@@ -1008,7 +1008,6 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	}
 
 	/* Initialize some generic 2D drawing functions: */
-	armsoc_bo_reference(pARMSOC->scanout);
 	if (!fbScreenInit(pScreen, armsoc_bo_map(pARMSOC->scanout),
 			pScrn->virtualX, pScrn->virtualY,
 			pScrn->xDpi, pScrn->yDpi, pScrn->displayWidth,
@@ -1016,6 +1015,8 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 		ERROR_MSG("fbScreenInit() failed!");
 		goto fail3;
 	}
+	pARMSOC->fb_bo = pARMSOC->scanout;
+	armsoc_bo_reference(pARMSOC->fb_bo);
 
 	/* Fixup RGB ordering: */
 	visual = pScreen->visuals + pScreen->numVisuals;
@@ -1201,6 +1202,7 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 	if (pScreen->devPrivate) {
 		(void) (*pScreen->DestroyPixmap)(pScreen->devPrivate);
 		pScreen->devPrivate = NULL;
+		armsoc_bo_unreference(pARMSOC->fb_bo);
 	}
 
 	unwrap(pARMSOC, pScreen, CloseScreen);
@@ -1217,6 +1219,7 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 
 	/* scanout buffer is released when root pixmap is destroyed */
+	armsoc_bo_unreference(pARMSOC->scanout);
 	pARMSOC->scanout = NULL;
 
 	pScrn->displayWidth = 0;

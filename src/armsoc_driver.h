@@ -133,6 +133,7 @@ struct ARMSOCRec {
 
 	/** Scan-out buffer. */
 	struct armsoc_bo		*scanout;
+	struct armsoc_bo		*fb_bo;
 
 	/** Pointer to the options for this screen. */
 	OptionInfoPtr		pOptionInfo;

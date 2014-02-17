@@ -80,6 +80,8 @@ void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw)
 	struct armsoc_bo *replaced;
 	bo->pDraw = pDraw;
 	HASH_REPLACE_PTR(hash, pDraw, bo, replaced);
+	if (replaced)
+		replaced->pDraw = NULL;
 }
 
 void armsoc_bo_set_backup(struct armsoc_bo *bo, int dev_kind, void *ptr)
