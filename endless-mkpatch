@@ -1,0 +1,1 @@
+git diff 0.6.0..HEAD > endless.patch
