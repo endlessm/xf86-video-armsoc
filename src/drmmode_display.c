@@ -925,6 +925,8 @@ drmmode_output_get_modes(xf86OutputPtr output)
 				drmmode_output->edid_blob->data);
 
 	if (ddc_mon) {
+		if (drmmode_output->edid_blob->length > 128)
+			ddc_mon->flags |= MONITOR_EDID_COMPLETE_RAWDATA;
 		xf86OutputSetEDID(output, ddc_mon);
 		xf86SetDDCproperties(pScrn, ddc_mon);
 	}
