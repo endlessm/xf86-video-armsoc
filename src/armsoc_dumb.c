@@ -39,6 +39,8 @@
 struct armsoc_device {
 	int fd;
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem);
+	Bool alpha_supported;
+
 };
 
 struct armsoc_bo {
@@ -74,6 +76,7 @@ struct armsoc_device *armsoc_device_new(int fd,
 
 	new_dev->fd = fd;
 	new_dev->create_custom_gem = create_custom_gem;
+	new_dev->alpha_supported = TRUE;
 	return new_dev;
 }
 
@@ -336,13 +339,29 @@ int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op)
 
 int armsoc_bo_add_fb(struct armsoc_bo *bo)
 {
-	int ret;
+	int ret, depth = bo->depth;
 
 	assert(bo->refcnt > 0);
 	assert(bo->fb_id == 0);
 
-	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->depth,
-			bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
+	if (bo->bpp == 32 && bo->depth == 32 && !bo->dev->alpha_supported)
+		depth = 24;
+
+	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, depth,
+		bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
+
+	if (ret < 0 && bo->bpp == 32 && bo->depth == 32 && bo->dev->alpha_supported) {
+		/* The DRM driver may not support an alpha channel but it is possible
+		 * to continue by ignoring the alpha, so if an attempt to create
+		 * a depth 32, bpp 32 framebuffer fails we retry with depth 24, bpp 32
+		 */
+		xf86DrvMsg(-1, X_WARNING,
+				"depth 32 FB unsupported : falling back to depth 24\n");
+		bo->dev->alpha_supported = FALSE;
+		ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, 24,
+				bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
+	}
+
 	if (ret < 0) {
 		bo->fb_id = 0;
 		return ret;
