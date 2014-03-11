@@ -266,6 +266,12 @@ uint32_t armsoc_bo_height(struct armsoc_bo *bo)
 	return bo->height;
 }
 
+uint8_t armsoc_bo_depth(struct armsoc_bo *bo)
+{
+	assert(bo->refcnt > 0);
+	return bo->depth;
+}
+
 uint32_t armsoc_bo_bpp(struct armsoc_bo *bo)
 {
 	assert(bo->refcnt > 0);
