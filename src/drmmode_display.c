@@ -83,6 +83,8 @@ struct drmmode_crtc_private_rec {
 };
 
 struct drmmode_prop_rec {
+	int drm_object;
+	int drm_object_id;
 	drmModePropertyPtr mode_prop;
 	/* Index within the kernel-side property arrays for this connector. */
 	int index;
@@ -1007,7 +1009,8 @@ drmmode_property_ignore(drmModePropertyPtr prop)
 		return TRUE;
 	/* ignore standard property */
 	if (!strcmp(prop->name, "EDID") ||
-			!strcmp(prop->name, "DPMS"))
+			!strcmp(prop->name, "DPMS") ||
+			!strcmp(prop->name, "mode"))
 		return TRUE;
 
 	return FALSE;
@@ -1022,12 +1025,18 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	drmModePropertyPtr drmmode_prop;
 	uint32_t value;
 	int i, j, err;
+	drmModeEncoderPtr enc;
+	drmModeObjectPropertiesPtr crtcprops;
 
+	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
 	drmmode_output->props =
-		calloc(connector->count_props,
+		calloc(connector->count_props + crtcprops->count_props,
 				sizeof(struct drmmode_prop_rec));
-	if (!drmmode_output->props)
+	if (!drmmode_output->props) {
+		drmModeFreeObjectProperties(crtcprops);
 		return;
+	}
 
 	drmmode_output->num_props = 0;
 	for (i = 0; i < connector->count_props; i++) {
@@ -1040,6 +1049,27 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		drmmode_output->props[drmmode_output->num_props].mode_prop =
 				drmmode_prop;
 		drmmode_output->props[drmmode_output->num_props].index = i;
+		drmmode_output->props[drmmode_output->num_props].drm_object_id = connector->connector_id;
+		drmmode_output->props[drmmode_output->num_props].drm_object =
+				DRM_MODE_OBJECT_CONNECTOR;
+
+		drmmode_output->num_props++;
+	}
+	for (i = 0; i < crtcprops->count_props; i++) {
+		drmmode_prop = drmModeGetProperty(drmmode->fd,
+			crtcprops->props[i]);
+
+		if (drmmode_property_ignore(drmmode_prop)) {
+			drmModeFreeProperty(drmmode_prop);
+			continue;
+		}
+		drmmode_output->props[drmmode_output->num_props].mode_prop =
+				drmmode_prop;
+		drmmode_output->props[drmmode_output->num_props].index = i;
+		drmmode_output->props[drmmode_output->num_props].drm_object_id = enc->crtc_id;
+		drmmode_output->props[drmmode_output->num_props].drm_object =
+				DRM_MODE_OBJECT_CRTC;
+
 		drmmode_output->num_props++;
 	}
 
@@ -1047,7 +1077,10 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		struct drmmode_prop_rec *p = &drmmode_output->props[i];
 		drmmode_prop = p->mode_prop;
 
-		value = drmmode_output->connector->prop_values[p->index];
+		if (p->drm_object == DRM_MODE_OBJECT_CONNECTOR)
+			value = drmmode_output->connector->prop_values[p->index];
+		else
+			value = crtcprops->prop_values[p->index];
 
 		if (drmmode_prop->flags & DRM_MODE_PROP_RANGE) {
 			INT32 range[2];
@@ -1125,6 +1158,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 						err);
 		}
 	}
+	drmModeFreeObjectProperties(crtcprops);
 }
 
 static Bool
@@ -1149,8 +1183,9 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 				return FALSE;
 			val = *(uint32_t *)value->data;
 
-			ret = drmModeConnectorSetProperty(drmmode->fd,
-					drmmode_output->output_id,
+			ret = drmModeObjectSetProperty(drmmode->fd,
+					p->drm_object_id,
+					p->drm_object,
 					p->mode_prop->prop_id, (uint64_t)val);
 
 			if (ret)
@@ -1179,9 +1214,10 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 			for (j = 0; j < p->mode_prop->count_enums; j++) {
 				if (!strcmp(p->mode_prop->enums[j].name,
 						name)) {
-					ret = drmModeConnectorSetProperty(
+					ret = drmModeObjectSetProperty(
 						drmmode->fd,
-						drmmode_output->output_id,
+						p->drm_object_id,
+						p->drm_object,
 						p->mode_prop->prop_id,
 						p->mode_prop->enums[j].value);
 
@@ -1205,6 +1241,8 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	uint32_t value;
 	int err, i;
+	drmModeEncoderPtr enc;
+	drmModeObjectPropertiesPtr crtcprops;
 
 	if (output->scrn->vtSema) {
 		drmModeFreeConnector(drmmode_output->connector);
@@ -1218,7 +1256,13 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 		if (p->atoms[0] != property)
 			continue;
 
-		value = drmmode_output->connector->prop_values[p->index];
+		if (p->drm_object == DRM_MODE_OBJECT_CRTC) {
+			enc = drmModeGetEncoder(drmmode->fd, drmmode_output->connector->encoder_id);
+			crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+			value = crtcprops->prop_values[p->index];
+			drmModeFreeObjectProperties(crtcprops);
+		} else
+			value = drmmode_output->connector->prop_values[p->index];
 
 		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
 			err = RRChangeOutputProperty(output->randr_output,
