@@ -78,6 +78,8 @@ struct drmmode_crtc_private_rec {
 	/* settings retained on last good modeset */
 	int last_good_x;
 	int last_good_y;
+	int underscan_x;
+	int underscan_y;
 	Rotation last_good_rotation;
 	DisplayModePtr last_good_mode;
 };
@@ -109,6 +111,43 @@ struct drmmode_output_priv {
 
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height);
+
+static void drmmode_get_underscan(struct drmmode_crtc_private_rec *drmmode_crtc, int *outx, int *outy)
+{
+	int crop = 0, i;
+	int x = 0, y = 0;
+
+	drmModePropertyPtr prop;
+	drmModeObjectPropertiesPtr crtcprops;
+	crtcprops = drmModeObjectGetProperties(drmmode_crtc->drmmode->fd,
+					       drmmode_crtc->crtc_id, DRM_MODE_OBJECT_CRTC);
+
+	for (i = 0; i < crtcprops->count_props; i++) {
+		prop = drmModeGetProperty(drmmode_crtc->drmmode->fd,
+			crtcprops->props[i]);
+		if (!strcmp(prop->name, "underscan")) {
+			int e;
+			for (e = 0; e < prop->count_enums; e++) {
+				if (prop->enums[e].value == crtcprops->prop_values[i] &&
+				    !strcmp(prop->enums[e].name, "crop"))
+					crop = 1;
+			}
+		}
+		if (!strcmp(prop->name, "underscan vborder"))
+			y = crtcprops->prop_values[i];
+		if (!strcmp(prop->name, "underscan hborder"))
+			x = crtcprops->prop_values[i];
+		drmModeFreeProperty(prop);
+	}
+
+	if (!crop) {
+		*outx = 0;
+		*outy = 0;
+	} else {
+		*outx = x;
+		*outy = y;
+	}
+}
 
 static struct drmmode_rec *
 drmmode_from_scrn(ScrnInfoPtr pScrn)
@@ -194,6 +233,9 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 	uint32_t fb_id;
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	drmModeModeInfo kmode;
+	int xu, yu;
+
+	drmmode_get_underscan(drmmode_crtc, &xu, &yu);
 
 	if (!drmmode_crtc->last_good_mode) {
 		DEBUG_MSG("No last good values to use");
@@ -218,6 +260,8 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 			drmmode_crtc->last_good_x,
 			drmmode_crtc->last_good_y,
 			output_ids, output_count, &kmode);
+	drmmode_crtc->underscan_x = xu;
+	drmmode_crtc->underscan_y = yu;
 
 	/* let RandR know we changed things */
 	xf86RandR12TellChanged(pScrn->pScreen);
@@ -242,6 +286,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	uint32_t fb_id;
 	drmModeModeInfo kmode;
 	drmModeCrtcPtr newcrtc = NULL;
+	int xu, yu;
 
 	TRACE_ENTER();
 
@@ -343,6 +388,10 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		else
 			goto done_setting;
 	}
+
+	drmmode_get_underscan(drmmode_crtc, &xu, &yu);
+	drmmode_crtc->underscan_x = xu;
+	drmmode_crtc->underscan_y = yu;
 
 	/* When called on a resize, crtc->mode already contains the
 	 * resized values so we can't use this for recovery.
@@ -477,6 +526,9 @@ drmmode_show_cursor_image(xf86CrtcPtr crtc, Bool update_image)
 
 		if ((crtc_y + h) > crtc->mode.VDisplay)
 			h = crtc->mode.VDisplay - crtc_y;
+
+		crtc_x += drmmode_crtc->underscan_x;
+		crtc_y += drmmode_crtc->underscan_y;
 
 		/* note src coords (last 4 args) are in Q16 format */
 		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
