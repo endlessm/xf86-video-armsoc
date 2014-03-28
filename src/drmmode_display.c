@@ -1667,10 +1667,11 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 	 * one of the ones we're typically asked to CreateBuffers for.
 	 * The best match I can find here is to assume it has taken over
 	 * the allocation provided to fbScreenInit. */
-	armsoc_bo_unreference(pARMSOC->fb_bo);
-	pARMSOC->fb_bo = pARMSOC->scanout;
-	armsoc_bo_reference(pARMSOC->fb_bo);
-
+	if (pARMSOC->fb_bo != pARMSOC->scanout) {
+		armsoc_bo_unreference(pARMSOC->fb_bo);
+		pARMSOC->fb_bo = pARMSOC->scanout;
+		armsoc_bo_reference(pARMSOC->fb_bo);
+	}
 	TRACE_EXIT();
 	return TRUE;
 }
