@@ -481,11 +481,34 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
 	struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(pDstBuffer);
-	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
+	struct ARMSOCDRISwapCmd *cmd;
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int new_canflip, ret, do_flip;
 
+	src_bo = src->bo;
+	dst_bo = dst->bo;
+
+	src_fb_id = armsoc_bo_get_fb(src_bo);
+	dst_fb_id = armsoc_bo_get_fb(dst_bo);
+
+	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
+
+	/* Mali does not always call GetBuffers before SwapBuffers. This means
+	 * that when we change resolution, we change scanout but Mali does not
+	 * necessarily notice. It sometimes then comes back and requests a
+	 * flip between the old buffers, and our handling of this simply
+	 * confuses state for all further flips and we end up stuck on a
+	 * stale scanout buffer.
+	 * Work around this Mali issue by detecting the case and bailing out.
+	 */
+	if (do_flip && dst_bo != pARMSOC->scanout) {
+		ErrorF("BAD MALI! Rejecting flip where dst is "
+			"non-scanout BO %d\n", armsoc_bo_name(dst_bo));
+		return FALSE;
+	}
+
+	cmd = calloc(1, sizeof(*cmd));
 	if (!cmd)
 		return FALSE;
 
@@ -507,12 +530,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	ARMSOCDRI2ReferenceBuffer(pSrcBuffer);
 	ARMSOCDRI2ReferenceBuffer(pDstBuffer);
 	pARMSOC->pending_flips++;
-
-	src_bo = src->bo;
-	dst_bo = dst->bo;
-
-	src_fb_id = armsoc_bo_get_fb(src_bo);
-	dst_fb_id = armsoc_bo_get_fb(dst_bo);
 
 	new_canflip = canflip(pDraw);
 	if ((src->previous_canflip != new_canflip) ||
@@ -536,8 +553,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	armsoc_bo_reference(src_bo);
 	armsoc_bo_reference(dst_bo);
-
-	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
 
 	/* After a resolution change the back buffer (src) will still be
 	 * of the original size. We can't sensibly flip to a framebuffer of
