@@ -112,19 +112,18 @@ struct drmmode_output_priv {
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height);
 
-static void drmmode_get_underscan(struct drmmode_crtc_private_rec *drmmode_crtc, int *outx, int *outy)
+static void drmmode_get_underscan(int fd, uint32_t crtc_id, int *outx, int *outy)
 {
 	int crop = 0, i;
 	int x = 0, y = 0;
 
 	drmModePropertyPtr prop;
 	drmModeObjectPropertiesPtr crtcprops;
-	crtcprops = drmModeObjectGetProperties(drmmode_crtc->drmmode->fd,
-					       drmmode_crtc->crtc_id, DRM_MODE_OBJECT_CRTC);
+	crtcprops = drmModeObjectGetProperties(fd, crtc_id,
+	                                       DRM_MODE_OBJECT_CRTC);
 
 	for (i = 0; i < crtcprops->count_props; i++) {
-		prop = drmModeGetProperty(drmmode_crtc->drmmode->fd,
-			crtcprops->props[i]);
+		prop = drmModeGetProperty(fd, crtcprops->props[i]);
 		if (!strcmp(prop->name, "underscan")) {
 			int e;
 			for (e = 0; e < prop->count_enums; e++) {
@@ -161,20 +160,20 @@ drmmode_from_scrn(ScrnInfoPtr pScrn)
 
 static void
 drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
-		DisplayModePtr	mode)
+		DisplayModePtr	mode, int xu, int yu)
 {
 	memset(mode, 0, sizeof(DisplayModeRec));
 	mode->status = MODE_OK;
 
 	mode->Clock = kmode->clock;
 
-	mode->HDisplay = kmode->hdisplay;
+	mode->HDisplay = kmode->hdisplay - 2*xu;
 	mode->HSyncStart = kmode->hsync_start;
 	mode->HSyncEnd = kmode->hsync_end;
 	mode->HTotal = kmode->htotal;
 	mode->HSkew = kmode->hskew;
 
-	mode->VDisplay = kmode->vdisplay;
+	mode->VDisplay = kmode->vdisplay - 2*yu;
 	mode->VSyncStart = kmode->vsync_start;
 	mode->VSyncEnd = kmode->vsync_end;
 	mode->VTotal = kmode->vtotal;
@@ -192,22 +191,30 @@ drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 		mode->type |= M_T_PREFERRED;
 
 	xf86SetModeCrtc(mode, pScrn->adjustFlags);
+	/* We need to store the underscan values...
+	 * the exynose drm module doesn't touch HSkew
+	 * so we steal it for this. */
+	mode->HSkew = (xu << 8) + yu;
 }
 
 static void
 drmmode_ConvertToKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 		DisplayModePtr mode)
 {
-	memset(kmode, 0, sizeof(*kmode));
+	int xu, yu;
 
+	xu = mode->HSkew >> 8;
+	yu = mode->HSkew & 0xFF;
+
+	memset(kmode, 0, sizeof(*kmode));
 	kmode->clock = mode->Clock;
-	kmode->hdisplay = mode->HDisplay;
+	kmode->hdisplay = mode->HDisplay + 2*xu;
 	kmode->hsync_start = mode->HSyncStart;
 	kmode->hsync_end = mode->HSyncEnd;
 	kmode->htotal = mode->HTotal;
 	kmode->hskew = mode->HSkew;
 
-	kmode->vdisplay = mode->VDisplay;
+	kmode->vdisplay = mode->VDisplay + 2*yu;
 	kmode->vsync_start = mode->VSyncStart;
 	kmode->vsync_end = mode->VSyncEnd;
 	kmode->vtotal = mode->VTotal;
@@ -225,6 +232,18 @@ drmmode_crtc_dpms(xf86CrtcPtr drmmode_crtc, int mode)
 	/* TODO: MIDEGL-1431: Implement this function */
 }
 
+/* Revert mode is odd with underscan properties present.
+ * We must use the current properties instead of the one
+ * saved with the mode.  We also need to change the mode
+ * so it saves the current property values, so it's not
+ * quite a real revert.
+ *
+ * this is all rather  untested because I don't know how to
+ * cause a revert to occur on demand.
+ * if this proves problematic, the next best solution might
+ * be to set the properties based on the underscan values
+ * encoded in the mode, but this could confusing to the UI.
+ */
 static int
 drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 {
@@ -235,7 +254,8 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 	drmModeModeInfo kmode;
 	int xu, yu;
 
-	drmmode_get_underscan(drmmode_crtc, &xu, &yu);
+	drmmode_get_underscan(drmmode_crtc->drmmode->fd,
+	                      drmmode_crtc->crtc_id, &xu, &yu);
 
 	if (!drmmode_crtc->last_good_mode) {
 		DEBUG_MSG("No last good values to use");
@@ -263,6 +283,9 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 	drmmode_crtc->underscan_x = xu;
 	drmmode_crtc->underscan_y = yu;
 
+	/* update the underscan params so the mouse doesn't
+	 * get confused. */
+	drmmode_crtc->last_good_mode->HSkew = (xu << 8) + yu;
 	/* let RandR know we changed things */
 	xf86RandR12TellChanged(pScrn->pScreen);
 
@@ -389,7 +412,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 			goto done_setting;
 	}
 
-	drmmode_get_underscan(drmmode_crtc, &xu, &yu);
+	drmmode_get_underscan(drmmode->fd, drmmode_crtc->crtc_id, &xu, &yu);
 	drmmode_crtc->underscan_x = xu;
 	drmmode_crtc->underscan_y = yu;
 
@@ -955,7 +978,11 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
+	drmModeEncoderPtr enc;
+	int xu, yu;
 
+	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
 	/* look for an EDID property */
 	for (i = 0; i < connector->count_props; i++) {
 		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
@@ -991,7 +1018,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	for (i = 0; i < connector->count_modes; i++) {
 		DisplayModePtr mode = xnfalloc(sizeof(DisplayModeRec));
 
-		drmmode_ConvertFromKMode(pScrn, &connector->modes[i], mode);
+		drmmode_ConvertFromKMode(pScrn, &connector->modes[i], mode, xu, yu);
 		modes = xf86ModesAdd(modes, mode);
 	}
 	return modes;
