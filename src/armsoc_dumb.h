@@ -58,6 +58,7 @@ struct armsoc_create_gem {
 	uint64_t size;
 };
 
+void armsoc_bo_do_pending_deletions(void);
 void armsoc_bo_set_drawable(struct armsoc_bo *bo, DrawablePtr pDraw);
 struct armsoc_bo *armsoc_bo_from_drawable(DrawablePtr pDraw);
 void armsoc_bo_set_backup(struct armsoc_bo *bo, int devkind, void *ptr);
