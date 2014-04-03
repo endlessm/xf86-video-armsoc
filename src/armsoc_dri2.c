@@ -672,6 +672,14 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	if (do_flip) {
 		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
+
+		/* Mali sometimes asks us to destroy DRI2 buffers for windows before
+		 * it has finished reading from them, so we don't free unused BOs
+		 * immediately. Here at ScheduleSwap time we seem to have a reliable
+		 * indication that Mali has finished drawing the scene, so we go ahead
+		 * and process all pending BO deletions. */
+		armsoc_bo_do_pending_deletions();
+
 		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
 		 * only partially successful
 		 */

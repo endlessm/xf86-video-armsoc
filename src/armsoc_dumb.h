@@ -92,6 +92,7 @@ int armsoc_bo_rm_fb(struct armsoc_bo *bo);
 int armsoc_bo_resize(struct armsoc_bo *bo, uint32_t new_width,
 						uint32_t new_height);
 
+void armsoc_bo_do_pending_deletions(void);
 
 #endif /* ARMSOC_DUMB_H_ */
 
