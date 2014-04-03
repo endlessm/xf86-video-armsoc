@@ -946,6 +946,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	xf86CrtcConfigPtr xf86_config;
 	int j;
 	char *fbdev;
+	int width, height;
 
 	TRACE_ENTER();
 
@@ -958,8 +959,16 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	DEBUG_MSG("allocating new scanout buffer: %dx%d",
 			pScrn->virtualX, pScrn->virtualY);
 	assert(!pARMSOC->scanout);
-	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
-			pScrn->virtualY, pScrn->depth, pScrn->bitsPerPixel,
+	width = pScrn->currentMode->HDisplay
+	      + 2*(pScrn->currentMode->HSkew >> 8);
+	height = pScrn->currentMode->VDisplay
+	       + 2*(pScrn->currentMode->HSkew & 0xFF);
+	if (pScrn->virtualX > width)
+		width = pScrn->virtualX;
+	if (pScrn->virtualY > height)
+		height = pScrn->virtualY;
+	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, width,
+			height, pScrn->depth, pScrn->bitsPerPixel,
 			ARMSOC_BO_SCANOUT);
 	if (!pARMSOC->scanout) {
 		ERROR_MSG("Cannot allocate scanout buffer\n");
