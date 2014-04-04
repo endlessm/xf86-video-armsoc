@@ -78,11 +78,15 @@ struct drmmode_crtc_private_rec {
 	/* settings retained on last good modeset */
 	int last_good_x;
 	int last_good_y;
+	int underscan_x;
+	int underscan_y;
 	Rotation last_good_rotation;
 	DisplayModePtr last_good_mode;
 };
 
 struct drmmode_prop_rec {
+	int drm_object;
+	int drm_object_id;
 	drmModePropertyPtr mode_prop;
 	/* Index within the kernel-side property arrays for this connector. */
 	int index;
@@ -108,6 +112,42 @@ struct drmmode_output_priv {
 static void drmmode_output_dpms(xf86OutputPtr output, int mode);
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height);
 
+static void drmmode_get_underscan(int fd, uint32_t crtc_id, int *outx, int *outy)
+{
+	int crop = 0, i;
+	int x = 0, y = 0;
+
+	drmModePropertyPtr prop;
+	drmModeObjectPropertiesPtr crtcprops;
+	crtcprops = drmModeObjectGetProperties(fd, crtc_id,
+	                                       DRM_MODE_OBJECT_CRTC);
+
+	for (i = 0; i < crtcprops->count_props; i++) {
+		prop = drmModeGetProperty(fd, crtcprops->props[i]);
+		if (!strcmp(prop->name, "underscan")) {
+			int e;
+			for (e = 0; e < prop->count_enums; e++) {
+				if (prop->enums[e].value == crtcprops->prop_values[i] &&
+				    !strcmp(prop->enums[e].name, "crop"))
+					crop = 1;
+			}
+		}
+		if (!strcmp(prop->name, "underscan vborder"))
+			y = crtcprops->prop_values[i];
+		if (!strcmp(prop->name, "underscan hborder"))
+			x = crtcprops->prop_values[i];
+		drmModeFreeProperty(prop);
+	}
+
+	if (!crop) {
+		*outx = 0;
+		*outy = 0;
+	} else {
+		*outx = x;
+		*outy = y;
+	}
+}
+
 static struct drmmode_rec *
 drmmode_from_scrn(ScrnInfoPtr pScrn)
 {
@@ -120,20 +160,20 @@ drmmode_from_scrn(ScrnInfoPtr pScrn)
 
 static void
 drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
-		DisplayModePtr	mode)
+		DisplayModePtr	mode, int xu, int yu)
 {
 	memset(mode, 0, sizeof(DisplayModeRec));
 	mode->status = MODE_OK;
 
 	mode->Clock = kmode->clock;
 
-	mode->HDisplay = kmode->hdisplay;
+	mode->HDisplay = kmode->hdisplay - 2*xu;
 	mode->HSyncStart = kmode->hsync_start;
 	mode->HSyncEnd = kmode->hsync_end;
 	mode->HTotal = kmode->htotal;
 	mode->HSkew = kmode->hskew;
 
-	mode->VDisplay = kmode->vdisplay;
+	mode->VDisplay = kmode->vdisplay - 2*yu;
 	mode->VSyncStart = kmode->vsync_start;
 	mode->VSyncEnd = kmode->vsync_end;
 	mode->VTotal = kmode->vtotal;
@@ -151,22 +191,30 @@ drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 		mode->type |= M_T_PREFERRED;
 
 	xf86SetModeCrtc(mode, pScrn->adjustFlags);
+	/* We need to store the underscan values...
+	 * the exynose drm module doesn't touch HSkew
+	 * so we steal it for this. */
+	mode->HSkew = (xu << 8) + yu;
 }
 
 static void
 drmmode_ConvertToKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 		DisplayModePtr mode)
 {
-	memset(kmode, 0, sizeof(*kmode));
+	int xu, yu;
 
+	xu = mode->HSkew >> 8;
+	yu = mode->HSkew & 0xFF;
+
+	memset(kmode, 0, sizeof(*kmode));
 	kmode->clock = mode->Clock;
-	kmode->hdisplay = mode->HDisplay;
+	kmode->hdisplay = mode->HDisplay + 2*xu;
 	kmode->hsync_start = mode->HSyncStart;
 	kmode->hsync_end = mode->HSyncEnd;
 	kmode->htotal = mode->HTotal;
 	kmode->hskew = mode->HSkew;
 
-	kmode->vdisplay = mode->VDisplay;
+	kmode->vdisplay = mode->VDisplay + 2*yu;
 	kmode->vsync_start = mode->VSyncStart;
 	kmode->vsync_end = mode->VSyncEnd;
 	kmode->vtotal = mode->VTotal;
@@ -184,6 +232,18 @@ drmmode_crtc_dpms(xf86CrtcPtr drmmode_crtc, int mode)
 	/* TODO: MIDEGL-1431: Implement this function */
 }
 
+/* Revert mode is odd with underscan properties present.
+ * We must use the current properties instead of the one
+ * saved with the mode.  We also need to change the mode
+ * so it saves the current property values, so it's not
+ * quite a real revert.
+ *
+ * this is all rather  untested because I don't know how to
+ * cause a revert to occur on demand.
+ * if this proves problematic, the next best solution might
+ * be to set the properties based on the underscan values
+ * encoded in the mode, but this could confusing to the UI.
+ */
 static int
 drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 {
@@ -192,6 +252,10 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 	uint32_t fb_id;
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	drmModeModeInfo kmode;
+	int xu, yu;
+
+	drmmode_get_underscan(drmmode_crtc->drmmode->fd,
+	                      drmmode_crtc->crtc_id, &xu, &yu);
 
 	if (!drmmode_crtc->last_good_mode) {
 		DEBUG_MSG("No last good values to use");
@@ -216,7 +280,12 @@ drmmode_revert_mode(xf86CrtcPtr crtc, uint32_t *output_ids, int output_count)
 			drmmode_crtc->last_good_x,
 			drmmode_crtc->last_good_y,
 			output_ids, output_count, &kmode);
+	drmmode_crtc->underscan_x = xu;
+	drmmode_crtc->underscan_y = yu;
 
+	/* update the underscan params so the mouse doesn't
+	 * get confused. */
+	drmmode_crtc->last_good_mode->HSkew = (xu << 8) + yu;
 	/* let RandR know we changed things */
 	xf86RandR12TellChanged(pScrn->pScreen);
 
@@ -240,6 +309,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	uint32_t fb_id;
 	drmModeModeInfo kmode;
 	drmModeCrtcPtr newcrtc = NULL;
+	int xu, yu;
 
 	TRACE_ENTER();
 
@@ -341,6 +411,10 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 		else
 			goto done_setting;
 	}
+
+	drmmode_get_underscan(drmmode->fd, drmmode_crtc->crtc_id, &xu, &yu);
+	drmmode_crtc->underscan_x = xu;
+	drmmode_crtc->underscan_y = yu;
 
 	/* When called on a resize, crtc->mode already contains the
 	 * resized values so we can't use this for recovery.
@@ -475,6 +549,9 @@ drmmode_show_cursor_image(xf86CrtcPtr crtc, Bool update_image)
 
 		if ((crtc_y + h) > crtc->mode.VDisplay)
 			h = crtc->mode.VDisplay - crtc_y;
+
+		crtc_x += drmmode_crtc->underscan_x;
+		crtc_y += drmmode_crtc->underscan_y;
 
 		/* note src coords (last 4 args) are in Q16 format */
 		drmModeSetPlane(drmmode->fd, cursor->ovr->plane_id,
@@ -901,7 +978,11 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
+	drmModeEncoderPtr enc;
+	int xu, yu;
 
+	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
 	/* look for an EDID property */
 	for (i = 0; i < connector->count_props; i++) {
 		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
@@ -937,7 +1018,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	for (i = 0; i < connector->count_modes; i++) {
 		DisplayModePtr mode = xnfalloc(sizeof(DisplayModeRec));
 
-		drmmode_ConvertFromKMode(pScrn, &connector->modes[i], mode);
+		drmmode_ConvertFromKMode(pScrn, &connector->modes[i], mode, xu, yu);
 		modes = xf86ModesAdd(modes, mode);
 	}
 	return modes;
@@ -1007,7 +1088,8 @@ drmmode_property_ignore(drmModePropertyPtr prop)
 		return TRUE;
 	/* ignore standard property */
 	if (!strcmp(prop->name, "EDID") ||
-			!strcmp(prop->name, "DPMS"))
+			!strcmp(prop->name, "DPMS") ||
+			!strcmp(prop->name, "mode"))
 		return TRUE;
 
 	return FALSE;
@@ -1022,12 +1104,18 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	drmModePropertyPtr drmmode_prop;
 	uint32_t value;
 	int i, j, err;
+	drmModeEncoderPtr enc;
+	drmModeObjectPropertiesPtr crtcprops;
 
+	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
 	drmmode_output->props =
-		calloc(connector->count_props,
+		calloc(connector->count_props + crtcprops->count_props,
 				sizeof(struct drmmode_prop_rec));
-	if (!drmmode_output->props)
+	if (!drmmode_output->props) {
+		drmModeFreeObjectProperties(crtcprops);
 		return;
+	}
 
 	drmmode_output->num_props = 0;
 	for (i = 0; i < connector->count_props; i++) {
@@ -1040,6 +1128,27 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		drmmode_output->props[drmmode_output->num_props].mode_prop =
 				drmmode_prop;
 		drmmode_output->props[drmmode_output->num_props].index = i;
+		drmmode_output->props[drmmode_output->num_props].drm_object_id = connector->connector_id;
+		drmmode_output->props[drmmode_output->num_props].drm_object =
+				DRM_MODE_OBJECT_CONNECTOR;
+
+		drmmode_output->num_props++;
+	}
+	for (i = 0; i < crtcprops->count_props; i++) {
+		drmmode_prop = drmModeGetProperty(drmmode->fd,
+			crtcprops->props[i]);
+
+		if (drmmode_property_ignore(drmmode_prop)) {
+			drmModeFreeProperty(drmmode_prop);
+			continue;
+		}
+		drmmode_output->props[drmmode_output->num_props].mode_prop =
+				drmmode_prop;
+		drmmode_output->props[drmmode_output->num_props].index = i;
+		drmmode_output->props[drmmode_output->num_props].drm_object_id = enc->crtc_id;
+		drmmode_output->props[drmmode_output->num_props].drm_object =
+				DRM_MODE_OBJECT_CRTC;
+
 		drmmode_output->num_props++;
 	}
 
@@ -1047,7 +1156,10 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		struct drmmode_prop_rec *p = &drmmode_output->props[i];
 		drmmode_prop = p->mode_prop;
 
-		value = drmmode_output->connector->prop_values[p->index];
+		if (p->drm_object == DRM_MODE_OBJECT_CONNECTOR)
+			value = drmmode_output->connector->prop_values[p->index];
+		else
+			value = crtcprops->prop_values[p->index];
 
 		if (drmmode_prop->flags & DRM_MODE_PROP_RANGE) {
 			INT32 range[2];
@@ -1125,6 +1237,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 						err);
 		}
 	}
+	drmModeFreeObjectProperties(crtcprops);
 }
 
 static Bool
@@ -1149,8 +1262,9 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 				return FALSE;
 			val = *(uint32_t *)value->data;
 
-			ret = drmModeConnectorSetProperty(drmmode->fd,
-					drmmode_output->output_id,
+			ret = drmModeObjectSetProperty(drmmode->fd,
+					p->drm_object_id,
+					p->drm_object,
 					p->mode_prop->prop_id, (uint64_t)val);
 
 			if (ret)
@@ -1179,9 +1293,10 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 			for (j = 0; j < p->mode_prop->count_enums; j++) {
 				if (!strcmp(p->mode_prop->enums[j].name,
 						name)) {
-					ret = drmModeConnectorSetProperty(
+					ret = drmModeObjectSetProperty(
 						drmmode->fd,
-						drmmode_output->output_id,
+						p->drm_object_id,
+						p->drm_object,
 						p->mode_prop->prop_id,
 						p->mode_prop->enums[j].value);
 
@@ -1205,6 +1320,8 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	uint32_t value;
 	int err, i;
+	drmModeEncoderPtr enc;
+	drmModeObjectPropertiesPtr crtcprops;
 
 	if (output->scrn->vtSema) {
 		drmModeFreeConnector(drmmode_output->connector);
@@ -1218,7 +1335,13 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 		if (p->atoms[0] != property)
 			continue;
 
-		value = drmmode_output->connector->prop_values[p->index];
+		if (p->drm_object == DRM_MODE_OBJECT_CRTC) {
+			enc = drmModeGetEncoder(drmmode->fd, drmmode_output->connector->encoder_id);
+			crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+			value = crtcprops->prop_values[p->index];
+			drmModeFreeObjectProperties(crtcprops);
+		} else
+			value = drmmode_output->connector->prop_values[p->index];
 
 		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
 			err = RRChangeOutputProperty(output->randr_output,
@@ -1544,10 +1667,11 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 	 * one of the ones we're typically asked to CreateBuffers for.
 	 * The best match I can find here is to assume it has taken over
 	 * the allocation provided to fbScreenInit. */
-	armsoc_bo_unreference(pARMSOC->fb_bo);
-	pARMSOC->fb_bo = pARMSOC->scanout;
-	armsoc_bo_reference(pARMSOC->fb_bo);
-
+	if (pARMSOC->fb_bo != pARMSOC->scanout) {
+		armsoc_bo_unreference(pARMSOC->fb_bo);
+		pARMSOC->fb_bo = pARMSOC->scanout;
+		armsoc_bo_reference(pARMSOC->fb_bo);
+	}
 	TRACE_EXIT();
 	return TRUE;
 }
