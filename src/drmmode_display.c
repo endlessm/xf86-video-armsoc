@@ -1418,11 +1418,16 @@ drmmode_clones_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode)
 void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo)
 {
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct armsoc_bo *old_scanout;
 
+	old_scanout = pARMSOC->scanout;
 	/* It had better have a framebuffer if we're scanning it out */
 	assert(armsoc_bo_get_fb(bo));
 
+	armsoc_bo_reference(bo);
 	pARMSOC->scanout = bo;
+	if (old_scanout)
+		armsoc_bo_unreference(old_scanout);
 }
 
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
@@ -1486,6 +1491,7 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 
 			pitch = armsoc_bo_pitch(pARMSOC->scanout);
 		} else {
+			struct armsoc_bo *old_scanout = pARMSOC->scanout;
 			DEBUG_MSG("allocated new scanout buffer okay");
 			pitch = armsoc_bo_pitch(new_scanout);
 			/* clear new BO and add FB */
@@ -1502,10 +1508,10 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 			}
 
 			/* Handle dma_buf fd that may be attached to old bo */
-			if (armsoc_bo_has_dmabuf(pARMSOC->scanout)) {
+			if (armsoc_bo_has_dmabuf(old_scanout)) {
 				int res;
 
-				armsoc_bo_clear_dmabuf(pARMSOC->scanout);
+				armsoc_bo_clear_dmabuf(old_scanout);
 				res = armsoc_bo_set_dmabuf(new_scanout);
 				if (res) {
 					ERROR_MSG(
@@ -1515,10 +1521,11 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 					return FALSE;
 				}
 			}
-			/* delete old scanout buffer */
-			armsoc_bo_unreference(pARMSOC->scanout);
 			/* use new scanout buffer */
 			set_scanout_bo(pScrn, new_scanout);
+
+			/* Resize swap chain will delete old_scanout */
+			ARMSOCDRI2ResizeSwapChain(pScrn, old_scanout, new_scanout);
 		}
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
 	} else
@@ -1556,7 +1563,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 
 	TRACE_ENTER();
 	if (!resize_scanout_bo(pScrn, width, height))
-		return FALSE;
+		goto fail;
 
 	/* Framebuffer needs to be reset on all CRTCs, not just
 	 * those that have repositioned */
@@ -1573,6 +1580,10 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 
 	TRACE_EXIT();
 	return TRUE;
+
+fail:
+	TRACE_EXIT();
+	return FALSE;
 }
 
 static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {

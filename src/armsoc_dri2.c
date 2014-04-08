@@ -36,7 +36,7 @@
 #include "dri2.h"
 
 /* any point to support earlier? */
-#if DRI2INFOREC_VERSION < 4
+#if DRI2INFOREC_VERSION < 5
 #	error "Requires newer DRI2"
 #endif
 
@@ -240,6 +240,13 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 			WARNING_MSG(
 					"Falling back to blitting a flippable window");
 		}
+#if DRI2INFOREC_VERSION >= 6
+		else if (FALSE == DRI2SwapLimit(pDraw, pARMSOC->swap_chain_size)) {
+			WARNING_MSG(
+				"Failed to set DRI2SwapLimit(%x,%d)",
+				(unsigned int)pDraw, pARMSOC->swap_chain_size);
+		}
+#endif /* DRI2INFOREC_VERSION >= 6 */
 	}
 
 	/* Register Pixmap as having a buffer that can be accessed externally,
@@ -378,6 +385,30 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 	return TRUE;
 }
 
+#if DRI2INFOREC_VERSION >= 6
+/**
+ * Validates that the swap limit range is within the range of supported
+ * asynchronous buffer flips. This is bounded by the DRI2MaxBuffers option plus
+ * one additional flip in case of early display usage.
+ */
+static Bool
+ARMSOCDRI2SwapLimitValidate(DrawablePtr pDraw, int swap_limit) {
+	ScreenPtr pScreen = pDraw->pScreen;
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	int32_t lower_limit, upper_limit;
+
+	lower_limit = 1;
+	upper_limit = pARMSOC->driNumBufs-1;
+
+	if (pARMSOC->drmmode_interface->use_early_display)
+		upper_limit += 1;
+
+	return ((swap_limit >= lower_limit) && (swap_limit <= upper_limit))
+		? TRUE : FALSE;
+}
+#endif /* DRI2INFOREC_VERSION >= 6 */
+
 #define ARMSOC_SWAP_FAKE_FLIP (1 << 0)
 #define ARMSOC_SWAP_FAIL      (1 << 1)
 
@@ -395,6 +426,10 @@ struct ARMSOCDRISwapCmd {
 	int swapCount;
 	int flags;
 	void *data;
+	struct armsoc_bo *old_src_bo;
+	struct armsoc_bo *old_dst_bo;
+	struct armsoc_bo *new_scanout;
+	int swap_id;
 };
 
 static const char * const swap_names[] = {
@@ -517,6 +552,59 @@ static struct armsoc_bo *boFromBuffer(DRI2BufferPtr buf)
 	return priv->bo;
 }
 
+static
+void updateResizedBuffer(ScrnInfoPtr pScrn, void *buffer,
+		struct armsoc_bo *old_bo, struct armsoc_bo *resized_bo) {
+	DRI2BufferPtr dri2buf = (DRI2BufferPtr)buffer;
+	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(dri2buf);
+	int i;
+
+	for (i = 0; i < buf->numPixmaps; i++) {
+		if (buf->pPixmaps[i] != NULL) {
+			struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(buf->pPixmaps[i]);
+			if (old_bo == priv->bo) {
+				int ret;
+				ret = armsoc_bo_get_name(resized_bo, &dri2buf->name);
+				assert(!ret);
+				priv->bo = resized_bo;
+			}
+		}
+	}
+}
+
+
+void
+ARMSOCDRI2ResizeSwapChain(ScrnInfoPtr pScrn, struct armsoc_bo *old_bo,
+		struct armsoc_bo *resized_bo) {
+	PixmapPtr rootPixmap;
+	struct ARMSOCPixmapPrivRec *rootPriv;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct ARMSOCDRISwapCmd *cmd = NULL;
+	int i;
+	int back = pARMSOC->swap_chain_count - 1;
+
+	rootPixmap = pScrn->pScreen->GetScreenPixmap(pScrn->pScreen);
+	rootPriv = exaGetPixmapDriverPrivate(rootPixmap);
+	/* We need to access the front to back (count-1) % size. */
+
+	for (i = 0; i < pARMSOC->swap_chain_size && back >= 0; i++) {
+		int idx = back % pARMSOC->swap_chain_size;
+		cmd = pARMSOC->swap_chain[idx];
+		back--;
+		if (!cmd)
+			continue;
+		updateResizedBuffer(pScrn, cmd->pSrcBuffer, old_bo, resized_bo);
+		updateResizedBuffer(pScrn, cmd->pDstBuffer, old_bo, resized_bo);
+	}
+
+	/* The current front buffer might be several frames ahead of scanout. So we
+	 * need to check if the current front buffer owned the previous scanout,
+	 * i.e. the one we are deleting. If so we will transfer the ownership. */
+	if (0 == armsoc_bo_unreference(old_bo) && rootPriv->bo == old_bo)
+		rootPriv->bo = resized_bo;
+}
+
+
 void
 ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 {
@@ -524,36 +612,22 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
+	int idx;
 	int status;
-	struct armsoc_bo *old_src_bo, *old_dst_bo;
 
 	if (--cmd->swapCount > 0)
 		return;
 
-	/* Save the old source bo for unreference below */
-	old_src_bo = boFromBuffer(cmd->pSrcBuffer);
-	old_dst_bo = boFromBuffer(cmd->pDstBuffer);
-
+	/* If we got signaled a failure we skip the steps below. Instead
+	 * we continue and cleanup remains of current swap. */
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
 			cmd->pSrcBuffer->attachment,
 			cmd->pDstBuffer->attachment);
-
 		status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
 				M_ANY, DixWriteAccess);
 
 		if (status == Success) {
-			if (cmd->type != DRI2_BLIT_COMPLETE &&
-			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
-				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				exchangebufs(pDraw, cmd->pSrcBuffer,
-							cmd->pDstBuffer);
-
-				if (cmd->pSrcBuffer->attachment ==
-						DRI2BufferBackLeft)
-					nextBuffer(pDraw,
-						ARMSOCBUF(cmd->pSrcBuffer));
-			}
 
 			DRI2SwapComplete(cmd->client, pDraw, 0, 0, 0, cmd->type,
 					cmd->func, cmd->data);
@@ -561,8 +635,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
-				set_scanout_bo(pScrn,
-					boFromBuffer(cmd->pDstBuffer));
+				set_scanout_bo(pScrn, cmd->new_scanout);
 			}
 		}
 	}
@@ -571,12 +644,18 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	 */
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
-	armsoc_bo_unreference(old_src_bo);
-	armsoc_bo_unreference(old_dst_bo);
+
+	/* drop extra reference of the actual buffer objects used */
+	armsoc_bo_unreference(cmd->old_src_bo);
+	armsoc_bo_unreference(cmd->old_dst_bo);
+
 	if (cmd->type == DRI2_FLIP_COMPLETE)
 		pARMSOC->pending_flips--;
 
-	free(cmd);
+	/* Free the swap operation and progress the swap chain. */
+	idx = cmd->swap_id % pARMSOC->swap_chain_size;
+	free(pARMSOC->swap_chain[idx]);
+	pARMSOC->swap_chain[idx] = NULL;
 }
 
 /**
@@ -606,6 +685,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int new_canflip, ret, do_flip;
+	int idx;
 	RegionRec region;
 	PixmapPtr pDstPixmap = draw2pix(dri2draw(pDraw, pDstBuffer));
 
@@ -644,6 +724,19 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
 
+	/* Store and reference actual buffer-objects used as they could
+	 * be exchanged under-the-hood if doing a page flip. */
+	cmd->old_src_bo = src_bo;
+	cmd->old_dst_bo = dst_bo;
+
+	armsoc_bo_reference(src_bo);
+	armsoc_bo_reference(dst_bo);
+
+	/* Add swap operation to the swap chain */
+	cmd->swap_id = pARMSOC->swap_chain_count++;
+	idx = cmd->swap_id % pARMSOC->swap_chain_size;
+	pARMSOC->swap_chain[idx] = cmd;
+
 	new_canflip = canflip(pDraw);
 	if ((src->previous_canflip != new_canflip) ||
 	    (dst->previous_canflip != new_canflip)) {
@@ -663,9 +756,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	src->previous_canflip = new_canflip;
 	dst->previous_canflip = new_canflip;
-
-	armsoc_bo_reference(src_bo);
-	armsoc_bo_reference(dst_bo);
 
 	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
 
@@ -709,6 +799,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			else
 				cmd->swapCount = 0;
 
+			cmd->new_scanout = boFromBuffer(pDstBuffer);
+
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
 
@@ -721,6 +813,22 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				cmd->swapCount = ret;
 			else
 				cmd->swapCount = 0;
+
+			/* Here we have successfully scheduled a flip. We now
+			 * need to exchange buffers between src and dst pixmaps
+			 * and obtain the next buffer.
+			 */
+			if (ret) {
+				assert(cmd->type == DRI2_FLIP_COMPLETE);
+				exchangebufs(pDraw, pSrcBuffer, pDstBuffer);
+
+				if (pSrcBuffer->attachment == DRI2BufferBackLeft)
+					nextBuffer(pDraw, ARMSOCBUF(pSrcBuffer));
+			}
+
+			/* We need to store the new scanout now as the
+			 * destination buffer might be switched before the cb. */
+			cmd->new_scanout = boFromBuffer(pDstBuffer);
 
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
@@ -737,6 +845,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		RegionInit(&region, &box, 0);
 		ARMSOCDRI2CopyRegion(pDraw, &region, pDstBuffer, pSrcBuffer);
 		cmd->type = DRI2_BLIT_COMPLETE;
+		cmd->new_scanout = boFromBuffer(pDstBuffer);
 		ARMSOCDRI2SwapComplete(cmd);
 	}
 
@@ -769,17 +878,24 @@ ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DRI2InfoRec info = {
-		.version         = 5,
-		.fd              = pARMSOC->drmFD,
-		.driverName      = "armsoc",
-		.deviceName      = pARMSOC->deviceName,
-		.CreateBuffer    = ARMSOCDRI2CreateBuffer,
-		.DestroyBuffer   = ARMSOCDRI2DestroyBuffer,
-		.CopyRegion      = ARMSOCDRI2CopyRegion,
-		.ScheduleSwap    = ARMSOCDRI2ScheduleSwap,
-		.ScheduleWaitMSC = ARMSOCDRI2ScheduleWaitMSC,
-		.GetMSC          = ARMSOCDRI2GetMSC,
-		.AuthMagic       = drmAuthMagic,
+#if DRI2INFOREC_VERSION >= 6
+		.version           = 6,
+#else
+		.version           = 5,
+#endif
+		.fd                = pARMSOC->drmFD,
+		.driverName        = "armsoc",
+		.deviceName        = pARMSOC->deviceName,
+		.CreateBuffer      = ARMSOCDRI2CreateBuffer,
+		.DestroyBuffer     = ARMSOCDRI2DestroyBuffer,
+		.CopyRegion        = ARMSOCDRI2CopyRegion,
+		.ScheduleSwap      = ARMSOCDRI2ScheduleSwap,
+		.ScheduleWaitMSC   = ARMSOCDRI2ScheduleWaitMSC,
+		.GetMSC            = ARMSOCDRI2GetMSC,
+		.AuthMagic         = drmAuthMagic,
+#if DRI2INFOREC_VERSION >= 6
+		.SwapLimitValidate = ARMSOCDRI2SwapLimitValidate,
+#endif
 	};
 	int minor = 1, major = 0;
 
@@ -790,6 +906,37 @@ ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 		WARNING_MSG("DRI2 requires DRI2 module version 1.1.0 or later");
 		return FALSE;
 	}
+
+	/* There is a one-to-one mapping with the DRI2SwapLimit
+	 * feature and the swap chain size. If DRI2SwapLimit is
+	 * not supported swap-chain will be of size 1.
+	 */
+	pARMSOC->swap_chain_size = 1;
+	pARMSOC->swap_chain_count = 0;
+
+	if (FALSE == pARMSOC->NoFlip &&
+		pARMSOC->drmmode_interface->use_page_flip_events) {
+#if DRI2INFOREC_VERSION < 6
+		if (pARMSOC->drmmode_interface->use_early_display ||
+				pARMSOC->driNumBufs > 2)
+			ERROR_MSG("DRI2SwapLimit not supported, but buffers requested are > 2");
+		else
+			WARNING_MSG("DRI2SwapLimit not supported.");
+#else
+		/* Swap chain size or the swap limit must be set to one
+		 * less than the number of buffers available unless we
+		 * have early display enabled which uses one extra flip.
+		 */
+		if (pARMSOC->drmmode_interface->use_early_display)
+			pARMSOC->swap_chain_size = pARMSOC->driNumBufs;
+		else
+			pARMSOC->swap_chain_size = pARMSOC->driNumBufs-1;
+#endif
+	}
+	pARMSOC->swap_chain = calloc(pARMSOC->swap_chain_size,
+		sizeof *pARMSOC->swap_chain);
+
+	INFO_MSG("Setting swap chain size: %d ", pARMSOC->swap_chain_size);
 
 	return DRI2ScreenInit(pScreen, &info);
 }
@@ -807,4 +954,11 @@ ARMSOCDRI2CloseScreen(ScreenPtr pScreen)
 		drmmode_wait_for_event(pScrn);
 	}
 	DRI2CloseScreen(pScreen);
+
+	if (pARMSOC->swap_chain) {
+		int idx = pARMSOC->swap_chain_count % pARMSOC->swap_chain_size;
+		assert(!pARMSOC->swap_chain[idx]);
+		free(pARMSOC->swap_chain);
+		pARMSOC->swap_chain = NULL;
+	}
 }

@@ -43,6 +43,12 @@ struct drmmode_interface {
 	 */
 	int use_page_flip_events;
 
+	/* Boolean value indicating whether to support early display
+	 * feature. This allows the next back buffer to be obtained while
+	 * the previous is being flipped.
+	 */
+	int use_early_display;
+
 	/* The cursor width */
 	int cursor_width;
 
