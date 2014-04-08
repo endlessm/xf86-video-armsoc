@@ -103,6 +103,8 @@ struct ARMSOCPixmapPrivRec {
 	 */
 	int ext_access_cnt;
 	struct armsoc_bo *bo;
+	unsigned char *unaccel;
+	size_t unaccel_size;
 	int usage_hint;
 };
 

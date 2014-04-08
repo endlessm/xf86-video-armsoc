@@ -151,6 +151,10 @@ struct ARMSOCRec {
 	/* Identify which CRTC to use. -1 uses all CRTCs */
 	int					crtcNum;
 
+	/* The first CreatePixmap after ScreenInit ends up being the
+	 * scanout, but we don't get any usage hint indicating that it should
+	 * be accelerated. Use a flag to detect this and act accordingly. */
+	Bool				created_scanout_pixmap;
 };
 
 /*

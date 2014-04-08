@@ -33,6 +33,16 @@
 #include "armsoc_exa.h"
 #include "armsoc_driver.h"
 
+static Bool is_accel_pixmap(struct ARMSOCPixmapPrivRec *priv)
+{
+	/* For pixmaps that are scanout or backing for windows, we
+	 * "accelerate" them by allocating them via GEM. For all other
+	 * pixmaps (where we never expect DRI2 CreateBuffer to be called), we
+	 * just malloc them, which turns out to be much faster.
+	 */
+	return priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT || priv->usage_hint == CREATE_PIXMAP_USAGE_BACKING_PIXMAP;
+}
+
 /* keep this here, instead of static-inline so submodule doesn't
  * need to know layout of ARMSOCRec.
  */
@@ -73,21 +83,40 @@ ARMSOCPixmapExchange(PixmapPtr a, PixmapPtr b)
 	}
 }
 
-_X_EXPORT void *
-ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
-		int depth, int usage_hint, int bitsPerPixel,
+static void *
+CreateNoAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width, int height,
+		int depth, int bitsPerPixel,
 		int *new_fb_pitch)
 {
-	struct ARMSOCPixmapPrivRec *priv =
-				calloc(sizeof(struct ARMSOCPixmapPrivRec), 1);
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+
+	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0) {
+		int pitch = ((width * bitsPerPixel + FB_MASK) >> FB_SHIFT) * sizeof(FbBits);
+		size_t datasize = pitch * height;
+		priv->unaccel = malloc(datasize);
+
+		if (!priv->unaccel) {
+			ERROR_MSG("failed to allocate %dx%d mem", width, height);
+			free(priv);
+			return NULL;
+		}
+		priv->unaccel_size = datasize;
+		*new_fb_pitch = pitch;
+	}
+
+	return priv;
+}
+
+static void *
+CreateAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width, int height,
+		int depth, int bitsPerPixel,
+		int *new_fb_pitch)
+{
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
-	if (!priv)
-		return NULL;
-
-	if (usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
+	if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		buf_type = ARMSOC_BO_SCANOUT;
 
 	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0) {
@@ -120,15 +149,32 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 		*new_fb_pitch = armsoc_bo_pitch(priv->bo);
 	}
 
-	/* The usage_hint field of the Pixmap passed to ModifyPixmapHeader is
-	 * not set to the usage_hint parameter passed to CreatePixmap.
-	 * It does appear to be set here so we stash it in the private
-	 * structure. However as we do not fully understand the uses of this
-	 * parameter, beware of any unexpected values!
-	 */
+	return priv;
+}
+
+_X_EXPORT void *
+ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
+		int depth, int usage_hint, int bitsPerPixel,
+		int *new_fb_pitch)
+{
+	struct ARMSOCPixmapPrivRec *priv =
+				calloc(sizeof(struct ARMSOCPixmapPrivRec), 1);
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+
+	if (!priv)
+		return NULL;
+
+	if (!pARMSOC->created_scanout_pixmap) {
+		usage_hint = ARMSOC_CREATE_PIXMAP_SCANOUT;
+		pARMSOC->created_scanout_pixmap = TRUE;
+	}
 	priv->usage_hint = usage_hint;
 
-	return priv;
+	if (is_accel_pixmap(priv))
+		return CreateAccelPixmap(priv, pScreen, width, height, depth, bitsPerPixel, new_fb_pitch);
+	else
+		return CreateNoAccelPixmap(priv, pScreen, width, height, depth, bitsPerPixel, new_fb_pitch);
 }
 
 _X_EXPORT void
@@ -145,15 +191,87 @@ ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 		armsoc_bo_unreference(priv->bo);
 	}
 
+	if (priv->unaccel)
+		free(priv->unaccel);
+
 	free(priv);
 }
 
-_X_EXPORT Bool
-ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
+static Bool
+ModifyUnAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int width, int height,
 		int depth, int bitsPerPixel, int devKind,
 		pointer pPixData)
 {
-	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
+	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
+	size_t datasize;
+
+	/* Only modify specified fields, keeping all others intact. */
+	if (pPixData)
+		pPixmap->devPrivate.ptr = pPixData;
+
+	if (devKind > 0)
+		pPixmap->devKind = devKind;
+
+	/*
+	 * Someone is messing with the memory allocation. Let's step out of
+	 * the picture.
+	 */
+	if (pPixData && pPixData != priv->unaccel) {
+		if (priv->unaccel)
+			free(priv->unaccel);
+		priv->unaccel = NULL;
+		priv->unaccel_size = 0;
+
+		/* Returning FALSE calls miModifyPixmapHeader */
+		return FALSE;
+	}
+
+	if (depth > 0)
+		pPixmap->drawable.depth = depth;
+
+	if (bitsPerPixel > 0)
+		pPixmap->drawable.bitsPerPixel = bitsPerPixel;
+
+	if (width > 0)
+		pPixmap->drawable.width = width;
+
+	if (height > 0)
+		pPixmap->drawable.height = height;
+
+	/*
+	 * X will sometimes create an empty pixmap (width/height == 0) and then
+	 * use ModifyPixmapHeader to point it at PixData. We'll hit this path
+	 * during the CreatePixmap call. Just return true and skip the allocate
+	 * in this case.
+	 */
+	if (!pPixmap->drawable.width || !pPixmap->drawable.height)
+		return TRUE;
+
+	datasize = devKind * height;
+	if (!priv->unaccel || priv->unaccel_size != datasize) {
+		/* re-allocate buffer! */
+		if (priv->unaccel)
+			free(priv->unaccel);
+		priv->unaccel = malloc(datasize);
+
+		if (!priv->unaccel) {
+			ERROR_MSG("failed to allocate %d bytes mem",
+					datasize);
+			priv->unaccel_size = 0;
+			return FALSE;
+		}
+		priv->unaccel_size = datasize;
+	}
+
+	return TRUE;
+}
+
+
+static Bool
+ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int width, int height,
+		int depth, int bitsPerPixel, int devKind,
+		pointer pPixData)
+{
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
@@ -183,7 +301,7 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	if (pPixData == armsoc_bo_map(pARMSOC->scanout))
 		priv->bo = pARMSOC->scanout;
 
-	if (priv->usage_hint & ARMSOC_CREATE_PIXMAP_SCANOUT)
+	if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		buf_type = ARMSOC_BO_SCANOUT;
 
 	if (depth > 0)
@@ -243,6 +361,18 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	}
 
 	return TRUE;
+}
+
+_X_EXPORT Bool
+ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
+		int depth, int bitsPerPixel, int devKind,
+		pointer pPixData)
+{
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
+	if (is_accel_pixmap(priv))
+		return ModifyAccelPixmapHeader(priv, pPixmap, width, height, depth, bitsPerPixel, devKind, pPixData);
+	else
+		return ModifyUnAccelPixmapHeader(priv, pPixmap, width, height, depth, bitsPerPixel, devKind, pPixData);
 }
 
 /**
@@ -309,6 +439,11 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 {
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 
+	if (!is_accel_pixmap(priv)) {
+		pPixmap->devPrivate.ptr = priv->unaccel;
+		return TRUE;
+	}
+
 	pPixmap->devPrivate.ptr = armsoc_bo_map(priv->bo);
 	if (!pPixmap->devPrivate.ptr) {
 		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __func__);
@@ -358,7 +493,8 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 	 * buffer was accessed by sw, and pass that info down to kernel to
 	 * do a more precise cache flush..
 	 */
-	armsoc_bo_cpu_fini(priv->bo, idx2op(index));
+	if (is_accel_pixmap(priv))
+		armsoc_bo_cpu_fini(priv->bo, idx2op(index));
 }
 
 /**
@@ -385,7 +521,7 @@ ARMSOCPixmapIsOffscreen(PixmapPtr pPixmap)
 	 * wrap this function.
 	 */
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
-	return priv && priv->bo;
+	return priv && (priv->bo || priv->unaccel);
 }
 
 void ARMSOCRegisterExternalAccess(PixmapPtr pPixmap)
