@@ -161,6 +161,11 @@ struct ARMSOCRec {
 	/* Size of the swap chain. Set to 1 if DRI2SwapLimit unsupported,
 	 * driNumBufs if early display enabled, otherwise driNumBufs-1 */
 	unsigned int                       swap_chain_size;
+
+	/* The first CreatePixmap after ScreenInit ends up being the
+	 * scanout, but we don't get any usage hint indicating that it should
+	 * be accelerated. Use a flag to detect this and act accordingly. */
+	Bool				created_scanout_pixmap;
 };
 
 /*
