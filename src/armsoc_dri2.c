@@ -143,7 +143,7 @@ static PixmapPtr
 createpix(DrawablePtr pDraw)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
-	int flags = canflip(pDraw) ? ARMSOC_CREATE_PIXMAP_SCANOUT : 0;
+	int flags = canflip(pDraw) ? ARMSOC_CREATE_PIXMAP_SCANOUT : CREATE_PIXMAP_USAGE_BACKING_PIXMAP;
 	return pScreen->CreatePixmap(pScreen,
 			pDraw->width, pDraw->height, pDraw->depth, flags);
 }

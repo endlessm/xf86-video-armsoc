@@ -949,6 +949,8 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 
 	TRACE_ENTER();
 
+	pARMSOC->created_scanout_pixmap = FALSE;
+
 	/* set drm master before allocating scanout buffer */
 	if (ARMSOCSetDRMMaster()) {
 		ERROR_MSG("Cannot get DRM master: %s", strerror(errno));
