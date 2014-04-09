@@ -195,7 +195,6 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	PixmapPtr pPixmap = NULL;
 	struct armsoc_bo *bo;
-	int ret;
 
 	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
 			pDraw, attachment, format);
@@ -248,14 +247,9 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
 	DRIBUF(buf)->format = format;
 	DRIBUF(buf)->flags = 0;
+	DRIBUF(buf)->name = armsoc_bo_name(bo);
 	buf->refcnt = 1;
 	buf->previous_canflip = canflip(pDraw);
-
-	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
-	if (ret) {
-		ERROR_MSG("could not get buffer name: %d", ret);
-		goto fail;
-	}
 
 	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
 		/* Create an fb around this buffer. This will fail and we will
@@ -492,11 +486,7 @@ static Bool allocNextBuffer(DrawablePtr pDraw, PixmapPtr *ppPixmap,
 	ARMSOCRegisterExternalAccess(pPixmap);
 	extRegistered = TRUE;
 
-	ret = armsoc_bo_get_name(bo, &new_name);
-	if (ret) {
-		ERROR_MSG("Could not get buffer name: %d", ret);
-		goto error;
-	}
+	new_name = armsoc_bo_name(bo);
 
 	if (!armsoc_bo_get_fb(bo)) {
 		ret = armsoc_bo_add_fb(bo);
@@ -544,12 +534,10 @@ static void nextBuffer(DrawablePtr pDraw, struct ARMSOCDRI2BufferRec *backBuf)
 		/* Already allocated the next buffer - get the name and
 		 * early-out */
 		struct armsoc_bo *bo;
-		int ret;
 
 		bo = ARMSOCPixmapBo(backBuf->pPixmaps[backBuf->currentPixmap]);
 		assert(bo);
-		ret = armsoc_bo_get_name(bo, &DRIBUF(backBuf)->name);
-		assert(!ret);
+		DRIBUF(backBuf)->name = armsoc_bo_name(bo);
 	} else {
 		Bool ret;
 		PixmapPtr * const curBackPix =
@@ -593,14 +581,6 @@ void updateResizedBuffer(ScrnInfoPtr pScrn, void *buffer,
 			struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(buf->pPixmaps[i]);
 
 			if (old_bo == priv->bo) {
-				int ret;
-
-				/* Update the buffer name if this pixmap is current */
-				if (i == buf->currentPixmap) {
-					ret = armsoc_bo_get_name(resized_bo, &dri2buf->name);
-					assert(!ret);
-				}
-
 				/* pixmap takes ref on resized bo */
 				armsoc_bo_reference(resized_bo);
 				/* replace the old_bo with the resized_bo */
