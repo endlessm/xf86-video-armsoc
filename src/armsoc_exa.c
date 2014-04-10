@@ -29,8 +29,12 @@
 #include "config.h"
 #endif
 
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #include "armsoc_exa.h"
 #include "armsoc_driver.h"
+#include "umplock_ioctl.h"
 
 static Bool is_accel_pixmap(struct ARMSOCPixmapPrivRec *priv)
 {
@@ -456,6 +460,10 @@ _X_EXPORT Bool
 ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 {
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
+	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	int max_retries = 10;
+	_lock_item_s item;
 
 	if (!is_accel_pixmap(priv)) {
 		pPixmap->devPrivate.ptr = priv->unaccel;
@@ -466,6 +474,21 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	if (!pPixmap->devPrivate.ptr) {
 		xf86DrvMsg(-1, X_ERROR, "%s: Failed to map buffer\n", __func__);
 		return FALSE;
+	}
+
+	if (!priv->ext_access_cnt)
+		return TRUE;
+
+	item.secure_id = armsoc_bo_name(priv->bo);
+	item.usage = _LOCK_ACCESS_CPU_WRITE;
+	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
+
+	while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
+		if (--max_retries == 0) {
+			ErrorF("giving up on locking bo %d\n", item.secure_id);
+			break;
+		}
+		usleep(2000);
 	}
 
 	return TRUE;
@@ -484,7 +507,18 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 _X_EXPORT void
 ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 {
+	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
+	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	_lock_item_s item;
+
 	pPixmap->devPrivate.ptr = NULL;
+	if (!is_accel_pixmap(priv) || !priv->ext_access_cnt)
+		return;
+
+	item.secure_id = armsoc_bo_name(priv->bo);
+	item.usage = _LOCK_ACCESS_CPU_WRITE;
+	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_RELEASE, &item);
 }
 
 /**
