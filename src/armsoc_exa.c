@@ -33,6 +33,9 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <ump/ump.h>
+#include <ump/ump_ref_drv.h>
+
 #include "armsoc_exa.h"
 #include "armsoc_driver.h"
 #include "umplock_ioctl.h"
@@ -458,13 +461,15 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 		return FALSE;
 	}
 
-	if (!priv->ext_access_cnt)
+	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return TRUE;
 
+	/* Use umplock to hopefully gain exclusive access to this buffer.
+	 * This waits for any ongoing GPU usage to finish, and also prevents
+	 * the GPU from using this buffer until we release the lock. */
 	item.secure_id = armsoc_bo_name(priv->bo);
 	item.usage = _LOCK_ACCESS_CPU_WRITE;
 	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
-
 	while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
 		if (--max_retries == 0) {
 			ErrorF("giving up on locking bo %d\n", item.secure_id);
@@ -472,6 +477,13 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 		}
 		usleep(2000);
 	}
+
+	/* Set a flag inside UMP which will trigger a cache flush later. */
+	ump_cache_operations_control(UMP_CACHE_OP_START);
+
+	/* Inform UMP that the CPU will be using the buffer now. This invalidates
+	 * the L2 cache for this buffer. */
+	ump_switch_hw_usage_secure_id(item.secure_id, UMP_USED_BY_CPU);
 
 	return TRUE;
 }
@@ -495,12 +507,20 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 	_lock_item_s item;
 
 	pPixmap->devPrivate.ptr = NULL;
-	if (!is_accel_pixmap(priv) || !priv->ext_access_cnt)
+	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return;
 
+	/* Flush the CPU L1 cache. */
+	ump_cache_operations_control(UMP_CACHE_OP_FINISH);
+
+	/* Release umplock so that GPU can gain access to this buffer again. */
 	item.secure_id = armsoc_bo_name(priv->bo);
 	item.usage = _LOCK_ACCESS_CPU_WRITE;
 	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_RELEASE, &item);
+
+	/* No need to tell UMP that ownership has been transferred back to the GPU
+	 * here, libMali will do that next time it tries to access the texture,
+	 * which will trigger a flush of the CPU L2 cache. */
 }
 
 /**

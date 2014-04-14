@@ -240,6 +240,10 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	 * so needs synchronised access */
 	ARMSOCRegisterExternalAccess(pPixmap);
 
+	/* At this point we would expect the texture to be used by the GPU.
+	 * However there is no need to make the corresponding call into UMP,
+	 * because libMali will do that before using it. */
+
 	return DRIBUF(buf);
 
 fail:
@@ -317,6 +321,9 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 	pGC = GetScratchGC(pDstDraw->depth, pScreen);
 	if (!pGC)
 		return;
+
+	/* No need to worry about UMP/caching here, this will trigger
+	 * PrepareAccess and FinishAccess which do the right thing. */
 
 	pCopyClip = REGION_CREATE(pScreen, NULL, 0);
 	RegionCopy(pCopyClip, pRegion);

@@ -38,7 +38,7 @@ ERROR_CFLAGS = -Werror -Wall -Wdeclaration-after-statement -Wvla \
 AM_CFLAGS = @XORG_CFLAGS@ $(ERROR_CFLAGS)
 armsoc_drv_la_LTLIBRARIES = armsoc_drv.la
 armsoc_drv_la_LDFLAGS = -module -avoid-version -no-undefined
-armsoc_drv_la_LIBADD = @XORG_LIBS@
+armsoc_drv_la_LIBADD = @XORG_LIBS@ -lUMP
 armsoc_drv_ladir = @moduledir@/drivers
 DRMMODE_SRCS = drmmode_@drmmode@/drmmode_@drmmode@.c
 
