@@ -39,8 +39,20 @@ struct drm_exynos_plane_set_zpos {
 #define DRM_IOCTL_EXYNOS_PLANE_SET_ZPOS DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_EXYNOS_PLANE_SET_ZPOS, struct drm_exynos_plane_set_zpos)
 
-#define EXYNOS_BO_CONTIG 0
-#define EXYNOS_BO_NONCONTIG 1
+enum e_drm_exynos_gem_mem_type {
+	/* Physically Continuous memory and used as default. */
+	EXYNOS_BO_CONTIG	= 0 << 0,
+	/* Physically Non-Continuous memory. */
+	EXYNOS_BO_NONCONTIG	= 1 << 0,
+	/* non-cachable mapping and used as default. */
+	EXYNOS_BO_NONCACHABLE	= 0 << 1,
+	/* cachable mapping. */
+	EXYNOS_BO_CACHABLE	= 1 << 1,
+	/* write-combine mapping. */
+	EXYNOS_BO_WC		= 1 << 2,
+	EXYNOS_BO_MASK		= EXYNOS_BO_NONCONTIG | EXYNOS_BO_CACHABLE |
+					EXYNOS_BO_WC
+};
 
 struct drm_exynos_gem_create {
 	uint64_t size;
@@ -143,6 +155,10 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	 * anyway, so for simplicity we always request non contiguous buffers.
 	 */
 	create_exynos.flags = EXYNOS_BO_NONCONTIG;
+	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
+		create_exynos.flags |= EXYNOS_BO_WC;
+	else
+		create_exynos.flags |= EXYNOS_BO_CACHABLE;
 
 	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE2, &create_exynos);
 	if (ret)
