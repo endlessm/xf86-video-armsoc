@@ -324,6 +324,7 @@ void *armsoc_bo_map(struct armsoc_bo *bo)
 	return bo->map_addr;
 }
 
+#if 0
 int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op)
 {
 	int ret = 0;
@@ -357,6 +358,7 @@ int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op)
 	assert(bo->refcnt > 0);
 	return msync(bo->map_addr, bo->size, MS_SYNC | MS_INVALIDATE);
 }
+#endif
 
 int armsoc_bo_add_fb(struct armsoc_bo *bo)
 {
@@ -424,14 +426,7 @@ int armsoc_bo_clear(struct armsoc_bo *bo)
 				"Couldn't map scanout bo\n");
 		return -1;
 	}
-	if (armsoc_bo_cpu_prep(bo, ARMSOC_GEM_WRITE)) {
-		xf86DrvMsg(-1, X_ERROR,
-			" %s: armsoc_bo_cpu_prep failed - unable to synchronise access.\n",
-			__func__);
-		return -1;
-	}
 	memset(dst, 0x0, bo->size);
-	(void)armsoc_bo_cpu_fini(bo, ARMSOC_GEM_WRITE);
 	return 0;
 }
 

@@ -422,8 +422,6 @@ static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
 		goto exit;
 	}
 
-	armsoc_bo_cpu_prep(pARMSOC->scanout, ARMSOC_GEM_WRITE);
-
 	/* NB: We have to call pixman direct instead of wrapping the buffers as
 	 * Pixmaps as this function is called from ScreenInit. Pixmaps cannot be
 	 * created until X calls CreateScratchPixmapsForScreen(), and the screen
@@ -433,7 +431,6 @@ static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
 			vinfo.bits_per_pixel, dst_bpp, vinfo.xoffset,
 			vinfo.yoffset, 0, 0, width, height);
 	if (!pixman_ret) {
-		armsoc_bo_cpu_fini(pARMSOC->scanout, 0);
 		ERROR_MSG("Pixman failed to blit from %s to scanout buffer",
 				fb_dev);
 		goto exit;
@@ -445,7 +442,6 @@ static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
 				dst_bpp, width, 0, dst_width-width, dst_height,
 				0);
 		if (!pixman_ret) {
-			armsoc_bo_cpu_fini(pARMSOC->scanout, 0);
 			ERROR_MSG(
 					"Pixman failed to fill margin of scanout buffer");
 			goto exit;
@@ -457,14 +453,11 @@ static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
 				dst_bpp, 0, height, width, dst_height-height,
 				0);
 		if (!pixman_ret) {
-			armsoc_bo_cpu_fini(pARMSOC->scanout, 0);
 			ERROR_MSG(
 					"Pixman failed to fill margin of scanout buffer");
 			goto exit;
 		}
 	}
-
-	armsoc_bo_cpu_fini(pARMSOC->scanout, 0);
 
 	ret = TRUE;
 

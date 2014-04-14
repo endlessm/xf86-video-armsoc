@@ -468,25 +468,6 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 		return FALSE;
 	}
 
-	/* Attach dmabuf fd to bo to synchronise access if
-	 * pixmap wrapped by DRI2
-	 */
-	if (priv->ext_access_cnt && !armsoc_bo_has_dmabuf(priv->bo)) {
-		if (armsoc_bo_set_dmabuf(priv->bo)) {
-			xf86DrvMsg(-1, X_ERROR,
-				"%s: Unable to get dma_buf fd for bo, to enable synchronised CPU access.\n",
-				__func__);
-			return FALSE;
-		}
-	}
-
-	if (armsoc_bo_cpu_prep(priv->bo, idx2op(index))) {
-		xf86DrvMsg(-1, X_ERROR,
-			"%s: armsoc_bo_cpu_prep failed - unable to synchronise access.\n",
-			__func__);
-		return FALSE;
-	}
-
 	return TRUE;
 }
 
@@ -503,16 +484,7 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 _X_EXPORT void
 ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 {
-	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
-
 	pPixmap->devPrivate.ptr = NULL;
-
-	/* NOTE: can we use EXA migration module to track which parts of the
-	 * buffer was accessed by sw, and pass that info down to kernel to
-	 * do a more precise cache flush..
-	 */
-	if (is_accel_pixmap(priv))
-		armsoc_bo_cpu_fini(priv->bo, idx2op(index));
 }
 
 /**
