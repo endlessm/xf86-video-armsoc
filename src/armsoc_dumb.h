@@ -67,8 +67,6 @@ int armsoc_get_param(struct armsoc_device *dev, uint64_t param,
 			uint64_t *value);
 int armsoc_bo_add_fb(struct armsoc_bo *bo);
 uint32_t armsoc_bo_get_fb(struct armsoc_bo *bo);
-int armsoc_bo_cpu_prep(struct armsoc_bo *bo, enum armsoc_gem_op op);
-int armsoc_bo_cpu_fini(struct armsoc_bo *bo, enum armsoc_gem_op op);
 uint32_t armsoc_bo_size(struct armsoc_bo *bo);
 
 struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
