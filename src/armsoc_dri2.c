@@ -48,9 +48,8 @@ struct ARMSOCDRI2BufferRec {
 	/**
 	 * Pixmap(s) that are backing the buffer
 	 *
-	 * NOTE: don't track the pixmap ptr for the front buffer if it is
-	 * a window.. this could get reallocated from beneath us, so we should
-	 * always use draw2pix to be sure to have the correct one
+	 * We assume that a window's front buffer pixmap is never reallocated,
+	 * and therefore that it is safe to use the pointer to it stored here.
 	 */
 	PixmapPtr *pPixmaps;
 
