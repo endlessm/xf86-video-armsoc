@@ -1607,8 +1607,15 @@ drmmode_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
 	int i;
 	xf86CrtcConfigPtr xf86_config;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
 	TRACE_ENTER();
+
+	/* FIXME: is there a correct way to handle a resolution change request
+	 * if we're in the middle of a page flip? */
+	while (pARMSOC->pending_flips > 0)
+		drmmode_wait_for_event(pScrn);
+
 	if (!resize_scanout_bo(pScrn, width, height))
 		goto fail;
 
