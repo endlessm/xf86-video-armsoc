@@ -1237,7 +1237,7 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 		if (pARMSOC->pARMSOCEXA->CloseScreen)
 			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 
-	/* scanout buffer is released when root pixmap is destroyed */
+	armsoc_bo_unreference(pARMSOC->scanout);
 	pARMSOC->scanout = NULL;
 
 	pScrn->displayWidth = 0;

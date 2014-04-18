@@ -305,8 +305,11 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 		return FALSE;
 	}
 
-	if (pPixData == armsoc_bo_map(pARMSOC->scanout))
+	if (pPixData == armsoc_bo_map(pARMSOC->scanout)) {
+		armsoc_bo_unreference(priv->bo);
 		priv->bo = pARMSOC->scanout;
+		armsoc_bo_reference(priv->bo);
+	}
 
 	if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		buf_type = ARMSOC_BO_SCANOUT;
