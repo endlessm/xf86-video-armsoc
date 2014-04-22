@@ -457,7 +457,7 @@ cleanup:
 	if (output_ids)
 		free(output_ids);
 
-	if (!ret && !drmmode_crtc->last_good_mode) {
+	if (!ret && drmmode_crtc->last_good_mode) {
 		/* If there was a problem, restore the last good mode: */
 		crtc->x = drmmode_crtc->last_good_x;
 		crtc->y = drmmode_crtc->last_good_y;
@@ -1108,6 +1108,9 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	drmModeObjectPropertiesPtr crtcprops;
 
 	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	if (!enc)
+		return;
+
 	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
 	drmmode_output->props =
 		calloc(connector->count_props + crtcprops->count_props,
