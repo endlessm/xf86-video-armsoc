@@ -81,19 +81,12 @@ struct ARMSOCDRI2BufferRec {
 	int refcnt;
 
 	/**
-	 * The value of canflip() for the previous frame. Used so that we can
-	 * tell whether the buffer should be re-allocated, e.g into scanout-able
-	 * memory if the buffer can now be flipped.
-	 *
-	 * We don't want to re-allocate every frame because it is unnecessary
-	 * overhead most of the time apart from when we switch from flipping
-	 * to blitting or vice versa.
-	 *
-	 * We should bump the serial number of the drawable if canflip() returns
-	 * something different to what is stored here, so that the DRI2 buffers
-	 * will get re-allocated.
-	 */
-	int previous_canflip;
+         * We don't want to overdo attempting fb allocation for mapped
+         * scanout buffers, to behave nice under low memory conditions.
+         * Instead we use this flag to attempt the allocation just once
+         * every time the window is mapped.
+         */
+	int attempted_fb_alloc;
 
 };
 
@@ -221,7 +214,6 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DRIBUF(buf)->format = format;
 	DRIBUF(buf)->flags = 0;
 	buf->refcnt = 1;
-	buf->previous_canflip = canflip(pDraw);
 
 	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
 	if (ret) {
@@ -234,12 +226,18 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		 * fall back to blitting if the display controller hardware
 		 * cannot scan out this buffer (for example, if it doesn't
 		 * support the format or there was insufficient scanout memory
-		 * at buffer creation time). */
+		 * at buffer creation time).
+		 *
+		 * If the window is not mapped at this time, we will not hit
+		 * this codepath, but ARMSOCDRI2ReuseBufferNotify will create
+		 * a framebuffer if it gets mapped later on. */
 		int ret = armsoc_bo_add_fb(bo);
+	        buf->attempted_fb_alloc = TRUE;
 		if (ret) {
 			WARNING_MSG(
 					"Falling back to blitting a flippable window");
 		}
+	} else {
 	}
 
 	/* Register Pixmap as having a buffer that can be accessed externally,
@@ -259,6 +257,56 @@ fail:
 	free(buf);
 
 	return NULL;
+}
+
+/* Called when DRI2 is handling a GetBuffers request and is going to
+ * reuse a buffer that we created earlier.
+ * Our interest in this situation is that we might have omitted creating
+ * a framebuffer for a backbuffer due to it not being flippable at creation
+ * time (e.g. because the window wasn't mapped yet).
+ * But if GetBuffers has been called because the window is now mapped,
+ * we are going to need a framebuffer so that we can page flip it later.
+ * We avoid creating a framebuffer when it is not necessary in order to save
+ * on scanout memory which is potentially scarce.
+ *
+ * Mali r4p0 is generally light on calling GetBuffers (e.g. it doesn't do it
+ * in response to an InvalidateBuffers event) but we have determined
+ * experimentally that it does always seem to call GetBuffers upon a
+ * unmapped-to-mapped transition.
+ */
+static void
+ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
+{
+	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
+	struct armsoc_bo *bo;
+	Bool flippable;
+	int fb_id;
+
+	if (buffer->attachment == DRI2BufferFrontLeft)
+		return;
+
+	bo = ARMSOCPixmapBo(buf->pPixmaps[0]);
+	fb_id = armsoc_bo_get_fb(bo);
+	flippable = canflip(pDraw);
+
+	/* Detect unflippable-to-flippable transition:
+	 * Window is flippable, but we haven't yet tried to allocate a
+	 * framebuffer for it, and it doesn't already have a framebuffer.
+	 * This can happen when CreateBuffer was called before the window
+	 * was mapped, and we have now been mapped. */
+	if (flippable && !buf->attempted_fb_alloc && fb_id == 0) {
+		armsoc_bo_add_fb(bo);
+	        buf->attempted_fb_alloc = TRUE;
+	}
+
+	/* Detect flippable-to-unflippable transition:
+	 * Window is now unflippable, but we have a framebuffer allocated for
+	 * it. Now we can free the framebuffer to save on scanout memory, and
+	 * reset state in case it gets mapped again later. */
+	if (!flippable && fb_id != 0) {
+	        buf->attempted_fb_alloc = FALSE;
+		armsoc_bo_rm_fb(bo);
+	}
 }
 
 /**
@@ -319,7 +367,6 @@ ARMSOCDRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 
 	DEBUG_MSG("pDraw=%p, pDstBuffer=%p (%p), pSrcBuffer=%p (%p)",
 			pDraw, pDstBuffer, pSrcDraw, pSrcBuffer, pDstDraw);
-
 	pGC = GetScratchGC(pDstDraw->depth, pScreen);
 	if (!pGC)
 		return;
@@ -599,12 +646,10 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	struct ARMSOCDRI2BufferRec *src = ARMSOCBUF(pSrcBuffer);
-	struct ARMSOCDRI2BufferRec *dst = ARMSOCBUF(pDstBuffer);
 	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
-	int new_canflip, ret, do_flip;
+	int ret, do_flip;
 
 	if (!cmd)
 		return FALSE;
@@ -633,26 +678,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
-
-	new_canflip = canflip(pDraw);
-	if ((src->previous_canflip != new_canflip) ||
-	    (dst->previous_canflip != new_canflip)) {
-		/* The drawable has transitioned between being flippable and
-		 * non-flippable or vice versa. Bump the serial number to force
-		 * the DRI2 buffers to be re-allocated during the next frame so
-		 * that:
-		 * - It is able to be scanned out
-		 *        (if drawable is now flippable), or
-		 * - It is not taking up possibly scarce scanout-able memory
-		 *        (if drawable is now not flippable)
-		 */
-
-		PixmapPtr pPix = pScreen->GetWindowPixmap((WindowPtr)pDraw);
-		pPix->drawable.serialNumber = NEXT_SERIAL_NUMBER;
-	}
-
-	src->previous_canflip = new_canflip;
-	dst->previous_canflip = new_canflip;
 
 	armsoc_bo_reference(src_bo);
 	armsoc_bo_reference(dst_bo);
@@ -758,17 +783,19 @@ ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DRI2InfoRec info = {
-		.version         = 5,
+		.version         = 6,
 		.fd              = pARMSOC->drmFD,
 		.driverName      = "armsoc",
 		.deviceName      = pARMSOC->deviceName,
 		.CreateBuffer    = ARMSOCDRI2CreateBuffer,
 		.DestroyBuffer   = ARMSOCDRI2DestroyBuffer,
+		.ReuseBufferNotify = ARMSOCDRI2ReuseBufferNotify,
 		.CopyRegion      = ARMSOCDRI2CopyRegion,
 		.ScheduleSwap    = ARMSOCDRI2ScheduleSwap,
 		.ScheduleWaitMSC = ARMSOCDRI2ScheduleWaitMSC,
 		.GetMSC          = ARMSOCDRI2GetMSC,
 		.AuthMagic       = drmAuthMagic,
+		.SwapLimitValidate = NULL,
 	};
 	int minor = 1, major = 0;
 
