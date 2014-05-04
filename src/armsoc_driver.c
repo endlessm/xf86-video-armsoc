@@ -951,7 +951,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	VisualPtr visual;
 	xf86CrtcConfigPtr xf86_config;
 	int j;
-	char *fbdev;
+	const char *fbdev;
 
 	TRACE_ENTER();
 
