@@ -76,6 +76,7 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 			enum armsoc_buf_type buf_type);
 uint32_t armsoc_bo_width(struct armsoc_bo *bo);
 uint32_t armsoc_bo_height(struct armsoc_bo *bo);
+uint8_t armsoc_bo_depth(struct armsoc_bo *bo);
 uint32_t armsoc_bo_bpp(struct armsoc_bo *bo);
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo);
 
