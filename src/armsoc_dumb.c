@@ -215,13 +215,12 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 
 void armsoc_bo_do_pending_deletions(void)
 {
-	struct armsoc_bo *bo;
+	struct armsoc_bo *bo, *tmp;
 
-	xorg_list_for_each_entry(bo, &pending_deletions, entry)
+	xorg_list_for_each_entry_safe(bo, tmp, &pending_deletions, entry) {
+		xorg_list_del(&bo->entry);
 		armsoc_bo_del(bo);
-
-	/* set list to empty */
-	xorg_list_del(&pending_deletions);
+	}
 }
 
 void armsoc_bo_unreference(struct armsoc_bo *bo)
