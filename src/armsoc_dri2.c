@@ -429,7 +429,7 @@ struct ARMSOCDRISwapCmd {
 	struct armsoc_bo *old_src_bo;
 	struct armsoc_bo *old_dst_bo;
 	struct armsoc_bo *new_scanout;
-	int swap_id;
+	unsigned int swap_id;
 };
 
 static const char * const swap_names[] = {
@@ -588,7 +588,7 @@ ARMSOCDRI2ResizeSwapChain(ScrnInfoPtr pScrn, struct armsoc_bo *old_bo,
 	/* We need to access the front to back (count-1) % size. */
 
 	for (i = 0; i < pARMSOC->swap_chain_size && back >= 0; i++) {
-		int idx = back % pARMSOC->swap_chain_size;
+		unsigned int idx = back % pARMSOC->swap_chain_size;
 		cmd = pARMSOC->swap_chain[idx];
 		back--;
 		if (!cmd)
@@ -612,14 +612,12 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
-	int idx;
+	unsigned int idx;
 	int status;
 
 	if (--cmd->swapCount > 0)
 		return;
 
-	/* If we got signaled a failure we skip the steps below. Instead
-	 * we continue and cleanup remains of current swap. */
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
 			cmd->pSrcBuffer->attachment,
@@ -654,7 +652,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 
 	/* Free the swap operation and progress the swap chain. */
 	idx = cmd->swap_id % pARMSOC->swap_chain_size;
-	free(pARMSOC->swap_chain[idx]);
+	assert(pARMSOC->swap_chain[idx] == cmd);
+	free(cmd);
 	pARMSOC->swap_chain[idx] = NULL;
 }
 
@@ -685,7 +684,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int new_canflip, ret, do_flip;
-	int idx;
+	unsigned int idx;
 	RegionRec region;
 	PixmapPtr pDstPixmap = draw2pix(dri2draw(pDraw, pDstBuffer));
 
@@ -735,6 +734,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	/* Add swap operation to the swap chain */
 	cmd->swap_id = pARMSOC->swap_chain_count++;
 	idx = cmd->swap_id % pARMSOC->swap_chain_size;
+	assert(NULL == pARMSOC->swap_chain[idx]);
 	pARMSOC->swap_chain[idx] = cmd;
 
 	new_canflip = canflip(pDraw);
@@ -956,7 +956,7 @@ ARMSOCDRI2CloseScreen(ScreenPtr pScreen)
 	DRI2CloseScreen(pScreen);
 
 	if (pARMSOC->swap_chain) {
-		int idx = pARMSOC->swap_chain_count % pARMSOC->swap_chain_size;
+		unsigned int idx = pARMSOC->swap_chain_count % pARMSOC->swap_chain_size;
 		assert(!pARMSOC->swap_chain[idx]);
 		free(pARMSOC->swap_chain);
 		pARMSOC->swap_chain = NULL;

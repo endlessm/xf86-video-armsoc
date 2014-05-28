@@ -152,13 +152,13 @@ struct ARMSOCRec {
 	int					crtcNum;
 
 	/* The Swap Chain stores the pending swap operations */
-	struct ARMSOCDRISwapCmd **swap_chain;
+	struct ARMSOCDRISwapCmd            **swap_chain;
 
 	/* This is the swap chain's count used to track last swap cmd. */
-	int                       swap_chain_count;
+	unsigned int                       swap_chain_count;
 
 	/* Defines swap chain size. */
-	int                       swap_chain_size;
+	unsigned int                       swap_chain_size;
 
 };
 

@@ -136,9 +136,9 @@ ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	struct ARMSOCPixmapPrivRec *priv = driverPriv;
 
 	assert(!priv->ext_access_cnt);
+
 	/* If ModifyPixmapHeader failed, it's possible we don't have a bo
 	 * backing this pixmap. */
-
 	if (priv->bo) {
 		assert(!armsoc_bo_has_dmabuf(priv->bo));
 		armsoc_bo_unreference(priv->bo);
@@ -216,13 +216,12 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	if (!pPixmap->drawable.width || !pPixmap->drawable.height)
 		return TRUE;
 
-	if (!priv->bo ||
-	    armsoc_bo_width(priv->bo) != pPixmap->drawable.width ||
+	assert(priv->bo);
+	if (armsoc_bo_width(priv->bo) != pPixmap->drawable.width ||
 	    armsoc_bo_height(priv->bo) != pPixmap->drawable.height ||
 	    armsoc_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
 		/* re-allocate buffer! */
-		if (priv->bo)
-			armsoc_bo_unreference(priv->bo);
+		armsoc_bo_unreference(priv->bo);
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
