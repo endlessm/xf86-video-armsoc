@@ -1028,7 +1028,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	int i, j, err;
 
 	drmmode_output->props = calloc(connector->count_props,
-					sizeof *connector->props);
+					sizeof(*drmmode_output->props));
 	if (!drmmode_output->props)
 		return;
 
