@@ -81,7 +81,7 @@ uint32_t armsoc_bo_bpp(struct armsoc_bo *bo);
 uint32_t armsoc_bo_pitch(struct armsoc_bo *bo);
 
 void armsoc_bo_reference(struct armsoc_bo *bo);
-int armsoc_bo_unreference(struct armsoc_bo *bo);
+void armsoc_bo_unreference(struct armsoc_bo *bo);
 
 /* When dmabuf is set on a bo, armsoc_bo_cpu_prep()
  *  waits for KDS shared access

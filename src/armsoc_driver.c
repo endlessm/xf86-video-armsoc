@@ -663,7 +663,7 @@ ARMSOCProbe(DriverPtr drv, int flags)
 			 * driverPrivate field.
 			 */
 			pScrn->driverPrivate =
-					calloc(1, sizeof *pARMSOC);
+					calloc(1, sizeof(*pARMSOC));
 			if (!pScrn->driverPrivate)
 				return FALSE;
 
@@ -973,6 +973,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 			pScrn->virtualX, pScrn->virtualY,
 			depth, pScrn->bitsPerPixel);
 	assert(!pARMSOC->scanout);
+	/* Screen creates and takes a ref on the scanout bo */
 	pARMSOC->scanout = armsoc_bo_new_with_dim(pARMSOC->dev, pScrn->virtualX,
 			pScrn->virtualY, depth, pScrn->bitsPerPixel,
 			ARMSOC_BO_SCANOUT);
@@ -1163,7 +1164,7 @@ fail3:
 	miClearVisualTypes();
 
 fail2:
-	/* release the scanout buffer */
+	/* Screen drops its ref on scanout bo on failure exit */
 	armsoc_bo_unreference(pARMSOC->scanout);
 	pARMSOC->scanout = NULL;
 	pScrn->displayWidth = 0;
@@ -1228,7 +1229,9 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 		if (pARMSOC->pARMSOCEXA->CloseScreen)
 			pARMSOC->pARMSOCEXA->CloseScreen(CLOSE_SCREEN_ARGS);
 
-	/* scanout buffer is released when root pixmap is destroyed */
+	assert(pARMSOC->scanout);
+	/* Screen drops its ref on the scanout buffer */
+	armsoc_bo_unreference(pARMSOC->scanout);
 	pARMSOC->scanout = NULL;
 
 	pScrn->displayWidth = 0;
@@ -1242,8 +1245,6 @@ ARMSOCCloseScreen(CLOSE_SCREEN_ARGS_DECL)
 
 	return ret;
 }
-
-
 
 /**
  * Adjust the screen pixmap for the current location of the front buffer.

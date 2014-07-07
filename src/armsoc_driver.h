@@ -154,12 +154,13 @@ struct ARMSOCRec {
 	/* The Swap Chain stores the pending swap operations */
 	struct ARMSOCDRISwapCmd            **swap_chain;
 
-	/* This is the swap chain's count used to track last swap cmd. */
+	/* Count of swaps scheduled since startup.
+	 * Used as swap_id of the next swap cmd */
 	unsigned int                       swap_chain_count;
 
-	/* Defines swap chain size. */
+	/* Size of the swap chain. Set to 1 if DRI2SwapLimit unsupported,
+	 * driNumBufs if early display enabled, otherwise driNumBufs-1 */
 	unsigned int                       swap_chain_size;
-
 };
 
 /*

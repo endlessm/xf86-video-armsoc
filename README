@@ -25,3 +25,26 @@ You can also copy src/drmmode_template into src/drmmode_<yourdrivername> and bui
 $ ./configure --with-drmmode=<yourdrivername>
 
 
+Summary of bo reference counting
+--------------------------------
+The Screen takes a ref on the scanout bo in InitScreen and drops it in ScreenClose. When the scanout bo changes
+(due to a flip or a modeset) the ref is moved from the old bo to the new one by set_scanout_bo.
+
+Pixmaps take a ref on their bo(s) when created in ARMSOCCreatePixmap2 and drop it in ARMSOCDestroyPixmap.
+If ARMSOCModifyPixmapHeader points a pixmap at anything other than the scanout bo then the ref to
+the existing bo (if any) is dropped.
+If ARMSOCModifyPixmapHeader points a pixmap at the scanout bo the ref is moved from the old bo to the new
+If ARMSOCModifyPixmapHeader changes the size of the pixmap's bo the ref is dropped, a new bo created and a
+ref taken on that.
+
+resize_scanout_bo creates and takes a ref on the new bo and drops its ref when the new bo becomes the scanout bo and
+the Screen has taken a ref.
+
+The swap chain takes a ref on the src and dst bos when a swap is scheduled in ARMSOCDRI2ScheduleSwap and drops them
+in ARMSOCDRI2SwapComplete after the src becomes pARMSOC->scanout and the screen takes a ref. 
+
+The cursor takes a ref on its bo in drmmode_cursor_init and drops it in drmmode_cursor_fini
+
+
+
+
