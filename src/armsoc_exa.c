@@ -291,11 +291,7 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 	if (pPixData && pPixData != armsoc_bo_map(pARMSOC->scanout)) {
 		/* scratch-pixmap (see GetScratchPixmapHeader()) gets recycled,
 		 * so could have a previous bo!
-		 */
-
-		/* scratch pixmap should not have a dmabuf */
-		assert(!armsoc_bo_has_dmabuf(priv->bo));
-		/* Pixmap drops ref on its old bo */
+		 * Pixmap drops ref on its old bo */
 		armsoc_bo_unreference(priv->bo);
 		priv->bo = NULL;
 
