@@ -140,6 +140,34 @@ createpix(DrawablePtr pDraw)
 			pDraw->width, pDraw->height, pDraw->depth, flags);
 }
 
+static inline Bool
+canexchange(DrawablePtr pDraw, struct armsoc_bo *src_bo, struct armsoc_bo *dst_bo)
+{
+	Bool ret = FALSE;
+	ScreenPtr pScreen = pDraw->pScreen;
+	PixmapPtr pRootPixmap, pWindowPixmap;
+	int src_fb_id, dst_fb_id;
+
+	pRootPixmap = pScreen->GetWindowPixmap(pScreen->root);
+	pWindowPixmap = pDraw->type == DRAWABLE_PIXMAP ? (PixmapPtr)pDraw : pScreen->GetWindowPixmap((WindowPtr)pDraw);
+
+	src_fb_id = armsoc_bo_get_fb(src_bo);
+	dst_fb_id = armsoc_bo_get_fb(dst_bo);
+
+	if (pRootPixmap != pWindowPixmap &&
+	    armsoc_bo_width(src_bo) == armsoc_bo_width(dst_bo) &&
+	    armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo) &&
+	    armsoc_bo_bpp(src_bo) == armsoc_bo_bpp(dst_bo) &&
+	    armsoc_bo_width(src_bo) == pDraw->width &&
+	    armsoc_bo_height(src_bo) == pDraw->height &&
+	    armsoc_bo_bpp(src_bo) == pDraw->bitsPerPixel &&
+	    src_fb_id == 0 && dst_fb_id == 0) {
+		ret = TRUE;
+	}
+
+	return ret;
+}
+
 /**
  * Create Buffer.
  *
@@ -681,6 +709,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 					cmd->func, cmd->data);
 
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			    cmd->type != DRI2_EXCHANGE_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				set_scanout_bo(pScrn, cmd->new_scanout);
@@ -871,6 +900,13 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
 		}
+	} else if (canexchange(pDraw, src_bo, dst_bo)) {
+		exchangebufs(pDraw, pSrcBuffer, pDstBuffer);
+		if (pSrcBuffer->attachment == DRI2BufferBackLeft)
+			nextBuffer(pDraw, ARMSOCBUF(pSrcBuffer));
+
+		cmd->type = DRI2_EXCHANGE_COMPLETE;
+		ARMSOCDRI2SwapComplete(cmd);
 	} else {
 		/* fallback to blit: */
 		BoxRec box = {
