@@ -201,14 +201,18 @@ static void armsoc_bo_del(struct armsoc_bo *bo)
 	free(bo);
 }
 
-void armsoc_bo_unreference(struct armsoc_bo *bo)
+int armsoc_bo_unreference(struct armsoc_bo *bo)
 {
+	int refcnt;
 	if (!bo)
-		return;
+		return 0;
 
 	assert(bo->refcnt > 0);
+	refcnt = bo->refcnt;
 	if (--bo->refcnt == 0)
 		armsoc_bo_del(bo);
+
+	return --refcnt;
 }
 
 void armsoc_bo_reference(struct armsoc_bo *bo)

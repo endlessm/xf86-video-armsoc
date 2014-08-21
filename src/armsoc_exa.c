@@ -182,9 +182,9 @@ ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	struct ARMSOCPixmapPrivRec *priv = driverPriv;
 
 	assert(!priv->ext_access_cnt);
-
 	/* If ModifyPixmapHeader failed, it's possible we don't have a bo
 	 * backing this pixmap. */
+
 	if (priv->bo) {
 		assert(!armsoc_bo_has_dmabuf(priv->bo));
 		armsoc_bo_unreference(priv->bo);
@@ -297,8 +297,18 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 		return FALSE;
 	}
 
-	if (pPixData == armsoc_bo_map(pARMSOC->scanout))
+	if (pPixData == armsoc_bo_map(pARMSOC->scanout)) {
+		struct armsoc_bo *old_bo = priv->bo;
 		priv->bo = pARMSOC->scanout;
+		armsoc_bo_reference(priv->bo);
+
+		if (old_bo) {
+			/* We are detaching the old_bo so clear it now. */
+			if (armsoc_bo_has_dmabuf(old_bo))
+				armsoc_bo_clear_dmabuf(old_bo);
+			armsoc_bo_unreference(old_bo);
+		}
+	}
 
 	if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		buf_type = ARMSOC_BO_SCANOUT;
@@ -329,7 +339,8 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 	    armsoc_bo_height(priv->bo) != pPixmap->drawable.height ||
 	    armsoc_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
 		/* re-allocate buffer! */
-		armsoc_bo_unreference(priv->bo);
+		if (priv->bo)
+			armsoc_bo_unreference(priv->bo);
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,

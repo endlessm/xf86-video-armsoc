@@ -151,6 +151,15 @@ struct ARMSOCRec {
 	/* Identify which CRTC to use. -1 uses all CRTCs */
 	int					crtcNum;
 
+	/* The Swap Chain stores the pending swap operations */
+	struct ARMSOCDRISwapCmd **swap_chain;
+
+	/* This is the swap chain's count used to track last swap cmd. */
+	int                       swap_chain_count;
+
+	/* Defines swap chain size. */
+	int                       swap_chain_size;
+
 	/* The first CreatePixmap after ScreenInit ends up being the
 	 * scanout, but we don't get any usage hint indicating that it should
 	 * be accelerated. Use a flag to detect this and act accordingly. */
@@ -211,6 +220,7 @@ struct ARMSOCDRISwapCmd;
 Bool ARMSOCDRI2ScreenInit(ScreenPtr pScreen);
 void ARMSOCDRI2CloseScreen(ScreenPtr pScreen);
 void ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd);
+void ARMSOCDRI2ResizeSwapChain(ScrnInfoPtr pScrn, struct armsoc_bo *old_bo, struct armsoc_bo *resized_bo);
 
 /**
  * DRI2 util functions..

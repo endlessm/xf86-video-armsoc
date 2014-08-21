@@ -158,6 +158,7 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 
 struct drmmode_interface exynos_interface = {
 	1                     /* use_page_flip_events */,
+	1                     /* use_early_display */,
 	CURSORW               /* cursor width */,
 	CURSORH               /* cursor_height */,
 	CURSORPAD             /* cursor padding */,
