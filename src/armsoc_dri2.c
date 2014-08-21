@@ -157,7 +157,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
+	struct ARMSOCDRI2BufferRec *buf;
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	PixmapPtr pPixmap = NULL;
 	struct armsoc_bo *bo;
@@ -166,6 +166,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
 			pDraw, attachment, format);
 
+	buf = calloc(1, sizeof *buf);
 	if (!buf) {
 		ERROR_MSG("Couldn't allocate internal buffer structure");
 		return NULL;
@@ -647,11 +648,12 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	struct ARMSOCDRISwapCmd *cmd = calloc(1, sizeof(*cmd));
+	struct ARMSOCDRISwapCmd *cmd;
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int ret, do_flip;
 
+	cmd = calloc(1, sizeof(*cmd));
 	if (!cmd)
 		return FALSE;
 

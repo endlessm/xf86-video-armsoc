@@ -267,7 +267,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	crtc->y = y;
 	crtc->rotation = rotation;
 
-	output_ids = calloc(sizeof(uint32_t), xf86_config->num_output);
+	output_ids = calloc(xf86_config->num_output, sizeof *output_ids);
 	if (!output_ids) {
 		ERROR_MSG(
 				"memory allocation failed in drmmode_set_mode_major()");
@@ -839,7 +839,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode, int num)
 	if (crtc == NULL)
 		return;
 
-	drmmode_crtc = xnfcalloc(sizeof(struct drmmode_crtc_private_rec), 1);
+	drmmode_crtc = xnfcalloc(1, sizeof *drmmode_crtc);
 	drmmode_crtc->crtc_id = drmmode->mode_res->crtcs[num];
 	drmmode_crtc->drmmode = drmmode;
 	drmmode_crtc->last_good_mode = NULL;
@@ -1021,9 +1021,8 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	uint32_t value;
 	int i, j, err;
 
-	drmmode_output->props =
-		calloc(connector->count_props,
-				sizeof(struct drmmode_prop_rec));
+	drmmode_output->props = calloc(connector->count_props,
+					sizeof *connector->props);
 	if (!drmmode_output->props)
 		return;
 
@@ -1051,7 +1050,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 			INT32 range[2];
 
 			p->num_atoms = 1;
-			p->atoms = calloc(p->num_atoms, sizeof(Atom));
+			p->atoms = calloc(p->num_atoms, sizeof *p->atoms);
 			if (!p->atoms)
 				continue;
 			p->atoms[0] = MakeAtom(drmmode_prop->name,
@@ -1083,7 +1082,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 
 		} else if (drmmode_prop->flags & DRM_MODE_PROP_ENUM) {
 			p->num_atoms = drmmode_prop->count_enums + 1;
-			p->atoms = calloc(p->num_atoms, sizeof(Atom));
+			p->atoms = calloc(p->num_atoms, sizeof *p->atoms);
 			if (!p->atoms)
 				continue;
 			p->atoms[0] = MakeAtom(drmmode_prop->name,
@@ -1312,7 +1311,7 @@ drmmode_output_init(ScrnInfoPtr pScrn, struct drmmode_rec *drmmode, int num)
 	if (!output)
 		goto free_encoders_exit;
 
-	drmmode_output = calloc(sizeof(struct drmmode_output_priv), 1);
+	drmmode_output = calloc(1, sizeof *drmmode_output);
 	if (!drmmode_output) {
 		xf86OutputDestroy(output);
 		goto free_encoders_exit;

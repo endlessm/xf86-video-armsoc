@@ -157,8 +157,7 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
 {
-	struct ARMSOCPixmapPrivRec *priv =
-				calloc(sizeof(struct ARMSOCPixmapPrivRec), 1);
+	struct ARMSOCPixmapPrivRec *priv = calloc(1, sizeof *priv);
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
