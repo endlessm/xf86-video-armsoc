@@ -354,7 +354,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 	drmmode_crtc->last_good_rotation = crtc->rotation;
 	if (drmmode_crtc->last_good_mode) {
 		if (drmmode_crtc->last_good_mode->name)
-			free(drmmode_crtc->last_good_mode->name);
+			free((void *)drmmode_crtc->last_good_mode->name);
 		free(drmmode_crtc->last_good_mode);
 	}
 	drmmode_crtc->last_good_mode = xf86DuplicateMode(&crtc->mode);
