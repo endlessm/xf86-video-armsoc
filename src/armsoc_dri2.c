@@ -689,7 +689,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
-	unsigned int idx;
+	unsigned int idx = 0;
 	int status;
 
 	if (--cmd->swapCount > 0) /* wait for all crtcs to flip */
