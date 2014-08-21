@@ -702,12 +702,13 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	/* swap chain drops ref on original dst bo */
 	armsoc_bo_unreference(cmd->old_dst_bo);
 
-	if (cmd->type == DRI2_FLIP_COMPLETE)
+	if (cmd->type == DRI2_FLIP_COMPLETE) {
 		pARMSOC->pending_flips--;
-
-	/* Free the swap cmd and remote it from the swap chain. */
-	idx = cmd->swap_id % pARMSOC->swap_chain_size;
-	assert(pARMSOC->swap_chain[idx] == cmd);
+		/* Free the swap cmd and remove it from the swap chain. */
+		idx = cmd->swap_id % pARMSOC->swap_chain_size;
+		assert(pARMSOC->swap_chain[idx] == cmd);
+		pARMSOC->swap_chain[idx] = NULL;
+	}
 	free(cmd);
 	pARMSOC->swap_chain[idx] = NULL;
 }
@@ -785,12 +786,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	/* Swap chain takes a ref on original dst bo */
 	armsoc_bo_reference(cmd->old_dst_bo);
 
-	/* Add swap operation to the swap chain */
-	cmd->swap_id = pARMSOC->swap_chain_count++;
-	idx = cmd->swap_id % pARMSOC->swap_chain_size;
-	assert(NULL == pARMSOC->swap_chain[idx]);
-	pARMSOC->swap_chain[idx] = cmd;
-
 	DEBUG_MSG("SWAP %d SCHEDULED : %d -> %d ", cmd->swap_id,
 				pSrcBuffer->attachment, pDstBuffer->attachment);
 
@@ -814,6 +809,12 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	if (do_flip) {
 		DEBUG_MSG("FLIPPING:  FB%d -> FB%d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
+
+		/* Add swap operation to the swap chain */
+		cmd->swap_id = pARMSOC->swap_chain_count++;
+		idx = cmd->swap_id % pARMSOC->swap_chain_size;
+		assert(NULL == pARMSOC->swap_chain[idx]);
+		pARMSOC->swap_chain[idx] = cmd;
 		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
 		 * only partially successful
 		 */
