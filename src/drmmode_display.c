@@ -1458,10 +1458,10 @@ void set_scanout_bo(ScrnInfoPtr pScrn, struct armsoc_bo *bo)
 	/* It had better have a framebuffer if we're scanning it out */
 	assert(armsoc_bo_get_fb(bo));
 
-	armsoc_bo_reference(bo);
+	armsoc_bo_reference(bo); /* Screen takes ref on new scanout bo */
 	pARMSOC->scanout = bo;
 	if (old_scanout)
-		armsoc_bo_unreference(old_scanout);
+		armsoc_bo_unreference(old_scanout); /* Screen drops ref on old scanout bo */
 }
 
 static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
@@ -1475,12 +1475,12 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 
 	depth = armsoc_bo_depth(pARMSOC->scanout);
 	bpp = armsoc_bo_bpp(pARMSOC->scanout);
-	DEBUG_MSG("Resize: %dx%d %d,%d", width, height, depth, bpp );
+	DEBUG_MSG("Resize: %dx%d %d,%d", width, height, depth, bpp);
 
 	/* We don't expect the depth and bpp to change for the screen
 	 * assert this here as a check */
-	assert( depth == pScrn->bitsPerPixel );
-	assert( bpp == pScrn->bitsPerPixel );
+	assert(depth == pScrn->bitsPerPixel);
+	assert(bpp == pScrn->bitsPerPixel);
 
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
@@ -1489,7 +1489,7 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 		(height != armsoc_bo_height(pARMSOC->scanout))) {
 		struct armsoc_bo *new_scanout;
 
-		/* allocate new scanout buffer */
+		/* resize_scanout_bo creates and takes ref on new scanout bo */
 		new_scanout = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width, height,
 				depth, bpp,
@@ -1526,10 +1526,12 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 			pitch = armsoc_bo_pitch(pARMSOC->scanout);
 		} else {
 			struct armsoc_bo *old_scanout = pARMSOC->scanout;
+
 			DEBUG_MSG("allocated new scanout buffer okay");
 			pitch = armsoc_bo_pitch(new_scanout);
 			/* clear new BO and add FB */
 			if (armsoc_bo_clear(new_scanout)) {
+				/* resize_scanout_bo drops ref on new scanout on failure exit */
 				armsoc_bo_unreference(new_scanout);
 				return FALSE;
 			}
@@ -1537,6 +1539,7 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 			if (armsoc_bo_add_fb(new_scanout)) {
 				ERROR_MSG(
 						"Failed to add framebuffer to the new scanout buffer");
+				/* resize_scanout_bo drops ref on new scanout on failure exit */
 				armsoc_bo_unreference(new_scanout);
 				return FALSE;
 			}
@@ -1551,14 +1554,14 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 					ERROR_MSG(
 							"Unable to attach dma_buf fd to new scanout buffer - %d (%s)\n",
 							res, strerror(res));
-					armsoc_bo_unreference(new_scanout);
+					armsoc_bo_unreference(new_scanout); /* resize_scanout_bo drops ref on new scanout on failure exit */
 					return FALSE;
 				}
 			}
 			/* use new scanout buffer */
 			set_scanout_bo(pScrn, new_scanout);
+			armsoc_bo_unreference(new_scanout); /* Screen has now taken ref on new_scanout so resize_scanout_bo drops it */
 
-			/* Resize swap chain will delete old_scanout */
 			ARMSOCDRI2ResizeSwapChain(pScrn, old_scanout, new_scanout);
 		}
 		pScrn->displayWidth = pitch / ((pScrn->bitsPerPixel + 7) / 8);
@@ -1568,10 +1571,20 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 	if (pScreen && pScreen->ModifyPixmapHeader) {
 		PixmapPtr rootPixmap = pScreen->GetScreenPixmap(pScreen);
 
+		/* Wrap the screen pixmap around the new scanout bo.
+		 * If we are n-buffering and the scanout bo is behind the
+		 * screen pixmap by a few flips, the bo which is being resized
+		 * may not belong to the screen pixmap. However we need to
+		 * resize the screen pixmap in order to continue flipping.
+		 * For now we let this happen and the swap chain reference
+		 * on the screen pixmap's existing bo will prevent it being
+		 * deleted here. Things may look odd until the swap chain
+		 * works through. This needs improvement.
+		 */
 		pScreen->ModifyPixmapHeader(rootPixmap,
-				pScrn->virtualX, pScrn->virtualY,
-				depth, bpp, pitch,
-				armsoc_bo_map(pARMSOC->scanout));
+			pScrn->virtualX, pScrn->virtualY,
+			depth, bpp, pitch,
+			armsoc_bo_map(pARMSOC->scanout));
 
 		/* Bump the serial number to ensure that all existing DRI2
 		 * buffers are invalidated.

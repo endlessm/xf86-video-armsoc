@@ -1,4 +1,3 @@
-/* -*- mode: C; c-file-style: "k&r"; tab-width 4; indent-tabs-mode: t; -*- */
 
 /*
  * Copyright © 2011 Texas Instruments, Inc
@@ -120,6 +119,7 @@ CreateAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width
 		buf_type = ARMSOC_BO_SCANOUT;
 
 	if (width > 0 && height > 0 && depth > 0 && bitsPerPixel > 0) {
+		/* Pixmap creates and takes a ref on its bo */
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width,
 				height,
@@ -133,6 +133,7 @@ CreateAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width
 			WARNING_MSG(
 					"Scanout buffer allocation failed, falling back to non-scanout");
 			buf_type = ARMSOC_BO_NON_SCANOUT;
+			/* Pixmap creates and takes a ref on its bo */
 			priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 					width,
 					height,
@@ -157,7 +158,7 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 		int depth, int usage_hint, int bitsPerPixel,
 		int *new_fb_pitch)
 {
-	struct ARMSOCPixmapPrivRec *priv = calloc(1, sizeof *priv);
+	struct ARMSOCPixmapPrivRec *priv = calloc(1, sizeof(*priv));
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 
@@ -187,6 +188,7 @@ ARMSOCDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	 * backing this pixmap. */
 	if (priv->bo) {
 		assert(!armsoc_bo_has_dmabuf(priv->bo));
+		/* pixmap drops ref on its bo */
 		armsoc_bo_unreference(priv->bo);
 	}
 
@@ -290,6 +292,10 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 		/* scratch-pixmap (see GetScratchPixmapHeader()) gets recycled,
 		 * so could have a previous bo!
 		 */
+
+		/* scratch pixmap should not have a dmabuf */
+		assert(!armsoc_bo_has_dmabuf(priv->bo));
+		/* Pixmap drops ref on its old bo */
 		armsoc_bo_unreference(priv->bo);
 		priv->bo = NULL;
 
@@ -297,15 +303,18 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 		return FALSE;
 	}
 
-	if (pPixData == armsoc_bo_map(pARMSOC->scanout)) {
+	/* Replacing the pixmap's current bo with the scanout bo */
+	if (pPixData == armsoc_bo_map(pARMSOC->scanout) && priv->bo != pARMSOC->scanout) {
 		struct armsoc_bo *old_bo = priv->bo;
 		priv->bo = pARMSOC->scanout;
+		/* pixmap takes a ref on its new bo */
 		armsoc_bo_reference(priv->bo);
 
 		if (old_bo) {
 			/* We are detaching the old_bo so clear it now. */
 			if (armsoc_bo_has_dmabuf(old_bo))
 				armsoc_bo_clear_dmabuf(old_bo);
+			/* pixmap drops ref on previous bo */
 			armsoc_bo_unreference(old_bo);
 		}
 	}
@@ -338,8 +347,9 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 	if (armsoc_bo_width(priv->bo) != pPixmap->drawable.width ||
 	    armsoc_bo_height(priv->bo) != pPixmap->drawable.height ||
 	    armsoc_bo_bpp(priv->bo) != pPixmap->drawable.bitsPerPixel) {
-		/* re-allocate buffer! */
+		/* pixmap drops ref on its old bo */
 		armsoc_bo_unreference(priv->bo);
+		/* pixmap creates new bo and takes ref on it */
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
@@ -353,6 +363,7 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 			WARNING_MSG(
 					"Scanout buffer allocation failed, falling back to non-scanout");
 			buf_type = ARMSOC_BO_NON_SCANOUT;
+			/* pixmap creates new bo and takes ref on it */
 			priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 					pPixmap->drawable.width,
 					pPixmap->drawable.height,

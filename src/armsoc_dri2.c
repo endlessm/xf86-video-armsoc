@@ -334,7 +334,7 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	if (--buf->refcnt > 0)
 		return;
 
-	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
+	DEBUG_MSG("pDraw=%p, DRIbuffer=%p", pDraw, buffer);
 
 	if (buffer->attachment == DRI2BufferBackLeft) {
 		assert(pARMSOC->driNumBufs > 1);
@@ -355,6 +355,7 @@ static void
 ARMSOCDRI2ReferenceBuffer(DRI2BufferPtr buffer)
 {
 	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
+
 	buf->refcnt++;
 }
 
@@ -434,9 +435,9 @@ ARMSOCDRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
 
 #if DRI2INFOREC_VERSION >= 6
 /**
- * Validates that the swap limit range is within the range of supported
- * asynchronous buffer flips. This is bounded by the DRI2MaxBuffers option plus
- * one additional flip in case of early display usage.
+ * Called by DRI2 to validate that any new swap limit being set by
+ * DRI2 is in range. In our case the range is 1 to the DRI2MaxBuffers
+ * option, plus one in the case of early display usage.
  */
 static Bool
 ARMSOCDRI2SwapLimitValidate(DrawablePtr pDraw, int swap_limit) {
@@ -470,12 +471,12 @@ struct ARMSOCDRISwapCmd {
 	DRI2BufferPtr pDstBuffer;
 	DRI2BufferPtr pSrcBuffer;
 	DRI2SwapEventPtr func;
-	int swapCount;
+	int swapCount; /* number of crtcs with flips in flight for this swap */
 	int flags;
 	void *data;
-	struct armsoc_bo *old_src_bo;
-	struct armsoc_bo *old_dst_bo;
-	struct armsoc_bo *new_scanout;
+	struct armsoc_bo *old_src_bo;  /* Swap chain holds ref on src bo */
+	struct armsoc_bo *old_dst_bo;  /* Swap chain holds ref on dst bo */
+	struct armsoc_bo *new_scanout; /* scanout to be used after swap */
 	unsigned int swap_id;
 };
 
@@ -612,31 +613,37 @@ void updateResizedBuffer(ScrnInfoPtr pScrn, void *buffer,
 			struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(buf->pPixmaps[i]);
 			if (old_bo == priv->bo) {
 				int ret;
-				ret = armsoc_bo_get_name(resized_bo, &dri2buf->name);
-				assert(!ret);
+
+				/* Update the buffer name if this pixmap is current */
+				if (i == buf->currentPixmap) {
+					ret = armsoc_bo_get_name(resized_bo, &dri2buf->name);
+					assert(!ret);
+				}
+
+				/* pixmap takes ref on resized bo */
+				armsoc_bo_reference(resized_bo);
+				/* replace the old_bo with the resized_bo */
 				priv->bo = resized_bo;
+				/* pixmap drops ref on old bo */
+				armsoc_bo_unreference(old_bo);
 			}
 		}
 	}
 }
 
-
 void
 ARMSOCDRI2ResizeSwapChain(ScrnInfoPtr pScrn, struct armsoc_bo *old_bo,
-		struct armsoc_bo *resized_bo) {
-	PixmapPtr rootPixmap;
-	struct ARMSOCPixmapPrivRec *rootPriv;
+		struct armsoc_bo *resized_bo)
+{
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	struct ARMSOCDRISwapCmd *cmd = NULL;
 	int i;
-	int back = pARMSOC->swap_chain_count - 1;
+	int back = pARMSOC->swap_chain_count - 1; /* The last swap scheduled */
 
-	rootPixmap = pScrn->pScreen->GetScreenPixmap(pScrn->pScreen);
-	rootPriv = exaGetPixmapDriverPrivate(rootPixmap);
-	/* We need to access the front to back (count-1) % size. */
-
+	/* Update the bos for each scheduled swap in the swap chain */
 	for (i = 0; i < pARMSOC->swap_chain_size && back >= 0; i++) {
 		unsigned int idx = back % pARMSOC->swap_chain_size;
+
 		cmd = pARMSOC->swap_chain[idx];
 		back--;
 		if (!cmd)
@@ -644,12 +651,6 @@ ARMSOCDRI2ResizeSwapChain(ScrnInfoPtr pScrn, struct armsoc_bo *old_bo,
 		updateResizedBuffer(pScrn, cmd->pSrcBuffer, old_bo, resized_bo);
 		updateResizedBuffer(pScrn, cmd->pDstBuffer, old_bo, resized_bo);
 	}
-
-	/* The current front buffer might be several frames ahead of scanout. So we
-	 * need to check if the current front buffer owned the previous scanout,
-	 * i.e. the one we are deleting. If so we will transfer the ownership. */
-	if (0 == armsoc_bo_unreference(old_bo) && rootPriv->bo == old_bo)
-		rootPriv->bo = resized_bo;
 }
 
 
@@ -663,11 +664,12 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	unsigned int idx;
 	int status;
 
-	if (--cmd->swapCount > 0)
+	if (--cmd->swapCount > 0) /* wait for all crtcs to flip */
 		return;
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
-		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
+		DEBUG_MSG("swap %d %s complete: %d -> %d",
+			cmd->swap_id, swap_names[cmd->type],
 			cmd->pSrcBuffer->attachment,
 			cmd->pDstBuffer->attachment);
 		status = dixLookupDrawable(&pDraw, cmd->draw_id, serverClient,
@@ -683,7 +685,11 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				set_scanout_bo(pScrn, cmd->new_scanout);
 			}
+		} else {
+			ERROR_MSG("dixLookupDrawable fail on swap complete");
 		}
+	} else {
+		ERROR_MSG("swap %d ARMSOC_SWAP_FAIL on swap complete", cmd->swap_id);
 	}
 
 	/* drop extra refcnt we obtained prior to swap:
@@ -691,14 +697,15 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
 
-	/* drop extra reference of the actual buffer objects used */
+	/* swap chain drops ref on original src bo */
 	armsoc_bo_unreference(cmd->old_src_bo);
+	/* swap chain drops ref on original dst bo */
 	armsoc_bo_unreference(cmd->old_dst_bo);
 
 	if (cmd->type == DRI2_FLIP_COMPLETE)
 		pARMSOC->pending_flips--;
 
-	/* Free the swap operation and progress the swap chain. */
+	/* Free the swap cmd and remote it from the swap chain. */
 	idx = cmd->swap_id % pARMSOC->swap_chain_size;
 	assert(pARMSOC->swap_chain[idx] == cmd);
 	free(cmd);
@@ -755,10 +762,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	DamageRegionAppend(&pDstPixmap->drawable, &region);
 	DamageRegionProcessPending(&pDstPixmap->drawable);
 
-	DEBUG_MSG("%d -> %d", pSrcBuffer->attachment, pDstBuffer->attachment);
-
-	/* obtain extra ref on buffers to avoid them going away while we await
-	 * the page flip event:
+	/* obtain extra ref on DRI buffers to avoid them going
+	 * away while we await the page flip event.
 	 */
 	ARMSOCDRI2ReferenceBuffer(pSrcBuffer);
 	ARMSOCDRI2ReferenceBuffer(pDstBuffer);
@@ -769,19 +774,25 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
 
-	/* Store and reference actual buffer-objects used as they could
-	 * be exchanged under-the-hood if doing a page flip. */
+	/* Store and reference actual buffer-objects used in case
+	 * the pixmaps dissapear.
+	 */
 	cmd->old_src_bo = src_bo;
 	cmd->old_dst_bo = dst_bo;
 
-	armsoc_bo_reference(src_bo);
-	armsoc_bo_reference(dst_bo);
+	/* Swap chain takes a ref on original src bo */
+	armsoc_bo_reference(cmd->old_src_bo);
+	/* Swap chain takes a ref on original dst bo */
+	armsoc_bo_reference(cmd->old_dst_bo);
 
 	/* Add swap operation to the swap chain */
 	cmd->swap_id = pARMSOC->swap_chain_count++;
 	idx = cmd->swap_id % pARMSOC->swap_chain_size;
 	assert(NULL == pARMSOC->swap_chain[idx]);
 	pARMSOC->swap_chain[idx] = cmd;
+
+	DEBUG_MSG("SWAP %d SCHEDULED : %d -> %d ", cmd->swap_id,
+				pSrcBuffer->attachment, pDstBuffer->attachment);
 
 	do_flip = src_fb_id && dst_fb_id && canflip(pDraw);
 
@@ -801,7 +812,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			(armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo));
 
 	if (do_flip) {
-		DEBUG_MSG("can flip:  %d -> %d", src_fb_id, dst_fb_id);
+		DEBUG_MSG("FLIPPING:  FB%d -> FB%d", src_fb_id, dst_fb_id);
 		cmd->type = DRI2_FLIP_COMPLETE;
 		/* TODO: MIDEGL-1461: Handle rollback if multiple CRTC flip is
 		 * only partially successful
@@ -826,7 +837,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				cmd->swapCount = 0;
 
 			cmd->new_scanout = boFromBuffer(pDstBuffer);
-
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
 
@@ -840,9 +850,9 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			else
 				cmd->swapCount = 0;
 
-			/* Here we have successfully scheduled a flip. We now
-			 * need to exchange buffers between src and dst pixmaps
-			 * and obtain the next buffer.
+			/* Flip successfully scheduled.
+			 * Now exchange bos between src and dst pixmaps
+			 * and select the next bo for the back buffer.
 			 */
 			if (ret) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
@@ -852,10 +862,11 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 					nextBuffer(pDraw, ARMSOCBUF(pSrcBuffer));
 			}
 
-			/* We need to store the new scanout now as the
-			 * destination buffer might be switched before the cb. */
+			/* Store the new scanout bo now as the destination
+			 * buffer bo might be exchanged if another swap is
+			 * scheduled before this swap completes
+			 */
 			cmd->new_scanout = boFromBuffer(pDstBuffer);
-
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
 		}
@@ -868,6 +879,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				.y2 = pDraw->height,
 		};
 		RegionRec region;
+
+		DEBUG_MSG("BLITTING");
 		RegionInit(&region, &box, 0);
 		ARMSOCDRI2CopyRegion(pDraw, &region, pDstBuffer, pSrcBuffer);
 		cmd->type = DRI2_BLIT_COMPLETE;
@@ -961,7 +974,7 @@ ARMSOCDRI2ScreenInit(ScreenPtr pScreen)
 #endif
 	}
 	pARMSOC->swap_chain = calloc(pARMSOC->swap_chain_size,
-		sizeof *pARMSOC->swap_chain);
+		sizeof(*pARMSOC->swap_chain));
 
 	INFO_MSG("Setting swap chain size: %d ", pARMSOC->swap_chain_size);
 
