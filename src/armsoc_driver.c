@@ -966,7 +966,8 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	 * The initial scanout buffer is created with the same depth
 	 * to match the visual.
 	 */
-	depth = pScrn->bitsPerPixel;
+	//depth = pScrn->bitsPerPixel;
+	depth = pScrn->depth;
 
 	/* Allocate initial scanout buffer.*/
 	DEBUG_MSG("allocating new scanout buffer: %dx%d %d %d",
@@ -1006,7 +1007,7 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Reset the visual list. */
 	miClearVisualTypes();
 
-	if (!miSetVisualTypes(depth,
+	if (!miSetVisualTypes(pScrn->bitsPerPixel,
 			miGetDefaultVisualMask(depth),
 			pScrn->rgbBits, pScrn->defaultVisual)) {
 		ERROR_MSG(
@@ -1014,6 +1015,17 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 				depth,
 				pScrn->bitsPerPixel);
 		goto fail2;
+	}
+
+	if (pScrn->bitsPerPixel == 32 && pScrn->depth == 24) {
+		// Also add a 24 bit depth visual 
+		if (!miSetVisualTypes(24, miGetDefaultVisualMask(pScrn->depth),
+				pScrn->rgbBits, pScrn->defaultVisual)) {
+			WARNING_MSG(
+					"Cannot initialize a 24 depth visual for 32bpp");
+		} else {
+			INFO_MSG("Initialized a 24 depth visual for 32bpp");
+		}
 	}
 
 	if (!miSetPixmapDepths()) {

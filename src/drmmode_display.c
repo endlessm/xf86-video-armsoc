@@ -1479,14 +1479,15 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 
 	/* We don't expect the depth and bpp to change for the screen
 	 * assert this here as a check */
-	assert(depth == pScrn->bitsPerPixel);
-	assert(bpp == pScrn->bitsPerPixel);
+	//assert(depth == pScrn->bitsPerPixel);
+	//assert(bpp == pScrn->bitsPerPixel);
 
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
 
-	if ((width != armsoc_bo_width(pARMSOC->scanout)) ||
-		(height != armsoc_bo_height(pARMSOC->scanout))) {
+	if ((width != armsoc_bo_width(pARMSOC->scanout))
+	      || (height != armsoc_bo_height(pARMSOC->scanout))
+	      || (pScrn->bitsPerPixel != armsoc_bo_bpp(pARMSOC->scanout))) {
 		struct armsoc_bo *new_scanout;
 
 		/* resize_scanout_bo creates and takes ref on new scanout bo */
