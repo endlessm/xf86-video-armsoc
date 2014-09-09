@@ -29,7 +29,7 @@
 # TODO: -nostdlib/-Bstatic/-lgcc platform magic, not installing the .a, etc.
 
 # TODO: probably should have configure script check for what is supported..
-ERROR_CFLAGS = -Werror -Wall -Wdeclaration-after-statement -Wvla \
+ERROR_CFLAGS = -Wall -Wdeclaration-after-statement -Wvla \
 	-Wpointer-arith -Wmissing-declarations -Wmissing-prototypes \
 	-Wwrite-strings -Wformat-nonliteral  -Wformat-security \
 	-Wold-style-definition -Winit-self -Wmissing-include-dirs \
