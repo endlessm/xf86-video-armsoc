@@ -208,8 +208,6 @@ Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
 void drmmode_wait_for_event(ScrnInfoPtr pScrn);
 Bool drmmode_cursor_init(ScreenPtr pScreen);
 void drmmode_cursor_fini(ScreenPtr pScreen);
-void drmmode_init_wakeup_handler(struct ARMSOCRec *pARMSOC);
-void drmmode_fini_wakeup_handler(struct ARMSOCRec *pARMSOC);
 
 
 /**

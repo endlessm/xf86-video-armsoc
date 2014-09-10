@@ -1889,20 +1889,6 @@ drmmode_wakeup_handler(pointer data, int err, pointer p)
 		drmHandleEvent(fd, &event_context);
 }
 
-void drmmode_init_wakeup_handler(struct ARMSOCRec *pARMSOC)
-{
-	AddGeneralSocket(pARMSOC->drmFD);
-	RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
-			drmmode_wakeup_handler, pARMSOC);
-}
-
-void drmmode_fini_wakeup_handler(struct ARMSOCRec *pARMSOC)
-{
-	RemoveBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
-			drmmode_wakeup_handler, pARMSOC);
-	RemoveGeneralSocket(pARMSOC->drmFD);
-}
-
 void
 drmmode_wait_for_event(ScrnInfoPtr pScrn)
 {
@@ -1913,7 +1899,12 @@ drmmode_wait_for_event(ScrnInfoPtr pScrn)
 void
 drmmode_screen_init(ScrnInfoPtr pScrn)
 {
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+
 	drmmode_uevent_init(pScrn);
+	AddGeneralSocket(pARMSOC->drmFD);
+	RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
+			drmmode_wakeup_handler, pARMSOC);
 }
 
 void

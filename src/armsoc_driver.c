@@ -310,7 +310,6 @@ ARMSOCOpenDRM(ScrnInfoPtr pScrn)
 		connection.fd = pARMSOC->drmFD;
 		connection.open_count = 1;
 		connection.master_count = 1;
-		drmmode_init_wakeup_handler(pARMSOC);
 	} else {
 		assert(connection.open_count);
 		connection.open_count++;
@@ -335,7 +334,6 @@ ARMSOCCloseDRM(ScrnInfoPtr pScrn)
 		connection.open_count--;
 		if (!connection.open_count) {
 			assert(!connection.master_count);
-			drmmode_fini_wakeup_handler(pARMSOC);
 			drmClose(pARMSOC->drmFD);
 			connection.fd = -1;
 		}
