@@ -979,10 +979,25 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	xf86MonPtr ddc_mon = NULL;
 	int i;
 	drmModeEncoderPtr enc;
-	int xu, yu;
+	int xu = 0;
+	int yu = 0;
 
 	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
-	drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
+
+	if (!enc) {
+		INFO_MSG("%s: no drm encoder with ID %d: attempting (re)detection",
+			 __func__, connector->encoder_id);
+		drmmode_output_detect(output);
+		enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+	}
+
+	if (enc) {
+		drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
+		INFO_MSG("%s: underscan is (%d, %d)", __func__, xu, yu);
+	} else {
+		WARNING_MSG("%s: no drm encoder with ID %d, assuming underscan is (0, 0)", __func__, connector->encoder_id);
+	}
+
 	/* look for an EDID property */
 	for (i = 0; i < connector->count_props; i++) {
 		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
