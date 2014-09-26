@@ -978,11 +978,16 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
-	drmModeEncoderPtr enc;
 	int xu, yu;
 
-	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
-	drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
+	/* only query overscan info when display is enabled */
+	if (connector->encoder_id > 0) {
+		drmModeEncoderPtr enc;
+		enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
+		if (enc)
+			drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
+	}
+
 	/* look for an EDID property */
 	for (i = 0; i < connector->count_props; i++) {
 		prop = drmModeGetProperty(drmmode->fd, connector->props[i]);
