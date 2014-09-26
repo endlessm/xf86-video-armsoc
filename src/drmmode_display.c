@@ -984,13 +984,6 @@ drmmode_output_get_modes(xf86OutputPtr output)
 
 	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
 
-	if (!enc) {
-		INFO_MSG("%s: no drm encoder with ID %d: attempting (re)detection",
-			 __func__, connector->encoder_id);
-		drmmode_output_detect(output);
-		enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
-	}
-
 	if (enc) {
 		drmmode_get_underscan(drmmode->fd, enc->crtc_id, &xu, &yu);
 		INFO_MSG("%s: underscan is (%d, %d)", __func__, xu, yu);
