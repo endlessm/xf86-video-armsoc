@@ -978,7 +978,7 @@ drmmode_output_get_modes(xf86OutputPtr output)
 	drmModePropertyPtr prop;
 	xf86MonPtr ddc_mon = NULL;
 	int i;
-	int xu, yu;
+	int xu = 0, yu = 0;
 
 	/* only query overscan info when display is enabled */
 	if (connector->encoder_id > 0) {
