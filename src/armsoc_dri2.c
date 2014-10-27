@@ -166,6 +166,26 @@ canexchange(DrawablePtr pDraw, struct armsoc_bo *src_bo, struct armsoc_bo *dst_b
 		ret = TRUE;
 	}
 
+	/*
+	 * Don't exchange for windows which do not own their complete backing
+	 * storage, e.g. are not redirected for composition, are child windows
+	 * of window manager frame/decoration windows, or have child windows
+	 * of their own.
+	 *
+	 * In these cases, fall back to CopyArea which respects the clip.
+	 */
+	if (pDraw->type == DRAWABLE_WINDOW) {
+	  WindowPtr pWin = (WindowPtr) pDraw;
+	  BoxPtr extents = RegionExtents(&pWin->clipList);
+
+	  if (RegionNumRects(&pWin->clipList) != 1)
+	    ret = FALSE;
+
+	  if (extents->x1 != 0 || extents->y1 != 0 ||
+	      extents->x2 != pDraw->width || extents->y2 != pDraw->height)
+	    ret = FALSE;
+	}
+
 	return ret;
 }
 
