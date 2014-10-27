@@ -695,7 +695,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int ret, do_flip;
-	RegionRec region;
 	PixmapPtr pDstPixmap = draw2pix(dri2draw(pDraw, pDstBuffer));
 
 	if (!cmd)
@@ -711,12 +710,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	cmd->func = func;
 	cmd->data = data;
 
-	region.extents.x1 = region.extents.y1 = 0;
-	region.extents.x2 = pDstPixmap->drawable.width;
-	region.extents.y2 = pDstPixmap->drawable.height;
-	region.data = NULL;
-	DamageRegionAppend(&pDstPixmap->drawable, &region);
-	DamageRegionProcessPending(&pDstPixmap->drawable);
 
 	DEBUG_MSG("%d -> %d", pSrcBuffer->attachment, pDstBuffer->attachment);
 
@@ -802,9 +795,18 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 				ARMSOCDRI2SwapComplete(cmd);
 		}
 	} else if (canexchange(pDraw, src_bo, dst_bo)) {
+		RegionRec region;
+
 		exchangebufs(pDraw, pSrcBuffer, pDstBuffer);
 		if (pSrcBuffer->attachment == DRI2BufferBackLeft)
 			nextBuffer(pDraw, ARMSOCBUF(pSrcBuffer));
+
+		region.extents.x1 = region.extents.y1 = 0;
+		region.extents.x2 = pDstPixmap->drawable.width;
+		region.extents.y2 = pDstPixmap->drawable.height;
+		region.data = NULL;
+		DamageRegionAppend(&pDstPixmap->drawable, &region);
+		DamageRegionProcessPending(&pDstPixmap->drawable);
 
 		cmd->type = DRI2_EXCHANGE_COMPLETE;
 		ARMSOCDRI2SwapComplete(cmd);
