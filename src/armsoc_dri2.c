@@ -491,6 +491,9 @@ struct ARMSOCDRISwapCmd {
 	int swapCount;
 	int flags;
 	void *data;
+
+	struct armsoc_bo *old_src_bo;
+	struct armsoc_bo *old_dst_bo;
 };
 
 static const char * const swap_names[] = {
@@ -615,14 +618,9 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
-	struct armsoc_bo *old_src_bo, *old_dst_bo;
 
 	if (--cmd->swapCount > 0)
 		return;
-
-	/* Save the old source bo for unreference below */
-	old_src_bo = boFromBuffer(cmd->pSrcBuffer);
-	old_dst_bo = boFromBuffer(cmd->pDstBuffer);
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
@@ -663,8 +661,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	 */
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
-	armsoc_bo_unreference(old_src_bo);
-	armsoc_bo_unreference(old_dst_bo);
+	armsoc_bo_unreference(cmd->old_src_bo);
+	armsoc_bo_unreference(cmd->old_dst_bo);
 	pARMSOC->pending_flips--;
 
 	free(cmd);
@@ -722,6 +720,11 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	src_bo = boFromBuffer(pSrcBuffer);
 	dst_bo = boFromBuffer(pDstBuffer);
+
+	/* Save these such that ARMSOCDRI2SwapComplete can deref the right buffers */
+	cmd->old_src_bo = src_bo;
+	cmd->old_dst_bo = dst_bo;
+
 
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
