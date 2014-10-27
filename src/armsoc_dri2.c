@@ -614,6 +614,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 
 		if (status == Success) {
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			    cmd->type != DRI2_EXCHANGE_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				exchangebufs(pDraw, cmd->pSrcBuffer,
