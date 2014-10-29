@@ -141,6 +141,54 @@ createpix(DrawablePtr pDraw)
 			pDraw->width, pDraw->height, pDraw->depth, flags);
 }
 
+static inline Bool
+canexchange(DrawablePtr pDraw, struct armsoc_bo *src_bo, struct armsoc_bo *dst_bo)
+{
+	Bool ret = FALSE;
+	ScreenPtr pScreen = pDraw->pScreen;
+	PixmapPtr pRootPixmap, pWindowPixmap;
+	int src_fb_id, dst_fb_id;
+
+	pRootPixmap = pScreen->GetWindowPixmap(pScreen->root);
+	pWindowPixmap = pDraw->type == DRAWABLE_PIXMAP ? (PixmapPtr)pDraw : pScreen->GetWindowPixmap((WindowPtr)pDraw);
+
+	src_fb_id = armsoc_bo_get_fb(src_bo);
+	dst_fb_id = armsoc_bo_get_fb(dst_bo);
+
+	if (pRootPixmap != pWindowPixmap &&
+	    armsoc_bo_width(src_bo) == armsoc_bo_width(dst_bo) &&
+	    armsoc_bo_height(src_bo) == armsoc_bo_height(dst_bo) &&
+	    armsoc_bo_bpp(src_bo) == armsoc_bo_bpp(dst_bo) &&
+	    armsoc_bo_width(src_bo) == pDraw->width &&
+	    armsoc_bo_height(src_bo) == pDraw->height &&
+	    armsoc_bo_bpp(src_bo) == pDraw->bitsPerPixel &&
+	    src_fb_id == 0 && dst_fb_id == 0) {
+		ret = TRUE;
+	}
+
+	/*
+	 * Don't exchange for windows which do not own their complete backing
+	 * storage, e.g. are not redirected for composition, are child windows
+	 * of window manager frame/decoration windows, or have child windows
+	 * of their own.
+	 *
+	 * In these cases, fall back to CopyArea which respects the clip.
+	 */
+	if (pDraw->type == DRAWABLE_WINDOW) {
+	  WindowPtr pWin = (WindowPtr) pDraw;
+	  BoxPtr extents = RegionExtents(&pWin->clipList);
+
+	  if (RegionNumRects(&pWin->clipList) != 1)
+	    ret = FALSE;
+
+	  if (extents->x1 != 0 || extents->y1 != 0 ||
+	      extents->x2 != pDraw->width || extents->y2 != pDraw->height)
+	    ret = FALSE;
+	}
+
+	return ret;
+}
+
 /**
  * Create Buffer.
  *
@@ -443,6 +491,9 @@ struct ARMSOCDRISwapCmd {
 	int swapCount;
 	int flags;
 	void *data;
+
+	struct armsoc_bo *old_src_bo;
+	struct armsoc_bo *old_dst_bo;
 };
 
 static const char * const swap_names[] = {
@@ -567,14 +618,9 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	DrawablePtr pDraw = NULL;
 	int status;
-	struct armsoc_bo *old_src_bo, *old_dst_bo;
 
 	if (--cmd->swapCount > 0)
 		return;
-
-	/* Save the old source bo for unreference below */
-	old_src_bo = boFromBuffer(cmd->pSrcBuffer);
-	old_dst_bo = boFromBuffer(cmd->pDstBuffer);
 
 	if ((cmd->flags & ARMSOC_SWAP_FAIL) == 0) {
 		DEBUG_MSG("%s complete: %d -> %d", swap_names[cmd->type],
@@ -586,6 +632,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 
 		if (status == Success) {
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			    cmd->type != DRI2_EXCHANGE_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				exchangebufs(pDraw, cmd->pSrcBuffer,
@@ -601,6 +648,7 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 					cmd->func, cmd->data);
 
 			if (cmd->type != DRI2_BLIT_COMPLETE &&
+			    cmd->type != DRI2_EXCHANGE_COMPLETE &&
 			   (cmd->flags & ARMSOC_SWAP_FAKE_FLIP) == 0) {
 				assert(cmd->type == DRI2_FLIP_COMPLETE);
 				set_scanout_bo(pScrn,
@@ -613,8 +661,8 @@ ARMSOCDRI2SwapComplete(struct ARMSOCDRISwapCmd *cmd)
 	 */
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pSrcBuffer);
 	ARMSOCDRI2DestroyBuffer(pDraw, cmd->pDstBuffer);
-	armsoc_bo_unreference(old_src_bo);
-	armsoc_bo_unreference(old_dst_bo);
+	armsoc_bo_unreference(cmd->old_src_bo);
+	armsoc_bo_unreference(cmd->old_dst_bo);
 	pARMSOC->pending_flips--;
 
 	free(cmd);
@@ -645,6 +693,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	struct armsoc_bo *src_bo, *dst_bo;
 	int src_fb_id, dst_fb_id;
 	int ret, do_flip;
+	PixmapPtr pDstPixmap = draw2pix(dri2draw(pDraw, pDstBuffer));
 
 	if (!cmd)
 		return FALSE;
@@ -659,6 +708,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	cmd->func = func;
 	cmd->data = data;
 
+
 	DEBUG_MSG("%d -> %d", pSrcBuffer->attachment, pDstBuffer->attachment);
 
 	/* obtain extra ref on buffers to avoid them going away while we await
@@ -670,6 +720,11 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 	src_bo = boFromBuffer(pSrcBuffer);
 	dst_bo = boFromBuffer(pDstBuffer);
+
+	/* Save these such that ARMSOCDRI2SwapComplete can deref the right buffers */
+	cmd->old_src_bo = src_bo;
+	cmd->old_dst_bo = dst_bo;
+
 
 	src_fb_id = armsoc_bo_get_fb(src_bo);
 	dst_fb_id = armsoc_bo_get_fb(dst_bo);
@@ -742,6 +797,22 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 			if (cmd->swapCount == 0)
 				ARMSOCDRI2SwapComplete(cmd);
 		}
+	} else if (canexchange(pDraw, src_bo, dst_bo)) {
+		RegionRec region;
+
+		exchangebufs(pDraw, pSrcBuffer, pDstBuffer);
+		if (pSrcBuffer->attachment == DRI2BufferBackLeft)
+			nextBuffer(pDraw, ARMSOCBUF(pSrcBuffer));
+
+		region.extents.x1 = region.extents.y1 = 0;
+		region.extents.x2 = pDstPixmap->drawable.width;
+		region.extents.y2 = pDstPixmap->drawable.height;
+		region.data = NULL;
+		DamageRegionAppend(&pDstPixmap->drawable, &region);
+		DamageRegionProcessPending(&pDstPixmap->drawable);
+
+		cmd->type = DRI2_EXCHANGE_COMPLETE;
+		ARMSOCDRI2SwapComplete(cmd);
 	} else {
 		/* fallback to blit: */
 		BoxRec box = {
