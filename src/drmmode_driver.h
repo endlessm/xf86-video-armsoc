@@ -92,5 +92,6 @@ struct drmmode_interface {
 
 extern struct drmmode_interface exynos_interface;
 extern struct drmmode_interface pl111_interface;
+extern struct drmmode_interface meson_interface;
 
 #endif

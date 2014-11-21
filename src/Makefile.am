@@ -41,7 +41,8 @@ armsoc_drv_la_LDFLAGS = -module -avoid-version -no-undefined
 armsoc_drv_la_LIBADD = @XORG_LIBS@ -lUMP
 armsoc_drv_ladir = @moduledir@/drivers
 DRMMODE_SRCS = drmmode_exynos/drmmode_exynos.c \
-	drmmode_pl111/drmmode_pl111.c
+	drmmode_pl111/drmmode_pl111.c \
+	drmmode_meson/drmmode_meson.c
 
 armsoc_drv_la_SOURCES = \
          drmmode_display.c \

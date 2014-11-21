@@ -722,6 +722,7 @@ static struct drmmode_interface *get_drmmode_implementation(int drm_fd)
 	struct drmmode_interface *ifaces[] = {
 		&exynos_interface,
 		&pl111_interface,
+		&meson_interface,
 	};
 	int i;
 
