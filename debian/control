@@ -1,0 +1,32 @@
+Source: xf86-video-armsoc
+Section: x11
+Priority: optional
+Maintainer: Daniel Drake <drake@endlessm.com>
+Build-Depends:
+ debhelper (>= 8),
+ dh-autoreconf,
+ quilt,
+ pkg-config,
+ xserver-xorg-dev (>= 2:1.9.4),
+ x11proto-core-dev,
+ x11proto-fonts-dev,
+ x11proto-randr-dev,
+ x11proto-render-dev,
+ x11proto-video-dev,
+ x11proto-xf86dri-dev,
+ libxext-dev,
+ libudev-dev,
+ xutils-dev (>= 1:7.5+1),
+ libump-mali400-dev
+Standards-Version: 3.9.1
+Homepage: https://github.com/ssvb/xf86-video-fbturbo
+
+Package: xserver-xorg-video-armsoc
+Architecture: armhf
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ${xviddriver:Depends},
+Provides:
+ ${xviddriver:Provides}
+Description: X.Org X server -- fbturbo display driver

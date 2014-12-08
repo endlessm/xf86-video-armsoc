@@ -1,0 +1,83 @@
+xf86-video-armsoc (0.6.0-1endless14) eos; urgency=medium
+
+  * Add EXCHANGE optimization (eos-shell #4054)
+
+ -- Daniel Drake <drake@endlessm.com>  Wed, 29 Oct 2014 14:58:47 -0600
+
+xf86-video-armsoc (0.6.0-1endless13) eos; urgency=medium
+
+  * Fix initialization of variables in latest change
+
+ -- Daniel Drake <drake@endlessm.com>  Mon, 29 Sep 2014 13:41:15 -0600
+
+xf86-video-armsoc (0.6.0-1endless12) eos; urgency=medium
+
+  * Fix bad patch in last commit
+
+ -- Daniel Drake <drake@endlessm.com>  Fri, 26 Sep 2014 14:17:12 -0600
+
+xf86-video-armsoc (0.6.0-1endless11) eos; urgency=medium
+
+  * Fix crash on monitor hotplug, eos-shell #3776
+
+ -- Daniel Drake <drake@endlessm.com>  Fri, 26 Sep 2014 14:00:25 -0600
+
+xf86-video-armsoc (0.6.0-1endless10) eos; urgency=low
+
+  * Use ReuseBufferNotify to track flippable state change, eos-shell #2382
+
+ -- Daniel Drake <drake@endlessm.com>  Tue, 29 Apr 2014 10:22:33 -0600
+
+xf86-video-armsoc (0.6.0-1endless9) eos; urgency=low
+
+  * Fix crash with no display at startup. eos-shell #2326
+
+ -- Daniel Drake <drake@endlessm.com>  Tue, 22 Apr 2014 14:49:06 -0600
+
+xf86-video-armsoc (0.6.0-1endless8) eos; urgency=low
+
+  * Switch to git branch r4p0-umplock. eos-shell #2327
+
+ -- Daniel Drake <drake@endlessm.com>  Fri, 18 Apr 2014 11:55:44 -0600
+
+xf86-video-armsoc (0.6.0-1endless7) eos; urgency=low
+
+  * Implement overscan compensation properties. eos-shell #2162.
+
+ -- Daniel Drake <drake@endlessm.com>  Fri, 04 Apr 2014 15:45:47 -0600
+
+xf86-video-armsoc (0.6.0-1endless6) eos; urgency=low
+
+  * Work around Mali window resize use-after-free bug. eos-shell #2223
+
+ -- Daniel Drake <drake@endlessm.com>  Thu, 03 Apr 2014 14:13:16 -0600
+
+xf86-video-armsoc (0.6.0-1endless5) eos; urgency=low
+
+  * Add screen resize fix from eos-shell #2217
+
+ -- Daniel Drake <drake@endlessm.com>  Fri, 28 Mar 2014 11:53:16 -0600
+
+xf86-video-armsoc (0.6.0-1endless4) eos; urgency=low
+
+  * Update to latest git, for EDID flag fix.
+
+ -- Daniel Drake <drake@endlessm.com>  Tue, 04 Mar 2014 10:30:03 -0600
+
+xf86-video-armsoc (0.6.0-1endless3) eos; urgency=low
+
+  * Update to latest git, previous patch was stale.
+
+ -- Daniel Drake <drake@endlessm.com>  Thu, 27 Feb 2014 11:59:37 -0600
+
+xf86-video-armsoc (0.6.0-1endless2) eos; urgency=low
+
+  * Fix installation of X config.
+
+ -- Daniel Drake <drake@endlessm.com>  Thu, 27 Feb 2014 09:15:32 -0600
+
+xf86-video-armsoc (0.6.0-1endless1) eos; urgency=low
+
+  * New X DDX for ARM/mali.
+
+ -- Daniel Drake <drake@endlessm.com>  Mon, 24 Feb 2014 14:34:18 -0600
