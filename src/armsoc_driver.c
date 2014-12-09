@@ -826,11 +826,10 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	if (ump_open() != UMP_OK)
 		goto fail2;
 
+	/* Optional umplock support. */
 	pARMSOC->umplock_fd = open("/dev/umplock", O_RDWR);
-	if (pARMSOC->umplock_fd < 0) {
-		ERROR_MSG("Failed to open /dev/umplock.");
-		goto fail2;
-	}
+	if (pARMSOC->umplock_fd < 0)
+		WARNING_MSG("Failed to open /dev/umplock.");
 
 	pARMSOC->drmmode_interface =
 			get_drmmode_implementation(pARMSOC->drmFD);
