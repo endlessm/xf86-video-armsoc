@@ -17,7 +17,7 @@ Build-Depends:
  libxext-dev,
  libudev-dev,
  xutils-dev (>= 1:7.5+1),
- libump-mali400-dev
+ libump-dev
 Standards-Version: 3.9.1
 Homepage: https://github.com/ssvb/xf86-video-fbturbo
 
