@@ -57,15 +57,6 @@ AC_ARG_WITH(xorg-module-dir,
             [moduledir="$withval"],
             [moduledir="$libdir/xorg/modules"])
 
-AC_MSG_CHECKING([which DRM driver to use])
-AC_ARG_WITH(drmmode,
-            AS_HELP_STRING([--with-drmmode],
-                           [Which DRM driver to use (see README)]),
-            [drmmode=$withval],
-            AC_MSG_FAILURE([You must specify which DRM driver to build for - see README]))
-AC_MSG_RESULT([$drmmode])
-AC_SUBST(drmmode)
-
 # Checks for extensions
 XORG_DRIVER_CHECK_EXT(RANDR, randrproto)
 XORG_DRIVER_CHECK_EXT(RENDER, renderproto)
