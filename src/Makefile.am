@@ -52,3 +52,12 @@ armsoc_drv_la_SOURCES = \
          armsoc_driver.c \
          armsoc_dumb.c \
          $(DRMMODE_SRCS)
+
+armsoc_drv_la_HEADERS = \
+	drmmode_meson/meson_drm.h \
+	armsoc_driver.h \
+	armsoc_dumb.h \
+	armsoc_exa.h \
+	compat-api.h \
+	drmmode_driver.h \
+	umplock_ioctl.h
