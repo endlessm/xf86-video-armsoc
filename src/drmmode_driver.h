@@ -37,6 +37,9 @@ enum hwcursor_api {
 };
 
 struct drmmode_interface {
+	/* Must match name used in the kernel driver */
+	const char *driver_name;
+
 	/* Boolean value indicating whether DRM page flip events should
 	 * be requested and waited for during DRM_IOCTL_MODE_PAGE_FLIP.
 	 */
@@ -87,6 +90,8 @@ struct drmmode_interface {
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem);
 };
 
-struct drmmode_interface *drmmode_interface_get_implementation(int drm_fd);
+extern struct drmmode_interface exynos_interface;
+extern struct drmmode_interface pl111_interface;
+extern struct drmmode_interface meson_interface;
 
 #endif

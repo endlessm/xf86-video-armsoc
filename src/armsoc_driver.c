@@ -713,6 +713,35 @@ ARMSOCProbe(DriverPtr drv, int flags)
 	return foundScreen;
 }
 
+/* Find a drmmode driver with the same name as the underlying
+ * drm kernel driver */
+static struct drmmode_interface *get_drmmode_implementation(int drm_fd)
+{
+	drmVersionPtr version;
+	struct drmmode_interface *ret = NULL;
+	struct drmmode_interface *ifaces[] = {
+		&exynos_interface,
+		&pl111_interface,
+		&meson_interface,
+	};
+	int i;
+
+	version = drmGetVersion(drm_fd);
+	if (!version)
+		return NULL;
+
+	for (i = 0; i < ARRAY_SIZE(ifaces); i++) {
+		struct drmmode_interface *iface = ifaces[i];
+		if (strcmp(version->name, iface->driver_name) == 0) {
+			ret = iface;
+			break;
+		}
+	}
+
+	drmFreeVersion(version);
+	return ret;
+}
+
 /**
  * The driver's PreInit() function.  Additional hardware probing is allowed
  * now, including display configuration.
@@ -798,14 +827,13 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	if (ump_open() != UMP_OK)
 		goto fail2;
 
+	/* Optional umplock support. */
 	pARMSOC->umplock_fd = open("/dev/umplock", O_RDWR);
-	if (pARMSOC->umplock_fd < 0) {
-		ERROR_MSG("Failed to open /dev/umplock.");
-		goto fail2;
-	}
+	if (pARMSOC->umplock_fd < 0)
+		WARNING_MSG("Failed to open /dev/umplock.");
 
 	pARMSOC->drmmode_interface =
-			drmmode_interface_get_implementation(pARMSOC->drmFD);
+			get_drmmode_implementation(pARMSOC->drmFD);
 	if (!pARMSOC->drmmode_interface)
 		goto fail2;
 

@@ -467,18 +467,21 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return TRUE;
 
+	item.secure_id = armsoc_bo_name(priv->bo);
+
 	/* Use umplock to hopefully gain exclusive access to this buffer.
 	 * This waits for any ongoing GPU usage to finish, and also prevents
 	 * the GPU from using this buffer until we release the lock. */
-	item.secure_id = armsoc_bo_name(priv->bo);
-	item.usage = _LOCK_ACCESS_CPU_WRITE;
-	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
-	while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
-		if (--max_retries == 0) {
-			ErrorF("giving up on locking bo %d\n", item.secure_id);
-			break;
+	if (pARMSOC->umplock_fd >= 0) {
+		item.usage = _LOCK_ACCESS_CPU_WRITE;
+		ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
+		while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
+			if (--max_retries == 0) {
+				ErrorF("giving up on locking bo %d\n", item.secure_id);
+				break;
+			}
+			usleep(2000);
 		}
-		usleep(2000);
 	}
 
 	/* Set a flag inside UMP which will trigger a cache flush later. */
@@ -507,7 +510,6 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	_lock_item_s item;
 
 	pPixmap->devPrivate.ptr = NULL;
 	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
@@ -517,9 +519,12 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 	ump_cache_operations_control(UMP_CACHE_OP_FINISH);
 
 	/* Release umplock so that GPU can gain access to this buffer again. */
-	item.secure_id = armsoc_bo_name(priv->bo);
-	item.usage = _LOCK_ACCESS_CPU_WRITE;
-	ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_RELEASE, &item);
+	if (pARMSOC->umplock_fd >= 0) {
+		_lock_item_s item;
+		item.secure_id = armsoc_bo_name(priv->bo);
+		item.usage = _LOCK_ACCESS_CPU_WRITE;
+		ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_RELEASE, &item);
+	}
 
 	/* No need to tell UMP that ownership has been transferred back to the GPU
 	 * here, libMali will do that next time it tries to access the texture,
