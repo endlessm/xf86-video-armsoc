@@ -53,7 +53,7 @@ armsoc_drv_la_SOURCES = \
          armsoc_dumb.c \
          $(DRMMODE_SRCS)
 
-armsoc_drv_la_HEADERS = \
+noinst_HEADERS = \
 	drmmode_meson/meson_drm.h \
 	armsoc_driver.h \
 	armsoc_dumb.h \
