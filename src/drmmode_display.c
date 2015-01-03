@@ -638,29 +638,18 @@ drmmode_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image)
 	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
 	struct drmmode_rec *drmmode = drmmode_crtc->drmmode;
 	struct drmmode_cursor_rec *cursor = drmmode->cursor;
-	int visible;
 
 	if (!cursor)
 		return;
-
-	visible = drmmode_crtc->cursor_visible;
-
-	if (visible)
-		drmmode_hide_cursor(crtc);
 
 	d = armsoc_bo_map(cursor->bo);
 	if (!d) {
 		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
 			"load_cursor_argb map failure\n");
-		if (visible)
-			drmmode_show_cursor_image(crtc, TRUE);
 		return;
 	}
 
 	set_cursor_image(crtc, d, image);
-
-	if (visible)
-		drmmode_show_cursor_image(crtc, TRUE);
 }
 
 static Bool
@@ -824,7 +813,7 @@ drmmode_cursor_init_standard(ScreenPtr pScreen)
 
 	cursor->handle = armsoc_bo_handle(cursor->bo);
 
-	if (!xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB)) {
+	if (!xf86_cursors_init(pScreen, w, h, HARDWARE_CURSOR_ARGB | HARDWARE_CURSOR_UPDATE_UNHIDDEN)) {
 		ERROR_MSG("xf86_cursors_init() failed");
 		if (drmModeRmFB(drmmode->fd, cursor->fb_id))
 			ERROR_MSG("drmModeRmFB() failed");
