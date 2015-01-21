@@ -53,6 +53,11 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	create_meson.size = create_gem->height * pitch;
 	create_meson.flags = 0;
 
+	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
+		create_meson.flags |= DRM_MESON_GEM_CREATE_WITH_UMP_FLAG_SCANOUT;
+	else
+		create_meson.flags |= DRM_MESON_GEM_CREATE_WITH_UMP_FLAG_TEXTURE;
+
 	ret = drmIoctl(fd, DRM_IOCTL_MESON_GEM_CREATE_WITH_UMP, &create_meson);
 	if (ret)
 		return ret;
