@@ -1317,8 +1317,7 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 	struct drmmode_rec *drmmode = drmmode_output->drmmode;
 	uint32_t value;
 	int err, i;
-	drmModeEncoderPtr enc;
-	drmModeObjectPropertiesPtr crtcprops;
+	drmModeObjectPropertiesPtr props;
 
 	if (output->scrn->vtSema) {
 		drmModeFreeConnector(drmmode_output->connector);
@@ -1332,13 +1331,8 @@ drmmode_output_get_property(xf86OutputPtr output, Atom property)
 		if (p->atoms[0] != property)
 			continue;
 
-		if (p->drm_object == DRM_MODE_OBJECT_CRTC) {
-			enc = drmModeGetEncoder(drmmode->fd, drmmode_output->connector->encoder_id);
-			crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
-			value = crtcprops->prop_values[p->index];
-			drmModeFreeObjectProperties(crtcprops);
-		} else
-			value = drmmode_output->connector->prop_values[p->index];
+		props = drmModeObjectGetProperties(drmmode->fd, p->drm_object_id, p->drm_object);
+		value = props->prop_values[p->index];
 
 		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
 			err = RRChangeOutputProperty(output->randr_output,
