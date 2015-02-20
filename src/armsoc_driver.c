@@ -49,6 +49,7 @@
 
 #include "xf86cmap.h"
 #include "xf86RandR12.h"
+#include "xf86drmMode.h"
 
 #include "compat-api.h"
 
@@ -109,7 +110,6 @@ enum {
 	OPTION_BUSID,
 	OPTION_DRIVERNAME,
 	OPTION_DRI_NUM_BUF,
-	OPTION_INIT_FROM_FBDEV,
 };
 
 /** Supported options. */
@@ -120,7 +120,6 @@ static const OptionInfoRec ARMSOCOptions[] = {
 	{ OPTION_BUSID,      "BusID",      OPTV_STRING,  {0}, FALSE },
 	{ OPTION_DRIVERNAME, "DriverName", OPTV_STRING,  {0}, FALSE },
 	{ OPTION_DRI_NUM_BUF, "DRI2MaxBuffers", OPTV_INTEGER, {-1}, FALSE },
-	{ OPTION_INIT_FROM_FBDEV, "InitFromFBDev", OPTV_STRING, {0}, FALSE },
 	{ -1,                NULL,         OPTV_NONE,    {0}, FALSE }
 };
 
@@ -343,47 +342,59 @@ ARMSOCCloseDRM(ScrnInfoPtr pScrn)
 	}
 }
 
-static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
+static Bool ARMSOCCopyDRMFB(ScrnInfoPtr pScrn)
 {
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	int src_cpp;
+	drmModeCrtcPtr crtc;
+	drmModeFBPtr fb;
+	struct drm_mode_map_dumb mreq;
+	uint32_t crct_id;
 	uint32_t src_pitch;
-	int src_pixman_stride;
-	int dst_pixman_stride;
+	int src_cpp;
 	int dst_width, dst_height, dst_bpp, dst_pitch;
-	unsigned int src_size = 0;
-	unsigned char *src = NULL, *dst = NULL;
-	struct fb_var_screeninfo vinfo;
-	int fd = -1;
 	int width, height;
-	pixman_bool_t pixman_ret;
+	int src_pixman_stride, dst_pixman_stride;
 	Bool ret = FALSE;
+	unsigned char *src = NULL, *dst = NULL;
+	unsigned int src_size = 0;
+	pixman_bool_t pixman_ret;
+
+	crct_id = drmmode_get_crtc_id(pScrn);
+
+	crtc = drmModeGetCrtc(pARMSOC->drmFD, crct_id);
+	if (!crtc) {
+		ERROR_MSG("Couldn't get crtc");
+		goto exit;
+	}
+
+	fb = drmModeGetFB(pARMSOC->drmFD, crtc->buffer_id);
+	if (!fb) {
+		ERROR_MSG("Couldn't get fb");
+		goto free_crtc;
+	}
+
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.handle = fb->handle;
+	ret = drmIoctl(pARMSOC->drmFD, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+	if (ret) {
+		ERROR_MSG("DRM_IOCTL_MODE_MAP_DUMB ioctl failed");
+		goto free_fb;
+	}
 
 	dst = armsoc_bo_map(pARMSOC->scanout);
 	if (!dst) {
 		ERROR_MSG("Couldn't map scanout bo");
-		goto exit;
+		goto free_fb;
 	}
 
-	fd = open(fb_dev, O_RDONLY | O_SYNC);
-	if (fd == -1) {
-		ERROR_MSG("Couldn't open %s", fb_dev);
-		goto exit;
-	}
+	src_cpp = (fb->bpp + 7) / 8;
+	src_pitch = fb->width * src_cpp;
+	src_size = fb->height * src_pitch;
 
-	if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) < 0) {
-		ERROR_MSG("Vscreeninfo ioctl failed");
-		goto exit;
-	}
-
-	src_cpp = (vinfo.bits_per_pixel + 7) / 8;
-	src_pitch = vinfo.xres_virtual * src_cpp;
-	src_size = vinfo.yres_virtual * src_pitch;
-
-	src = mmap(NULL, src_size, PROT_READ, MAP_SHARED, fd, 0);
+	src = mmap(0, src_size, PROT_READ | PROT_WRITE, MAP_SHARED, pARMSOC->drmFD, mreq.offset);
 	if (src == MAP_FAILED) {
-		ERROR_MSG("Couldn't mmap %s", fb_dev);
-		goto exit;
+		ERROR_MSG("Couldn't mmap");
+		goto free_fb;
 	}
 
 	dst_width = armsoc_bo_width(pARMSOC->scanout);
@@ -391,89 +402,58 @@ static Bool ARMSOCCopyFB(ScrnInfoPtr pScrn, const char *fb_dev)
 	dst_bpp = armsoc_bo_bpp(pARMSOC->scanout);
 	dst_pitch = armsoc_bo_pitch(pARMSOC->scanout);
 
-	width = min(vinfo.xres, dst_width);
-	height = min(vinfo.yres, dst_height);
+	width = min(fb->width, dst_width);
+	height = min(fb->height, dst_height);
 
-	/* The stride parameters pixman takes are in multiples of uint32_t,
-	 * which is the data type of the pointer passed */
 	src_pixman_stride = src_pitch/sizeof(uint32_t);
 	dst_pixman_stride = dst_pitch/sizeof(uint32_t);
 
-	/* We could handle the cases where stride is not a multiple of uint32_t,
-	 * but they will be rare so not currently worth the added complexity */
-	if (src_pitch%sizeof(uint32_t) || dst_pitch%sizeof(uint32_t)) {
-		ERROR_MSG(
-				"Buffer strides need to be a multiple of 4 bytes to initialize from fbdev device");
-		goto exit;
+	if (src_pitch % sizeof(uint32_t) || dst_pitch % sizeof(uint32_t)) {
+		ERROR_MSG("Buffer strides need to be a multiple of 4 bytes");
+		goto free_fb;
 	}
 
-	/* similarly using pixman_blt doesn't allow for format conversion, so
-	 * check if they don't match and print a message */
-	if (vinfo.bits_per_pixel != dst_bpp || vinfo.grayscale != 0 ||
-			vinfo.nonstd != 0 ||
-			vinfo.red.offset != pScrn->offset.red ||
-			vinfo.red.length != pScrn->weight.red ||
-			vinfo.red.msb_right != 0 ||
-			vinfo.green.offset != pScrn->offset.green ||
-			vinfo.green.length != pScrn->weight.green ||
-			vinfo.green.msb_right != 0 ||
-			vinfo.blue.offset != pScrn->offset.blue ||
-			vinfo.blue.length != pScrn->weight.blue ||
-			vinfo.blue.msb_right != 0) {
-		ERROR_MSG("Format of %s does not match scanout buffer", fb_dev);
-		goto exit;
-	}
-
-	/* NB: We have to call pixman direct instead of wrapping the buffers as
-	 * Pixmaps as this function is called from ScreenInit. Pixmaps cannot be
-	 * created until X calls CreateScratchPixmapsForScreen(), and the screen
-	 * pixmap is not initialized until X calls CreateScreenResources */
 	pixman_ret = pixman_blt((uint32_t *)src, (uint32_t *)dst,
 			src_pixman_stride, dst_pixman_stride,
-			vinfo.bits_per_pixel, dst_bpp, vinfo.xoffset,
-			vinfo.yoffset, 0, 0, width, height);
+			fb->bpp, dst_bpp, crtc->x,
+			crtc->y, 0, 0, width, height);
 	if (!pixman_ret) {
-		ERROR_MSG("Pixman failed to blit from %s to scanout buffer",
-				fb_dev);
-		goto exit;
+		ERROR_MSG("Pixman failed to blit to scanout buffer");
+		goto free_fb;
 	}
 
-	/* fill any area not covered by the blit */
 	if (width < dst_width) {
 		pixman_ret = pixman_fill((uint32_t *)dst, dst_pixman_stride,
-				dst_bpp, width, 0, dst_width-width, dst_height,
-				0);
+				dst_bpp, width, 0, dst_width-width, dst_height, 0);
 		if (!pixman_ret) {
-			ERROR_MSG(
-					"Pixman failed to fill margin of scanout buffer");
-			goto exit;
+			ERROR_MSG("Pixman failed to fill margin of scanout buffer");
+			goto free_fb;
 		}
 	}
 
 	if (height < dst_height) {
 		pixman_ret = pixman_fill((uint32_t *)dst, dst_pixman_stride,
-				dst_bpp, 0, height, width, dst_height-height,
-				0);
+				dst_bpp, 0, height, width, dst_height-height, 0);
 		if (!pixman_ret) {
-			ERROR_MSG(
-					"Pixman failed to fill margin of scanout buffer");
-			goto exit;
+			ERROR_MSG("Pixman failed to fill margin of scanout buffer");
+			goto free_fb;
 		}
 	}
 
 	ret = TRUE;
 
+free_fb:
+	drmModeFreeFB(fb);
+
+free_crtc:
+	drmModeFreeCrtc(crtc);
+
 exit:
 	if (src)
 		munmap(src, src_size);
 
-	if (fd >= 0)
-		close(fd);
-
 	return ret;
 }
-
-
 
 /** Let the XFree86 code know the Setup() function. */
 static MODULESETUPPROTO(ARMSOCSetup);
@@ -977,7 +957,6 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	VisualPtr visual;
 	xf86CrtcConfigPtr xf86_config;
 	int j;
-	char *fbdev;
 	int width, height;
 
 	TRACE_ENTER();
@@ -1101,14 +1080,10 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Initialize backing store: */
 	xf86SetBackingStore(pScreen);
 
-	fbdev = xf86GetOptValString(pARMSOC->pOptionInfo,
-			OPTION_INIT_FROM_FBDEV);
-	if (fbdev && *fbdev != '\0') {
-		if (ARMSOCCopyFB(pScrn, fbdev)) {
-			/* Only allow None BG root if we initialized the scanout
-			 * buffer */
-			pScreen->canDoBGNoneRoot = TRUE;
-		}
+	if (ARMSOCCopyDRMFB(pScrn)) {
+		/* Only allow None BG root if we initialized the scanout
+		 * buffer */
+		pScreen->canDoBGNoneRoot = TRUE;
 	}
 
 	/* Enable cursor position updates by mouse signal handler: */
@@ -1132,9 +1107,11 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Take over the virtual terminal from the console, set the
 	 * desired mode, etc.:
 	 */
-	if (!ARMSOCEnterVT(VT_FUNC_ARGS(0))) {
-		ERROR_MSG("ARMSOCEnterVT() failed!");
-		goto fail6;
+	if (0) {
+		if (!ARMSOCEnterVT(VT_FUNC_ARGS(0))) {
+			ERROR_MSG("ARMSOCEnterVT() failed!");
+			goto fail6;
+		}
 	}
 
 	/* Do some XRandR initialization. Return value is not useful */

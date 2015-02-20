@@ -861,6 +861,15 @@ void drmmode_cursor_fini(ScreenPtr pScreen)
 	free(cursor);
 }
 
+uint32_t drmmode_get_crtc_id(ScrnInfoPtr pScrn)
+{
+	xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+	xf86OutputPtr output = config->output[config->compat_output];
+	xf86CrtcPtr crtc = output->crtc;
+	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
+
+	return drmmode_crtc->crtc_id;
+}
 
 #if 1 == ARMSOC_SUPPORT_GAMMA
 static void
