@@ -203,7 +203,7 @@ Bool drmmode_page_flip(DrawablePtr draw, uint32_t fb_id, void *priv);
 void drmmode_wait_for_event(ScrnInfoPtr pScrn);
 Bool drmmode_cursor_init(ScreenPtr pScreen);
 void drmmode_cursor_fini(ScreenPtr pScreen);
-
+uint32_t drmmode_get_crtc_id(ScrnInfoPtr pScrn);
 
 /**
  * DRI2 functions..
