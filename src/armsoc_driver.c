@@ -1080,12 +1080,6 @@ ARMSOCScreenInit(SCREEN_INIT_ARGS_DECL)
 	/* Initialize backing store: */
 	xf86SetBackingStore(pScreen);
 
-	if (ARMSOCCopyDRMFB(pScrn)) {
-		/* Only allow None BG root if we initialized the scanout
-		 * buffer */
-		pScreen->canDoBGNoneRoot = TRUE;
-	}
-
 	/* Enable cursor position updates by mouse signal handler: */
 	xf86SetSilkenMouse(pScreen);
 
@@ -1275,6 +1269,17 @@ ARMSOCCreateScreenResources(ScreenPtr pScreen)
 	if (!(*pScreen->CreateScreenResources) (pScreen))
 		return FALSE;
 	swap(pARMSOC, pScreen, CreateScreenResources);
+
+	if (ARMSOCCopyDRMFB(pScrn)) {
+		/* Only allow None BG root if we initialized the scanout
+		 * buffer */
+		pScreen->canDoBGNoneRoot = TRUE;
+	}
+
+	if (!xf86SetDesiredModes(pScrn)) {
+		ERROR_MSG("xf86SetDesiredModes() failed!");
+		return FALSE;
+	}
 
 	return TRUE;
 }
