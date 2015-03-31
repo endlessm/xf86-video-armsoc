@@ -524,12 +524,6 @@ static const char * const swap_names[] = {
 		[DRI2_FLIP_COMPLETE] = "flip,"
 };
 
-struct ARMSOCDRIVBlankCmd {
-	int type;
-	ClientPtr client;
-	DrawablePtr pDraw;
-};
-
 static Bool allocNextBuffer(DrawablePtr pDraw, PixmapPtr *ppPixmap,
 		uint32_t *name) {
 	ScreenPtr pScreen = pDraw->pScreen;
@@ -861,9 +855,6 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 
 void ARMSOCDRI2VBlankHandler(unsigned int sequence, unsigned int tv_sec, unsigned int tv_usec, void *user_data)
 {
-	struct ARMSOCDRIVBlankCmd *cmd = (struct ARMSOCDRIVBlankCmd *)user_data;
-	DRI2WaitMSCComplete(cmd->client, cmd->pDraw, sequence, tv_sec, tv_usec);
-	free(cmd);
 }
 
 /**
@@ -878,49 +869,9 @@ ARMSOCDRI2ScheduleWaitMSC(ClientPtr client, DrawablePtr pDraw,
 {
 	ScreenPtr pScreen = pDraw->pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	struct ARMSOCDRIVBlankCmd *cmd = NULL;
-	drmVBlank vbl = { .request = {
-		.type = DRM_VBLANK_RELATIVE,
-		.sequence = 0,
-	} };
-	int ret;
-	CARD64 current_msc;
 
-	if (!pARMSOC->drmmode_interface->vblank_query_supported)
-		return FALSE;
-
-	ret = drmWaitVBlank(pARMSOC->drmFD, &vbl);
-	if (ret) {
-		ERROR_MSG("get vblank counter failed: %s", strerror(errno));
-		return FALSE;
-	}
-	current_msc = vbl.reply.sequence;
-
-	if (current_msc >= target_msc) {
-		DRI2WaitMSCComplete(client, pDraw, current_msc, 0, 0);
-		return TRUE;
-	}
-
-	cmd = calloc(1, sizeof(*cmd));
-	if (!cmd)
-		return FALSE;
-
-	cmd->type = 0;
-	cmd->client = client;
-	cmd->pDraw = pDraw;
-
-	vbl.request.type = DRM_VBLANK_ABSOLUTE | DRM_VBLANK_EVENT;
-	vbl.request.sequence = target_msc;
-	vbl.request.signal = (unsigned long)cmd;
-	ret = drmWaitVBlank(pARMSOC->drmFD, &vbl);
-	if (ret) {
-		ERROR_MSG("get vblank counter failed: %s", strerror(errno));
-		return FALSE;
-	}
-	DRI2BlockClient(client, pDraw);
-
-	return TRUE;
+	ERROR_MSG("not implemented");
+	return FALSE;
 }
 
 /**
