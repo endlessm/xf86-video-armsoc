@@ -1798,9 +1798,17 @@ page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 	ARMSOCDRI2SwapComplete(user_data);
 }
 
+static void
+vblank_handler(int fd, unsigned int sequence, unsigned int tv_sec,
+		unsigned int tv_usec, void *user_data)
+{
+	ARMSOCDRI2VBlankHandler(sequence, tv_sec, tv_usec, user_data);
+}
+
 static drmEventContext event_context = {
 		.version = DRM_EVENT_CONTEXT_VERSION,
 		.page_flip_handler = page_flip_handler,
+		.vblank_handler = vblank_handler,
 };
 
 int
