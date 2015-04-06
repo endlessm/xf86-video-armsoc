@@ -9,6 +9,7 @@ Makefile
 *.la
 libtool
 *.pc
+compile
 config.log
 config.status
 config.guess
