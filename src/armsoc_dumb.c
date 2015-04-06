@@ -420,7 +420,17 @@ int armsoc_bo_clear(struct armsoc_bo *bo)
 				"Couldn't map scanout bo\n");
 		return -1;
 	}
-	memset(dst, 0x0, bo->size);
+
+	{
+		uint32_t *p, *e;
+		/* XXX: Pixman using NEON might be faster here,
+		 * but hopefully we won't hit this very often. */
+		p = (uint32_t *) (dst);
+		e = (uint32_t *) (dst + bo->size);
+		for (; p < e; p++)
+			*p = 0xFF000000;
+	}
+
 	return 0;
 }
 
