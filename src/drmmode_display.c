@@ -1568,7 +1568,7 @@ static Bool resize_scanout_bo(ScrnInfoPtr pScrn, int width, int height)
 		/* allocate new scanout buffer */
 		new_scanout = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width, height,
-				pScrn->depth, pScrn->bitsPerPixel,
+				pScrn->bitsPerPixel, pScrn->bitsPerPixel,
 				ARMSOC_BO_SCANOUT);
 		if (!new_scanout) {
 			/* Try to use the previous buffer if the new resolution

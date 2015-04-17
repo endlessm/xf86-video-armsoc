@@ -130,7 +130,7 @@ CreateAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				width,
 				height,
-				depth,
+				bitsPerPixel,
 				bitsPerPixel, buf_type);
 
 		if ((!priv->bo) && ARMSOC_BO_SCANOUT == buf_type) {
@@ -344,7 +344,7 @@ ModifyAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, int
 		priv->bo = armsoc_bo_new_with_dim(pARMSOC->dev,
 				pPixmap->drawable.width,
 				pPixmap->drawable.height,
-				pPixmap->drawable.depth,
+				pPixmap->drawable.bitsPerPixel,
 				pPixmap->drawable.bitsPerPixel, buf_type);
 
 		if ((!priv->bo) && ARMSOC_BO_SCANOUT == buf_type) {
