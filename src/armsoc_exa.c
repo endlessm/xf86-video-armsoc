@@ -476,6 +476,10 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 		item.usage = _LOCK_ACCESS_CPU_WRITE;
 		ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
 		while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
+			/* If we were interrupted, try again immediately without sleeping... */
+			if (errno == EINTR)
+				continue;
+
 			if (--max_retries == 0) {
 				ErrorF("giving up on locking bo %d\n", item.secure_id);
 				break;
