@@ -26,6 +26,7 @@
 
 #include "armsoc_driver.h"
 #include "armsoc_exa.h"
+#include "fb.h"
 
 DevPrivateKeyRec alphaHackGCPrivateKeyRec;
 #define alphaHackGCPrivateKey (&alphaHackGCPrivateKeyRec)
@@ -37,6 +38,9 @@ DevPrivateKeyRec alphaHackScreenPrivateKeyRec;
 typedef struct {
     GCFuncs funcs;
     const GCFuncs *origFuncs;
+
+    GCOps ops;
+    const GCOps *origOps;
 } AlphaHackGCRec;
 
 // AlphaHackScreenRec: per-screen private data
@@ -81,6 +85,9 @@ ShouldApplyAlphaHack(DrawablePtr pDrawable)
 #define UNWRAP_FUNCS() pGC->funcs = gcrec->origFuncs;
 #define WRAP_FUNCS() pGC->funcs = &gcrec->funcs;
 
+#define UNWRAP_OPS() pGC->ops = gcrec->origOps;
+#define WRAP_OPS() pGC->ops = &gcrec->ops;
+
 static void
 AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
 {
@@ -105,6 +112,139 @@ AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
     WRAP_FUNCS();
 }
 
+static void
+AlphaHackCopyNToN(DrawablePtr pSrcDrawable,
+                  DrawablePtr pDstDrawable,
+                  GCPtr pGC, BoxPtr pbox, int nbox,
+                  int dx, int dy,
+                  Bool reverse, Bool upsidedown, Pixel bitplane, void *closure)
+{
+    FbBits *src;
+    FbStride srcStride;
+    int srcBpp;
+    int srcXoff, srcYoff;
+    FbBits *dst;
+    FbStride dstStride;
+    int dstBpp;
+    int dstXoff, dstYoff;
+    int n;
+    BoxPtr b;
+    pixman_image_t *si, *di;
+
+    fbGetDrawable(pSrcDrawable, src, srcStride, srcBpp, srcXoff, srcYoff);
+    fbGetDrawable(pDstDrawable, dst, dstStride, dstBpp, dstXoff, dstYoff);
+
+    si = pixman_image_create_bits(PIXMAN_x8r8g8b8,
+                                  pSrcDrawable->width, pSrcDrawable->height,
+                                  (uint32_t *) src, srcStride * sizeof(FbStride));
+    di = pixman_image_create_bits(PIXMAN_a8r8g8b8,
+                                  pDstDrawable->width, pDstDrawable->height,
+                                  (uint32_t *) dst, dstStride * sizeof(FbStride));
+
+    n = nbox;
+    b = pbox;
+    while (n--) {
+        pixman_image_composite32(PIXMAN_OP_SRC, si, NULL, di,
+                                 (b->x1 + dx + srcXoff), (b->y1 + dy + srcYoff),
+                                 0, 0,
+                                 (b->x1 + dstXoff), (b->y1 + dstYoff),
+                                 (b->x2 - b->x1), (b->y2 - b->y1));
+
+        b++;
+    }
+
+    pixman_image_unref(si);
+    pixman_image_unref(di);
+}
+
+static RegionPtr
+AlphaHackCopyArea(DrawablePtr pSrcDrawable,
+                  DrawablePtr pDstDrawable,
+                  GCPtr pGC,
+                  int xIn, int yIn, int widthSrc, int heightSrc,
+                  int xOut, int yOut)
+{
+    AlphaHackGCRec *gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
+    FbBits pm = fbGetGCPrivate(pGC)->pm;
+    if (pGC->alu == GXcopy && pm == 0x00FFFFFF && ShouldApplyAlphaHack(pDstDrawable))
+        return miDoCopy(pSrcDrawable, pDstDrawable, pGC, xIn, yIn,
+                        widthSrc, heightSrc, xOut, yOut, AlphaHackCopyNToN, 0, 0);
+    else
+        return gcrec->origOps->CopyArea(pSrcDrawable, pDstDrawable, pGC, xIn, yIn,
+                                        widthSrc, heightSrc, xOut, yOut);
+}
+
+static Bool
+AlphaHackDoPutImage(DrawablePtr pDrawable, GCPtr pGC, int depth,
+                    int x, int y, int w, int h, int format, char *bits)
+{
+    pixman_image_t *si, *di;
+    FbBits *dst;
+    FbStride dstStride;
+    int dstBpp;
+    int dstXoff, dstYoff;
+    RegionPtr pClip;
+    BoxPtr pbox;
+    int nbox;
+    int bpp = pDrawable->bitsPerPixel;
+
+    if (format != ZPixmap || bpp != 32 || pGC->alu != GXcopy)
+        return FALSE;
+    ErrorF("PI2\n");
+    if (!ShouldApplyAlphaHack(pDrawable))
+        return FALSE;
+    ErrorF("PI3\n");
+
+    fbGetDrawable(pDrawable, dst, dstStride, dstBpp, dstXoff, dstYoff);
+
+    si = pixman_image_create_bits(PIXMAN_x8r8g8b8, w, h, (uint32_t *) bits, w * sizeof(FbStride));
+    di = pixman_image_create_bits(PIXMAN_a8r8g8b8,
+                                  pDrawable->width, pDrawable->height,
+                                  (uint32_t *) dst, dstStride * sizeof(FbStride));
+
+    pClip = fbGetCompositeClip(pGC);
+
+    for (nbox = RegionNumRects(pClip), pbox = RegionRects(pClip); nbox--; pbox++) {
+        int x1 = x;
+        int y1 = y;
+        int x2 = x + w;
+        int y2 = y + h;
+
+        if (x1 < pbox->x1)
+            x1 = pbox->x1;
+        if (y1 < pbox->y1)
+            y1 = pbox->y1;
+        if (x2 > pbox->x2)
+            x2 = pbox->x2;
+        if (y2 > pbox->y2)
+            y2 = pbox->y2;
+        if (x1 >= x2 || y1 >= y2)
+            continue;
+
+        pixman_image_composite32(PIXMAN_OP_SRC, si, NULL, di,
+                                 (x1 - x), (y1 - y),
+                                 0, 0,
+                                 (x1 + dstXoff), (y1 + dstYoff),
+                                 (x2 - x1), (y2 - y1));
+    }
+
+    pixman_image_unref(si);
+    pixman_image_unref(di);
+    return TRUE;
+}
+
+static void
+AlphaHackPutImage(DrawablePtr pDrawable,
+                  GCPtr pGC,
+                  int depth, int x, int y, int w, int h,
+                  int leftPad, int format, char *bits)
+{
+    AlphaHackGCRec *gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
+
+    if (!AlphaHackDoPutImage(pDrawable, pGC, depth, x, y, w, h, format, bits))
+        gcrec->origOps->PutImage(pDrawable, pGC, depth, x, y, w, h, leftPad, format, bits);
+}
+
 static Bool
 AlphaHackCreateGC(GCPtr pGC)
 {
@@ -117,12 +257,20 @@ AlphaHackCreateGC(GCPtr pGC)
     pScreen->CreateGC = s->CreateGC;
     result = pScreen->CreateGC(pGC);
     gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
+
     gcrec->origFuncs = pGC->funcs;
     gcrec->funcs = *pGC->funcs;
     gcrec->funcs.ValidateGC = AlphaHackValidateGC;
-    pScreen->CreateGC = AlphaHackCreateGC;
+
+    gcrec->origOps = pGC->ops;
+    gcrec->ops = *pGC->ops;
+    gcrec->ops.CopyArea = AlphaHackCopyArea;
+    gcrec->ops.PutImage = AlphaHackPutImage;
 
     WRAP_FUNCS();
+    WRAP_OPS();
+
+    pScreen->CreateGC = AlphaHackCreateGC;
 
     return result;
 }
