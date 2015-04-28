@@ -66,6 +66,18 @@ IsDrawableScanout(DrawablePtr pDrawable)
     return IsPixmapScanout(GetDrawablePixmap(pDrawable));
 }
 
+static inline Bool
+ShouldApplyAlphaHack(DrawablePtr pDrawable)
+{
+    /* Do some quick early checks before we dig into the drawable
+     * more deeply. */
+    if (pDrawable->depth != 24 || pDrawable->bitsPerPixel != 32 ||
+        pDrawable->type != DRAWABLE_WINDOW)
+        return FALSE;
+
+    return IsDrawableScanout(pDrawable);
+}
+
 #define UNWRAP_FUNCS() pGC->funcs = gcrec->origFuncs;
 #define WRAP_FUNCS() pGC->funcs = &gcrec->funcs;
 
@@ -79,8 +91,7 @@ AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
 
     /* If we're drawing to a scanout bo, make sure that
      * we don't overwrite the alpha mask. */
-    if (pDrawable->depth == 24 && pDrawable->bitsPerPixel == 32 &&
-        pDrawable->type == DRAWABLE_WINDOW && IsDrawableScanout(pDrawable)) {
+    if (ShouldApplyAlphaHack(pDrawable)) {
         long unsigned int pm = pGC->planemask;
         pGC->planemask &= 0x00FFFFFF;
         if (pm != pGC->planemask) {
