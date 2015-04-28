@@ -36,8 +36,7 @@ DevPrivateKeyRec alphaHackScreenPrivateKeyRec;
 // AlphaHackGCRec: private per-gc data
 typedef struct {
     GCFuncs funcs;
-
-    void *ValidateGC;
+    const GCFuncs *origFuncs;
 } AlphaHackGCRec;
 
 // AlphaHackScreenRec: per-screen private data
@@ -67,13 +66,16 @@ IsDrawableScanout(DrawablePtr pDrawable)
     return IsPixmapScanout(GetDrawablePixmap(pDrawable));
 }
 
+#define UNWRAP_FUNCS() pGC->funcs = gcrec->origFuncs;
+#define WRAP_FUNCS() pGC->funcs = &gcrec->funcs;
+
 static void
 AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
 {
     AlphaHackGCRec *gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
     unsigned int depth = pDrawable->depth;
 
-    gcrec->funcs.ValidateGC = gcrec->ValidateGC;
+    UNWRAP_FUNCS();
 
     /* If we're drawing to a scanout bo, make sure that
      * we don't overwrite the alpha mask. */
@@ -89,7 +91,7 @@ AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
     pGC->funcs->ValidateGC(pGC, changes, pDrawable);
     pDrawable->depth = depth;
 
-    gcrec->funcs.ValidateGC = AlphaHackValidateGC;
+    WRAP_FUNCS();
 }
 
 static Bool
@@ -104,11 +106,12 @@ AlphaHackCreateGC(GCPtr pGC)
     pScreen->CreateGC = s->CreateGC;
     result = pScreen->CreateGC(pGC);
     gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
-    gcrec->ValidateGC = pGC->funcs->ValidateGC;
+    gcrec->origFuncs = pGC->funcs;
     gcrec->funcs = *pGC->funcs;
     gcrec->funcs.ValidateGC = AlphaHackValidateGC;
-    pGC->funcs = &gcrec->funcs;
     pScreen->CreateGC = AlphaHackCreateGC;
+
+    WRAP_FUNCS();
 
     return result;
 }
