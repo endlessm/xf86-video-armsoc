@@ -30,6 +30,8 @@
 #include "config.h"
 #endif
 
+#include <errno.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -450,7 +452,6 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	int max_retries = 10;
 	_lock_item_s item;
 
 	if (!is_accel_pixmap(priv)) {
@@ -473,15 +474,12 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	 * This waits for any ongoing GPU usage to finish, and also prevents
 	 * the GPU from using this buffer until we release the lock. */
 	if (pARMSOC->umplock_fd >= 0) {
+		int ret;
 		item.usage = _LOCK_ACCESS_CPU_WRITE;
-		ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_CREATE, &item);
-		while (ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item) < 0) {
-			if (--max_retries == 0) {
-				ErrorF("giving up on locking bo %d\n", item.secure_id);
-				break;
-			}
-			usleep(2000);
-		}
+		ret = ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item);
+		if (ret < 0)
+			ErrorF("Failed to lock bo %d: %s\n",
+			       item.secure_id, strerror(errno));
 	}
 
 	/* Set a flag inside UMP which will trigger a cache flush later. */
