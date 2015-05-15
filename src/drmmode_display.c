@@ -1098,6 +1098,28 @@ drmmode_property_ignore(drmModePropertyPtr prop)
 	return FALSE;
 }
 
+#define NUM_ELEMENTS(x) (sizeof(x)/ sizeof(x[1]))
+
+static const char * connector_types[] = {
+    [DRM_MODE_CONNECTOR_Unknown]     = "unknown",
+    [DRM_MODE_CONNECTOR_VGA]         = "VGA",
+    [DRM_MODE_CONNECTOR_DVII]        = "DVI-I",
+    [DRM_MODE_CONNECTOR_DVID]        = "DVI-D",
+    [DRM_MODE_CONNECTOR_DVIA]        = "DVI-A",
+    [DRM_MODE_CONNECTOR_Composite]   = "TV-Composite",
+    [DRM_MODE_CONNECTOR_SVIDEO]      = "TV-SVideo",
+    [DRM_MODE_CONNECTOR_LVDS]        = "Panel",
+    [DRM_MODE_CONNECTOR_Component]   = "TV-Component",
+    [DRM_MODE_CONNECTOR_9PinDIN]     = "unknown",
+    [DRM_MODE_CONNECTOR_DisplayPort] = "DisplayPort",
+    [DRM_MODE_CONNECTOR_HDMIA]       = "HDMI",
+    [DRM_MODE_CONNECTOR_HDMIB]       = "HDMI",
+    [DRM_MODE_CONNECTOR_TV]          = "TV",
+    [DRM_MODE_CONNECTOR_eDP]         = "Panel",
+    [DRM_MODE_CONNECTOR_VIRTUAL]     = "unknown",
+    [DRM_MODE_CONNECTOR_DSI]         = "Panel",
+};
+
 static void
 drmmode_output_create_resources(xf86OutputPtr output)
 {
@@ -1116,7 +1138,7 @@ drmmode_output_create_resources(xf86OutputPtr output)
 
 	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
 	drmmode_output->props =
-		calloc(connector->count_props + crtcprops->count_props,
+		calloc(connector->count_props + crtcprops->count_props + 1,
 				sizeof(struct drmmode_prop_rec));
 	if (!drmmode_output->props) {
 		drmModeFreeObjectProperties(crtcprops);
@@ -1243,6 +1265,39 @@ drmmode_output_create_resources(xf86OutputPtr output)
 						err);
 		}
 	}
+
+	i = drmmode_output->num_props;
+
+	{
+		/* add the standard ConnectorType prop */
+		struct drmmode_prop_rec *p = &drmmode_output->props[i];
+
+		p->num_atoms = NUM_ELEMENTS(connector_types) + 1;
+		p->atoms = calloc(p->num_atoms, sizeof(Atom));
+		p->atoms[0] = MakeAtom(RR_PROPERTY_CONNECTOR_TYPE, strlen(RR_PROPERTY_CONNECTOR_TYPE), TRUE);
+		for (j = 0; j < NUM_ELEMENTS(connector_types); ++j)
+			p->atoms[j + 1] = MakeAtom(connector_types[j], strlen(connector_types[j]), TRUE);
+		err = RRConfigureOutputProperty(output->randr_output, p->atoms[0],
+						FALSE, FALSE, TRUE,
+						p->num_atoms - 1,
+						(INT32 *) &p->atoms[1]);
+		if (err != 0) {
+			xf86DrvMsg(output->scrn->scrnIndex, X_ERROR,
+				   "RRConfigureOutputProperty error, %d\n", err);
+		}
+		/* there's always a matching value */
+		err = RRChangeOutputProperty(output->randr_output, p->atoms[0],
+					     XA_ATOM, 32, PropModeReplace, 1,
+					     &p->atoms[connector->connector_type], FALSE, TRUE);
+		if (err != 0) {
+			xf86DrvMsg(output->scrn->scrnIndex, X_ERROR,
+				   "RRChangeOutputProperty error, %d\n", err);
+		}
+
+		i++;
+		drmmode_output->num_props++;
+	}
+
 	drmModeFreeObjectProperties(crtcprops);
 }
 
