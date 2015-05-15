@@ -1321,56 +1321,7 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 static Bool
 drmmode_output_get_property(xf86OutputPtr output, Atom property)
 {
-
-	struct drmmode_output_priv *drmmode_output = output->driver_private;
-	struct drmmode_rec *drmmode = drmmode_output->drmmode;
-	uint32_t value;
-	int err, i;
-	drmModeObjectPropertiesPtr props;
-
-	if (output->scrn->vtSema) {
-		drmModeFreeConnector(drmmode_output->connector);
-		drmmode_output->connector =
-				drmModeGetConnector(drmmode->fd,
-						drmmode_output->output_id);
-	}
-
-	for (i = 0; i < drmmode_output->num_props; i++) {
-		struct drmmode_prop_rec *p = &drmmode_output->props[i];
-		if (p->atoms[0] != property)
-			continue;
-
-		props = drmModeObjectGetProperties(drmmode->fd, p->drm_object_id, p->drm_object);
-		value = props->prop_values[p->index];
-
-		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
-			err = RRChangeOutputProperty(output->randr_output,
-					property, XA_INTEGER, 32,
-					PropModeReplace, 1, &value,
-					FALSE, FALSE);
-
-			return !err;
-		} else if (p->mode_prop->flags & DRM_MODE_PROP_ENUM) {
-			int		j;
-
-			/* search for matching name string, then set
-			 * its value down
-			 */
-			for (j = 0; j < p->mode_prop->count_enums; j++) {
-				if (p->mode_prop->enums[j].value == value)
-					break;
-			}
-
-			err = RRChangeOutputProperty(output->randr_output,
-						property,
-						XA_ATOM, 32, PropModeReplace, 1,
-						&p->atoms[j+1], FALSE, FALSE);
-
-			return !err;
-		}
-	}
-
-	return FALSE;
+	return TRUE;
 }
 
 static const xf86OutputFuncsRec drmmode_output_funcs = {
