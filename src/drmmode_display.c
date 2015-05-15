@@ -1116,8 +1116,10 @@ static const char * connector_types[] = {
     [DRM_MODE_CONNECTOR_HDMIB]       = "HDMI",
     [DRM_MODE_CONNECTOR_TV]          = "TV",
     [DRM_MODE_CONNECTOR_eDP]         = "Panel",
+    /*
     [DRM_MODE_CONNECTOR_VIRTUAL]     = "unknown",
     [DRM_MODE_CONNECTOR_DSI]         = "Panel",
+    */
 };
 
 static void
@@ -1131,14 +1133,22 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	int i, j, err;
 	drmModeEncoderPtr enc;
 	drmModeObjectPropertiesPtr crtcprops;
+	int n_crtcprops;
 
 	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
-	if (!enc)
-		return;
 
-	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+	drmmode_output->num_props++;
+
+	if (enc) {
+		crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+		n_crtcprops = crtcprops->count_props;
+	} else {
+		crtcprops = NULL;
+		n_crtcprops = 0;
+	}
+
 	drmmode_output->props =
-		calloc(connector->count_props + crtcprops->count_props + 1,
+		calloc(connector->count_props + n_crtcprops + 1,
 				sizeof(struct drmmode_prop_rec));
 	if (!drmmode_output->props) {
 		drmModeFreeObjectProperties(crtcprops);
@@ -1162,7 +1172,8 @@ drmmode_output_create_resources(xf86OutputPtr output)
 
 		drmmode_output->num_props++;
 	}
-	for (i = 0; i < crtcprops->count_props; i++) {
+
+	for (i = 0; i < n_crtcprops; i++) {
 		drmmode_prop = drmModeGetProperty(drmmode->fd,
 			crtcprops->props[i]);
 
@@ -1266,11 +1277,9 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		}
 	}
 
-	i = drmmode_output->num_props;
-
 	{
 		/* add the standard ConnectorType prop */
-		struct drmmode_prop_rec *p = &drmmode_output->props[i];
+		struct drmmode_prop_rec *p = &drmmode_output->props[drmmode_output->num_props];
 
 		p->num_atoms = NUM_ELEMENTS(connector_types) + 1;
 		p->atoms = calloc(p->num_atoms, sizeof(Atom));
@@ -1288,13 +1297,12 @@ drmmode_output_create_resources(xf86OutputPtr output)
 		/* there's always a matching value */
 		err = RRChangeOutputProperty(output->randr_output, p->atoms[0],
 					     XA_ATOM, 32, PropModeReplace, 1,
-					     &p->atoms[connector->connector_type], FALSE, TRUE);
+					     &p->atoms[connector->connector_type + 1], FALSE, TRUE);
 		if (err != 0) {
 			xf86DrvMsg(output->scrn->scrnIndex, X_ERROR,
 				   "RRChangeOutputProperty error, %d\n", err);
 		}
 
-		i++;
 		drmmode_output->num_props++;
 	}
 
