@@ -1098,6 +1098,31 @@ drmmode_property_ignore(drmModePropertyPtr prop)
 	return FALSE;
 }
 
+#define NUM_ELEMENTS(x) (sizeof(x)/ sizeof(x[1]))
+
+static const char * connector_types[] = {
+    [DRM_MODE_CONNECTOR_Unknown]     = "unknown",
+    [DRM_MODE_CONNECTOR_VGA]         = "VGA",
+    [DRM_MODE_CONNECTOR_DVII]        = "DVI-I",
+    [DRM_MODE_CONNECTOR_DVID]        = "DVI-D",
+    [DRM_MODE_CONNECTOR_DVIA]        = "DVI-A",
+    [DRM_MODE_CONNECTOR_Composite]   = "TV-Composite",
+    [DRM_MODE_CONNECTOR_SVIDEO]      = "TV-SVideo",
+    [DRM_MODE_CONNECTOR_LVDS]        = "Panel",
+    [DRM_MODE_CONNECTOR_Component]   = "TV-Component",
+    [DRM_MODE_CONNECTOR_9PinDIN]     = "unknown",
+    [DRM_MODE_CONNECTOR_DisplayPort] = "DisplayPort",
+    [DRM_MODE_CONNECTOR_HDMIA]       = "HDMI",
+    [DRM_MODE_CONNECTOR_HDMIB]       = "HDMI",
+    [DRM_MODE_CONNECTOR_TV]          = "TV",
+    [DRM_MODE_CONNECTOR_eDP]         = "Panel",
+    /* XXX: These require a later kernel than what we have. */
+#if 0
+    [DRM_MODE_CONNECTOR_VIRTUAL]     = "unknown",
+    [DRM_MODE_CONNECTOR_DSI]         = "Panel",
+#endif
+};
+
 static void
 drmmode_output_create_resources(xf86OutputPtr output)
 {
@@ -1109,14 +1134,22 @@ drmmode_output_create_resources(xf86OutputPtr output)
 	int i, j, err;
 	drmModeEncoderPtr enc;
 	drmModeObjectPropertiesPtr crtcprops;
+	int n_crtcprops;
 
 	enc = drmModeGetEncoder(drmmode->fd, connector->encoder_id);
-	if (!enc)
-		return;
 
-	crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+	drmmode_output->num_props++;
+
+	if (enc) {
+		crtcprops = drmModeObjectGetProperties(drmmode->fd, enc->crtc_id, DRM_MODE_OBJECT_CRTC);
+		n_crtcprops = crtcprops->count_props;
+	} else {
+		crtcprops = NULL;
+		n_crtcprops = 0;
+	}
+
 	drmmode_output->props =
-		calloc(connector->count_props + crtcprops->count_props,
+		calloc(connector->count_props + n_crtcprops + 1,
 				sizeof(struct drmmode_prop_rec));
 	if (!drmmode_output->props) {
 		drmModeFreeObjectProperties(crtcprops);
@@ -1140,7 +1173,8 @@ drmmode_output_create_resources(xf86OutputPtr output)
 
 		drmmode_output->num_props++;
 	}
-	for (i = 0; i < crtcprops->count_props; i++) {
+
+	for (i = 0; i < n_crtcprops; i++) {
 		drmmode_prop = drmModeGetProperty(drmmode->fd,
 			crtcprops->props[i]);
 
@@ -1243,6 +1277,36 @@ drmmode_output_create_resources(xf86OutputPtr output)
 						err);
 		}
 	}
+
+	{
+		/* add the standard ConnectorType prop */
+		struct drmmode_prop_rec *p = &drmmode_output->props[drmmode_output->num_props];
+
+		p->num_atoms = NUM_ELEMENTS(connector_types) + 1;
+		p->atoms = calloc(p->num_atoms, sizeof(Atom));
+		p->atoms[0] = MakeAtom(RR_PROPERTY_CONNECTOR_TYPE, strlen(RR_PROPERTY_CONNECTOR_TYPE), TRUE);
+		for (j = 0; j < NUM_ELEMENTS(connector_types); ++j)
+			p->atoms[j + 1] = MakeAtom(connector_types[j], strlen(connector_types[j]), TRUE);
+		err = RRConfigureOutputProperty(output->randr_output, p->atoms[0],
+						FALSE, FALSE, TRUE,
+						p->num_atoms - 1,
+						(INT32 *) &p->atoms[1]);
+		if (err != 0) {
+			xf86DrvMsg(output->scrn->scrnIndex, X_ERROR,
+				   "RRConfigureOutputProperty error, %d\n", err);
+		}
+		/* there's always a matching value */
+		err = RRChangeOutputProperty(output->randr_output, p->atoms[0],
+					     XA_ATOM, 32, PropModeReplace, 1,
+					     &p->atoms[connector->connector_type + 1], FALSE, TRUE);
+		if (err != 0) {
+			xf86DrvMsg(output->scrn->scrnIndex, X_ERROR,
+				   "RRChangeOutputProperty error, %d\n", err);
+		}
+
+		drmmode_output->num_props++;
+	}
+
 	drmModeFreeObjectProperties(crtcprops);
 }
 
@@ -1321,56 +1385,7 @@ drmmode_output_set_property(xf86OutputPtr output, Atom property,
 static Bool
 drmmode_output_get_property(xf86OutputPtr output, Atom property)
 {
-
-	struct drmmode_output_priv *drmmode_output = output->driver_private;
-	struct drmmode_rec *drmmode = drmmode_output->drmmode;
-	uint32_t value;
-	int err, i;
-	drmModeObjectPropertiesPtr props;
-
-	if (output->scrn->vtSema) {
-		drmModeFreeConnector(drmmode_output->connector);
-		drmmode_output->connector =
-				drmModeGetConnector(drmmode->fd,
-						drmmode_output->output_id);
-	}
-
-	for (i = 0; i < drmmode_output->num_props; i++) {
-		struct drmmode_prop_rec *p = &drmmode_output->props[i];
-		if (p->atoms[0] != property)
-			continue;
-
-		props = drmModeObjectGetProperties(drmmode->fd, p->drm_object_id, p->drm_object);
-		value = props->prop_values[p->index];
-
-		if (p->mode_prop->flags & DRM_MODE_PROP_RANGE) {
-			err = RRChangeOutputProperty(output->randr_output,
-					property, XA_INTEGER, 32,
-					PropModeReplace, 1, &value,
-					FALSE, FALSE);
-
-			return !err;
-		} else if (p->mode_prop->flags & DRM_MODE_PROP_ENUM) {
-			int		j;
-
-			/* search for matching name string, then set
-			 * its value down
-			 */
-			for (j = 0; j < p->mode_prop->count_enums; j++) {
-				if (p->mode_prop->enums[j].value == value)
-					break;
-			}
-
-			err = RRChangeOutputProperty(output->randr_output,
-						property,
-						XA_ATOM, 32, PropModeReplace, 1,
-						&p->atoms[j+1], FALSE, FALSE);
-
-			return !err;
-		}
-	}
-
-	return FALSE;
+	return TRUE;
 }
 
 static const xf86OutputFuncsRec drmmode_output_funcs = {
