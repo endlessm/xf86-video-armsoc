@@ -31,9 +31,27 @@
 #include "xf86Crtc.h"
 #include "armsoc_dumb.h"
 
+#define ARMSOC_GEM_DOMAIN_CPU   0x01
+#define ARMSOC_GEM_DOMAIN_MALI  0x02
+
 enum hwcursor_api {
 	HWCURSOR_API_PLANE = 0,
 	HWCURSOR_API_STANDARD = 1,
+};
+
+/*
+ * Generic GEM set domain information used to abstract custom GEM set domain
+ * for every DRM driver.
+ */
+struct armsoc_gem_set_domain {
+	uint32_t handle;
+	uint32_t write_domain;
+};
+
+enum armsoc_drm_cache_op_control {
+	ARMSOC_DRM_CACHE_OP_START,
+	ARMSOC_DRM_CACHE_OP_FINISH,
+	ARMSOC_DRM_CACHE_OP_COUNT,
 };
 
 struct drmmode_interface {
@@ -88,6 +106,28 @@ struct drmmode_interface {
 	 * @return 0 on success, non-zero on failure
 	 */
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem);
+
+	/* (Optional) Signal to the kernel that cache control operations are
+	 * about to start of have just finished.
+	 *
+	 * A driver specific ioctl() to trigger the necessary cache flushes or
+	 * invalidations before the CPU can access the buffer.
+	 *
+	 * @param       fd               DRM device file descriptor
+	 * @return 0 on success, non-zero on failure
+	 */
+	int (*cache_ops_control)(int fd, enum armsoc_drm_cache_op_control op);
+
+	/* (Optional) Set the domain of a gem object
+	 *
+	 * A driver specific ioctl() to trigger the necessary cache flushes or
+	 * invalidations before the CPU can access the buffer.
+	 *
+	 * @param       fd               DRM device file descriptor
+	 * @param       gem_set_domain   generic GEM set domain information
+	 * @return 0 on success, non-zero on failure
+	 */
+	int (*gem_set_domain)(int fd, struct armsoc_gem_set_domain gsd);
 };
 
 extern struct drmmode_interface exynos_interface;
