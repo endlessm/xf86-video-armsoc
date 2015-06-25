@@ -264,7 +264,7 @@ ModifyUnAccelPixmapHeader(struct ARMSOCPixmapPrivRec *priv, PixmapPtr pPixmap, i
 		priv->unaccel = malloc(datasize);
 
 		if (!priv->unaccel) {
-			ERROR_MSG("failed to allocate %d bytes mem",
+			ERROR_MSG("failed to allocate %zu bytes mem",
 					datasize);
 			priv->unaccel_size = 0;
 			return FALSE;
