@@ -35,11 +35,9 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include <ump/ump.h>
-#include <ump/ump_ref_drv.h>
-
 #include "armsoc_exa.h"
 #include "armsoc_driver.h"
+#include "drmmode_driver.h"
 #include "umplock_ioctl.h"
 
 static Bool is_accel_pixmap(struct ARMSOCPixmapPrivRec *priv)
@@ -452,7 +450,10 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct drmmode_interface *di = pARMSOC->drmmode_interface;
 	_lock_item_s item;
+	struct armsoc_gem_set_domain gsd;
+	int ret;
 
 	if (!is_accel_pixmap(priv)) {
 		pPixmap->devPrivate.ptr = priv->unaccel;
@@ -468,13 +469,12 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return TRUE;
 
-	item.secure_id = armsoc_bo_name(priv->bo);
+	armsoc_bo_get_name(priv->bo, &item.secure_id);
 
 	/* Use umplock to hopefully gain exclusive access to this buffer.
 	 * This waits for any ongoing GPU usage to finish, and also prevents
 	 * the GPU from using this buffer until we release the lock. */
 	if (pARMSOC->umplock_fd >= 0) {
-		int ret;
 		item.usage = _LOCK_ACCESS_CPU_WRITE;
 		ret = ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_PROCESS, &item);
 		if (ret < 0)
@@ -482,12 +482,29 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 			       item.secure_id, strerror(errno));
 	}
 
-	/* Set a flag inside UMP which will trigger a cache flush later. */
-	ump_cache_operations_control(UMP_CACHE_OP_START);
+	/* Signal the driver we're about to start a cache control operation */
+	if (di->cache_ops_control) {
+		ret = di->cache_ops_control(pARMSOC->drmFD,
+					    ARMSOC_DRM_CACHE_OP_START);
+		if (ret < 0) {
+			ErrorF("cache_ops_control(start) failed: bo %d: %s\n",
+			       item.secure_id, strerror(errno));
+			return FALSE;
+		}
+	}
 
 	/* Inform UMP that the CPU will be using the buffer now. This invalidates
 	 * the L2 cache for this buffer. */
-	ump_switch_hw_usage_secure_id(item.secure_id, UMP_USED_BY_CPU);
+	if (di->gem_set_domain) {
+		gsd.handle = item.secure_id;
+		gsd.write_domain |= ARMSOC_GEM_DOMAIN_CPU;
+		ret = di->gem_set_domain(pARMSOC->drmFD, gsd);
+		if (ret < 0) {
+			ErrorF("gem_set_domain(CPU) failed: bo %d: %s\n",
+			       item.secure_id, strerror(errno));
+			return FALSE;
+		}
+	}
 
 	return TRUE;
 }
@@ -508,13 +525,21 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct drmmode_interface *di = pARMSOC->drmmode_interface;
+	int ret;
 
 	pPixmap->devPrivate.ptr = NULL;
 	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return;
 
 	/* Flush the CPU L1 cache. */
-	ump_cache_operations_control(UMP_CACHE_OP_FINISH);
+	if (di->cache_ops_control) {
+		ret = di->cache_ops_control(pARMSOC->drmFD,
+					    ARMSOC_DRM_CACHE_OP_FINISH);
+		if (ret < 0)
+			ErrorF("cache_ops_control(finish) failed: %s\n",
+			       strerror(errno));
+	}
 
 	/* Release umplock so that GPU can gain access to this buffer again. */
 	if (pARMSOC->umplock_fd >= 0) {
