@@ -36,8 +36,6 @@
 #include <sys/mman.h>
 
 #include <pixman.h>
-#include <ump/ump.h>
-#include <ump/ump_ref_drv.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -803,9 +801,6 @@ ARMSOCPreInit(ScrnInfoPtr pScrn, int flags)
 	 */
 	if (!ARMSOCOpenDRM(pScrn))
 		goto fail;
-
-	if (ump_open() != UMP_OK)
-		goto fail2;
 
 	/* Optional umplock support. */
 	pARMSOC->umplock_fd = open("/dev/umplock", O_RDWR);
