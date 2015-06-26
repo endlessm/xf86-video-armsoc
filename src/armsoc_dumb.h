@@ -60,7 +60,7 @@ struct armsoc_create_gem {
 struct armsoc_device *armsoc_device_new(int fd,
 	int (*create_custom_gem)(int fd, struct armsoc_create_gem *create_gem));
 void armsoc_device_del(struct armsoc_device *dev);
-uint32_t armsoc_bo_name(struct armsoc_bo *bo);
+int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name);
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo);
 void *armsoc_bo_map(struct armsoc_bo *bo);
 int armsoc_get_param(struct armsoc_device *dev, uint64_t param,

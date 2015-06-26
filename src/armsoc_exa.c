@@ -453,6 +453,7 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	ScrnInfoPtr pScrn = pix2scrn(pPixmap);
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	_lock_item_s item;
+	int ret;
 
 	if (!is_accel_pixmap(priv)) {
 		pPixmap->devPrivate.ptr = priv->unaccel;
@@ -468,7 +469,11 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	if (!priv->ext_access_cnt || priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		return TRUE;
 
-	item.secure_id = armsoc_bo_name(priv->bo);
+	ret = armsoc_bo_get_name(priv->bo, &item.secure_id);
+	if (ret) {
+		ERROR_MSG("could not get buffer name: %d", ret);
+		return FALSE;
+	}
 
 	/* Use umplock to hopefully gain exclusive access to this buffer.
 	 * This waits for any ongoing GPU usage to finish, and also prevents
@@ -518,8 +523,13 @@ ARMSOCFinishAccess(PixmapPtr pPixmap, int index)
 
 	/* Release umplock so that GPU can gain access to this buffer again. */
 	if (pARMSOC->umplock_fd >= 0) {
+		int ret;
 		_lock_item_s item;
-		item.secure_id = armsoc_bo_name(priv->bo);
+		ret = armsoc_bo_get_name(priv->bo, &item.secure_id);
+		if (ret) {
+			ERROR_MSG("could not get buffer name: %d", ret);
+			return;
+		}
 		item.usage = _LOCK_ACCESS_CPU_WRITE;
 		ioctl(pARMSOC->umplock_fd, LOCK_IOCTL_RELEASE, &item);
 	}
