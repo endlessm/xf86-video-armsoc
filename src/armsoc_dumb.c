@@ -241,15 +241,6 @@ void armsoc_bo_reference(struct armsoc_bo *bo)
 	bo->refcnt++;
 }
 
-uint32_t armsoc_bo_name(struct armsoc_bo *bo)
-{
-	assert(bo->refcnt > 0);
-	return bo->name;
-}
-
-#if 0
-/* Not used because we put UMP IDs in the name,
- * which we allocate at bo creation time */
 int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 {
 	if (bo->name == 0) {
@@ -274,7 +265,6 @@ int armsoc_bo_get_name(struct armsoc_bo *bo, uint32_t *name)
 
 	return 0;
 }
-#endif
 
 uint32_t armsoc_bo_handle(struct armsoc_bo *bo)
 {

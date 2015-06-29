@@ -23,6 +23,7 @@
 #include "../drmmode_driver.h"
 
 #include "meson_drm.h"
+#include <errno.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
@@ -66,7 +67,49 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	create_gem->handle = create_meson.handle;
 	create_gem->pitch = pitch;
 	create_gem->size = create_meson.size;
-	create_gem->name = create_meson.ump_secure_id;
+
+	return 0;
+}
+
+static int cache_ops_control(int fd, enum armsoc_drm_cache_op_control op)
+{
+	struct drm_meson_cache_operations_control coc;
+	int ret;
+
+	switch (op) {
+		case ARMSOC_DRM_CACHE_OP_START:
+			coc.op = DRM_MESON_CACHE_OP_START;
+			break;
+		case ARMSOC_DRM_CACHE_OP_FINISH:
+			coc.op = DRM_MESON_CACHE_OP_FINISH;
+			break;
+		case ARMSOC_DRM_CACHE_OP_COUNT:
+			return -EINVAL;
+	}
+
+	ret = drmIoctl(fd, DRM_IOCTL_MESON_CACHE_OPERATIONS_CONTROL, &coc);
+	if (ret < 0) {
+		ErrorF("cache_operations_control ioctl failed:%s\n",
+		       strerror(errno));
+		return ret;
+	}
+
+	return 0;
+}
+
+static int gem_set_domain(int fd, struct armsoc_gem_set_domain gsd)
+{
+	struct drm_meson_gem_set_domain mgsd;
+	int ret;
+
+	mgsd.handle = gsd.handle;
+	mgsd.write_domain = gsd.write_domain;
+	ret = drmIoctl(fd, DRM_IOCTL_MESON_GEM_SET_DOMAIN, &mgsd);
+	if (ret < 0) {
+		ErrorF("gem_set_domain(CPU) failed: bo %d: %s\n", gsd.handle,
+		       strerror(errno));
+		return ret;
+	}
 
 	return 0;
 }
@@ -81,4 +124,6 @@ struct drmmode_interface meson_interface = {
 	NULL                  /* init_plane_for_cursor */,
 	0                     /* vblank_query_supported */,
 	create_custom_gem     /* create_custom_gem */,
+	cache_ops_control     /* cache_ops_control */,
+	gem_set_domain        /* gem_set_domain */,
 };
