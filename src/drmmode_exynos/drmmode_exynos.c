@@ -155,10 +155,11 @@ static int create_custom_gem(int fd, struct armsoc_create_gem *create_gem)
 	 * anyway, so for simplicity we always request non contiguous buffers.
 	 */
 	create_exynos.flags = EXYNOS_BO_NONCONTIG;
-	if (create_gem->buf_type == ARMSOC_BO_SCANOUT)
-		create_exynos.flags |= EXYNOS_BO_WC;
-	else
-		create_exynos.flags |= EXYNOS_BO_CACHABLE;
+
+	/* Don't enable CPU cache because we don't have cache control
+	 * on this platform.
+	 */
+	create_exynos.flags |= EXYNOS_BO_WC;
 
 	ret = drmIoctl(fd, DRM_IOCTL_EXYNOS_GEM_CREATE2, &create_exynos);
 	if (ret)
