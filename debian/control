@@ -16,8 +16,7 @@ Build-Depends:
  x11proto-xf86dri-dev,
  libxext-dev,
  libudev-dev,
- xutils-dev (>= 1:7.5+1),
- libump-dev
+ xutils-dev (>= 1:7.5+1)
 Standards-Version: 3.9.1
 Homepage: https://github.com/ssvb/xf86-video-fbturbo
 
