@@ -53,7 +53,6 @@ struct armsoc_create_gem {
 	/* handle, pitch, size will be returned */
 	uint32_t handle;
 	uint32_t pitch;
-	uint32_t name;
 	uint64_t size;
 };
 
