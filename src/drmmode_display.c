@@ -82,6 +82,7 @@ struct drmmode_crtc_private_rec {
 	int underscan_y;
 	Rotation last_good_rotation;
 	DisplayModePtr last_good_mode;
+	struct armsoc_bo *rotate_bo;
 };
 
 struct drmmode_prop_rec {
@@ -889,6 +890,75 @@ drmmode_gamma_set(xf86CrtcPtr crtc, CARD16 *red, CARD16 *green, CARD16 *blue,
 }
 #endif
 
+static void *
+drmmode_crtc_shadow_allocate(xf86CrtcPtr crtc, int width, int height)
+{
+	ScrnInfoPtr pScrn = crtc->scrn;
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
+	void *virtual;
+
+	/* allocate new scanout buffer */
+	drmmode_crtc->rotate_bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+                                width, height,
+                                pScrn->bitsPerPixel, pScrn->bitsPerPixel,
+                                ARMSOC_BO_SCANOUT);
+	if (!drmmode_crtc->rotate_bo) {
+		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
+			   "Couldn't allocate shadow memory for rotated CRTC\n");
+		return NULL;
+	}
+
+	virtual = armsoc_bo_map(drmmode_crtc->rotate_bo);
+
+	if (armsoc_bo_add_fb(drmmode_crtc->rotate_bo)) {
+		xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
+			   "Error adding FB for shadow scanout\n");
+		armsoc_bo_unreference(drmmode_crtc->rotate_bo);
+		return NULL;
+	}
+
+	return virtual;
+}
+
+static PixmapPtr
+drmmode_crtc_shadow_create(xf86CrtcPtr crtc, void *data, int width, int height)
+{
+	struct ARMSOCPixmapPrivRec *priv;
+	ScrnInfoPtr pScrn = crtc->scrn;
+	ScreenPtr pScreen = pScrn->pScreen;
+	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
+	PixmapPtr ppix;
+
+	ppix = pScreen->CreatePixmap(pScreen, 0, 0, pScrn->depth, ARMSOC_CREATE_PIXMAP_SCANOUT);
+	if (!ppix)
+		return NULL;
+
+	pScreen->ModifyPixmapHeader(ppix, width, height, pScrn->depth,
+				     pScrn->bitsPerPixel,
+				    32, NULL);
+
+	priv = exaGetPixmapDriverPrivate(ppix);
+	armsoc_bo_reference(priv->bo);
+
+	return ppix;
+}
+
+static void
+drmmode_crtc_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
+{
+	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
+
+	if (rotate_pixmap)
+		FreeScratchPixmapHeader(rotate_pixmap);
+
+	if (data) {
+		armsoc_bo_rm_fb(drmmode_crtc->rotate_bo);
+		armsoc_bo_unreference(drmmode_crtc->rotate_bo);
+		drmmode_crtc->rotate_bo = NULL;
+	}
+}
+
 static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
 		.dpms = drmmode_crtc_dpms,
 		.set_mode_major = drmmode_set_mode_major,
@@ -896,6 +966,9 @@ static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
 		.show_cursor = drmmode_show_cursor,
 		.hide_cursor = drmmode_hide_cursor,
 		.load_cursor_argb = drmmode_load_cursor_argb,
+		.shadow_create = drmmode_crtc_shadow_create,
+		.shadow_allocate = drmmode_crtc_shadow_allocate,
+		.shadow_destroy = drmmode_crtc_shadow_destroy,
 #if 1 == ARMSOC_SUPPORT_GAMMA
 		.gamma_set = drmmode_gamma_set,
 #endif
