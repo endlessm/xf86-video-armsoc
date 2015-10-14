@@ -927,7 +927,6 @@ drmmode_crtc_shadow_create(xf86CrtcPtr crtc, void *data, int width, int height)
 	struct ARMSOCPixmapPrivRec *priv;
 	ScrnInfoPtr pScrn = crtc->scrn;
 	ScreenPtr pScreen = pScrn->pScreen;
-	struct drmmode_crtc_private_rec *drmmode_crtc = crtc->driver_private;
 	PixmapPtr ppix;
 
 	ppix = pScreen->CreatePixmap(pScreen, 0, 0, pScrn->depth, ARMSOC_CREATE_PIXMAP_SCANOUT);
