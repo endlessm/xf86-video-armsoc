@@ -55,6 +55,13 @@ struct ARMSOCDRI2BufferRec {
 	PixmapPtr *pPixmaps;
 
 	/**
+	 * Hold an explicit reference to the bo. You would hope that having
+	 * the pixmap pointer above would allow us to do this, but things get
+	 * complex when working with scanout. For that, we use the main drawable
+	 * itself, and swap it's backing pixmap as appropriate. */
+	struct armsoc_bo *bo;
+
+	/**
 	 * Pixmap that corresponds to the DRI2BufferRec.name, so wraps
 	 * the buffer that will be used for DRI2GetBuffers calls and the
 	 * next DRI2SwapBuffers call.
@@ -318,6 +325,12 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	 * However there is no need to make the corresponding call into UMP,
 	 * because libMali will do that before using it. */
 
+	/* Take a direct reference from DRI2Buffer to the corresponding bo. It
+	 * is not enough to do this through the pixmap, because for the scanout
+	 * pixmap, we can change it's backing bo to something else. */
+	buf->bo = bo;
+	armsoc_bo_reference(bo);
+
 	return DRIBUF(buf);
 
 fail:
@@ -414,6 +427,7 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 		pScreen->DestroyPixmap(buf->pPixmaps[i]);
 	}
 
+	armsoc_bo_unreference(buf->bo);
 	free(buf->pPixmaps);
 	free(buf);
 }
