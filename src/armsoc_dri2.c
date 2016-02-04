@@ -243,6 +243,8 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
 			pDraw, attachment, format);
 
+	ErrorF("\n[%s]: pDraw=%p, attachment=%d, format=%08x\n", __func__, pDraw, attachment, format);
+
 	if (!buf) {
 		ERROR_MSG("Couldn't allocate internal buffer structure");
 		return NULL;
@@ -330,6 +332,9 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	 * pixmap, we can change it's backing bo to something else. */
 	buf->bo = bo;
 	armsoc_bo_reference(bo);
+
+	ErrorF("[%s]: canflip(pDraw):%d, buf->numPixmaps:%d, DRIBUF(buf)->name:%d\n",
+			__func__, canflip(pDraw), buf->numPixmaps, DRIBUF(buf)->name);
 
 	return DRIBUF(buf);
 

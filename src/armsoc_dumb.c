@@ -174,6 +174,9 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->dmabuf = -1;
 	new_buf->name = 0;
 
+	ErrorF("[%s]: bo->handle:%d (height:%d, width:%d, bpp:%d, buf_type: 0x%x)\n",
+			__func__, new_buf->handle, height, width, bpp, buf_type);
+
 	return new_buf;
 }
 
@@ -371,6 +374,7 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 		bo->fb_id = 0;
 		return ret;
 	}
+	ErrorF("[%s]: bo->bf_id:%d\n", __func__, bo->fb_id);
 	return 0;
 }
 
