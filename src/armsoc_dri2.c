@@ -113,6 +113,44 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 }
 
 static Bool
+xxDRI2CanFlip(DrawablePtr pDraw)
+{
+	ScreenPtr pScreen = pDraw->pScreen;
+	WindowPtr pWin, pRoot;
+	//PixmapPtr pWinPixmap, pRootPixmap;
+	PixmapPtr pWinPixmap;
+
+	if (pDraw->type == DRAWABLE_PIXMAP)
+		return TRUE;
+
+	pRoot = pScreen->root;
+//	pRootPixmap = pScreen->GetWindowPixmap(pRoot);
+
+	pWin = (WindowPtr) pDraw;
+	pWinPixmap = pScreen->GetWindowPixmap(pWin);
+
+//	if (pRootPixmap != pWinPixmap) {
+//		ErrorF("[%s] :::::: 0\n", __func__);
+//		return FALSE;
+//	}
+	if (!RegionEqual(&pWin->clipList, &pRoot->winSize)) {
+		ErrorF("[%s] :::::: 1\n", __func__);
+		return FALSE;
+	}
+
+	if (pDraw->x != 0 || pDraw->y != 0 ||
+	    pDraw->x != pWinPixmap->screen_x || pDraw->y != pWinPixmap->screen_y ||
+	    pDraw->width != pWinPixmap->drawable.width ||
+	    pDraw->height != pWinPixmap->drawable.height) {
+		ErrorF("[%s] pDraw->x:%d, pDraw->y:%d, pDraw->width:%d, pDraw->height:%d, pWinPixmap->screen_x:%d, pWinPixmap->screen_y:%d, pWinPixmap->drawable.width:%d, pWinPixmap->drawable.height:%d\n", __func__,
+				pDraw->x, pDraw->y, pDraw->width, pDraw->height, pWinPixmap->screen_x, pWinPixmap->screen_y, pWinPixmap->drawable.width, pWinPixmap->drawable.height);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static Bool
 canflip(DrawablePtr pDraw)
 {
 	ScreenPtr pScreen = pDraw->pScreen;
@@ -124,7 +162,7 @@ canflip(DrawablePtr pDraw)
 		return FALSE;
 	} else {
 		return (pDraw->type == DRAWABLE_WINDOW) &&
-				DRI2CanFlip(pDraw);
+				xxDRI2CanFlip(pDraw);
 	}
 }
 
@@ -240,10 +278,18 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	struct armsoc_bo *bo;
 	int ret;
 
-	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
-			pDraw, attachment, format);
-
-	ErrorF("\n[%s]: pDraw=%p, attachment=%d, format=%08x\n", __func__, pDraw, attachment, format);
+	if (pDraw->type == DRAWABLE_WINDOW) {
+		ErrorF("[%s] -----------------------------------\n", __func__);
+	
+		DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
+				pDraw, attachment, format);
+	
+		ErrorF("[%s]: pDraw=%p, format=%08x, attachment=", __func__, pDraw, format);
+		if (attachment == DRI2BufferFrontLeft)
+			ErrorF("DRI2BufferFrontLeft\n");
+		else
+			ErrorF("DRI2BufferBackLeft\n");
+	}
 
 	if (!buf) {
 		ERROR_MSG("Couldn't allocate internal buffer structure");
@@ -287,6 +333,7 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
+
 	DRIBUF(buf)->attachment = attachment;
 	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
 	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
@@ -300,6 +347,9 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
+	if (pDraw->type == DRAWABLE_WINDOW)
+		ErrorF("[%s]: draw:%p ==> ARMSOCDRI2BufferRec (buf):%p ==> DRI2BufferPtr (DRIBUF(buf)):%p ==> pixmap (buf->pPimaps[0]):%p ==> bo (pixmap->priv->bo):%p (%d)\n", __func__, pDraw, DRIBUF(buf), buf, pPixmap, bo, DRIBUF(buf)->name);
+
 	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
 		/* Create an fb around this buffer. This will fail and we will
 		 * fall back to blitting if the display controller hardware
@@ -311,12 +361,15 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		 * this codepath, but ARMSOCDRI2ReuseBufferNotify will create
 		 * a framebuffer if it gets mapped later on. */
 		int ret = armsoc_bo_add_fb(bo);
+		ErrorF("[%s]: 		CREATING A FB AROUND THE BUFFER\n", __func__);
 	        buf->attempted_fb_alloc = TRUE;
 		if (ret) {
 			WARNING_MSG(
 					"Falling back to blitting a flippable window");
 		}
 	} else {
+		if (!canflip(pDraw) && attachment != DRI2BufferFrontLeft)
+			ErrorF("[%s]: 		NOT CREATING A FB. WE WILL SEE LATER IN ARMSOCDRI2ReuseBufferNotify()\n", __func__);
 	}
 
 	/* Register Pixmap as having a buffer that can be accessed externally,
@@ -333,9 +386,12 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	buf->bo = bo;
 	armsoc_bo_reference(bo);
 
-	ErrorF("[%s]: canflip(pDraw):%d, buf->numPixmaps:%d, DRIBUF(buf)->name:%d\n",
-			__func__, canflip(pDraw), buf->numPixmaps, DRIBUF(buf)->name);
-
+	if (pDraw->type == DRAWABLE_WINDOW) {
+		ErrorF("[%s]: canflip(pDraw):%d, buf->numPixmaps:%d, DRIBUF(buf)->name:%d\n",
+				__func__, canflip(pDraw), buf->numPixmaps, DRIBUF(buf)->name);
+	
+		ErrorF("[%s] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", __func__);
+	}
 	return DRIBUF(buf);
 
 fail:
@@ -348,6 +404,8 @@ fail:
 	free(buf->pPixmaps);
 	free(buf);
 
+	if (pDraw->type == DRAWABLE_WINDOW)
+		ErrorF("[%s] E~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~E\n", __func__);
 	return NULL;
 }
 
@@ -373,13 +431,19 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	struct armsoc_bo *bo;
 	Bool flippable;
 	int fb_id;
+	uint32_t bo_id;
 
 	if (buffer->attachment == DRI2BufferFrontLeft)
 		return;
 
+	if (pDraw->type == DRAWABLE_WINDOW)
+		ErrorF("[%s] -----------------------------------\n", __func__);
+
 	bo = ARMSOCPixmapBo(buf->pPixmaps[0]);
 	fb_id = armsoc_bo_get_fb(bo);
 	flippable = canflip(pDraw);
+
+	armsoc_bo_get_name(bo, &bo_id);
 
 	/* Detect unflippable-to-flippable transition:
 	 * Window is flippable, but we haven't yet tried to allocate a
@@ -387,6 +451,8 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 * This can happen when CreateBuffer was called before the window
 	 * was mapped, and we have now been mapped. */
 	if (flippable && !buf->attempted_fb_alloc && fb_id == 0) {
+		ErrorF("[%s] pDraw:%p, pixmap:%p, bo:%p (%d), flippable:%d, fb_id:%d\n", __func__, pDraw, buf->pPixmaps[0], bo, bo_id, flippable, fb_id);
+		ErrorF("[%s] --> allocating new fb\n", __func__);
 		armsoc_bo_add_fb(bo);
 	        buf->attempted_fb_alloc = TRUE;
 	}
@@ -396,9 +462,13 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 * it. Now we can free the framebuffer to save on scanout memory, and
 	 * reset state in case it gets mapped again later. */
 	if (!flippable && fb_id != 0) {
+	//	ErrorF("[%s] --> removing fb\n", __func__);
 	        buf->attempted_fb_alloc = FALSE;
 		armsoc_bo_rm_fb(bo);
 	}
+
+	if (pDraw->type == DRAWABLE_WINDOW)
+		ErrorF("[%s] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", __func__);
 }
 
 /**
@@ -801,6 +871,8 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 	if (!cmd)
 		return FALSE;
 
+	ErrorF("[%s] -----------------------------------\n", __func__);
+
 	cmd->client = client;
 	cmd->pScreen = pScreen;
 	cmd->draw_id = pDraw->id;
@@ -917,6 +989,7 @@ ARMSOCDRI2ScheduleSwap(ClientPtr client, DrawablePtr pDraw,
 		}
 	}
 
+	ErrorF("[%s] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \n", __func__);
 	return TRUE;
 }
 

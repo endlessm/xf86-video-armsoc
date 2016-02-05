@@ -123,7 +123,7 @@ CreateAccelPixmap(struct ARMSOCPixmapPrivRec *priv, ScreenPtr pScreen, int width
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
 	enum armsoc_buf_type buf_type = ARMSOC_BO_NON_SCANOUT;
 
-	ErrorF("[%s]\n", __func__);
+//	ErrorF("[%s]\n", __func__);
 
 	if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
 		buf_type = ARMSOC_BO_SCANOUT;
@@ -180,8 +180,17 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 	}
 	priv->usage_hint = usage_hint;
 
-	ErrorF("[%s]: width:%d, height:%d, depth:%d, usage_hint:0x%08x, bitsPerPixel:%d, is_accel:%d\n",
-			__func__, width, height, depth, usage_hint, bitsPerPixel, is_accel_pixmap(priv));
+	if (is_accel_pixmap(priv)) {
+		ErrorF("[%s]: width:%d, height:%d, depth:%d, bitsPerPixel:%d, is_accel:%d, usage_hint:0x%08x -> ",
+				__func__, width, height, depth, bitsPerPixel, is_accel_pixmap(priv), usage_hint);
+	
+		if (priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT)
+			ErrorF("(ARMSOC_CREATE_PIXMAP_SCANOUT)\n");
+		else if (priv->usage_hint == CREATE_PIXMAP_USAGE_BACKING_PIXMAP)
+			ErrorF("(CREATE_PIXMAP_USAGE_BACKING_PIXMAP)\n");
+		else
+			ErrorF("(NO ACC)\n");
+	}
 
 	if (is_accel_pixmap(priv))
 		return CreateAccelPixmap(priv, pScreen, width, height, depth, bitsPerPixel, new_fb_pitch);

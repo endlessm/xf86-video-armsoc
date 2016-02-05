@@ -174,8 +174,12 @@ struct armsoc_bo *armsoc_bo_new_with_dim(struct armsoc_device *dev,
 	new_buf->dmabuf = -1;
 	new_buf->name = 0;
 
-	ErrorF("[%s]: bo->handle:%d (height:%d, width:%d, bpp:%d, buf_type: 0x%x)\n",
-			__func__, new_buf->handle, height, width, bpp, buf_type);
+	ErrorF("[%s]: bo:%p, bo->handle:%d (height:%d, width:%d, bpp:%d, buf_type:",
+			__func__, new_buf, new_buf->handle, height, width, bpp);
+	if (buf_type == ARMSOC_BO_SCANOUT)
+		ErrorF("ARMSOC_BO_SCANOUT)\n");
+	else
+		ErrorF("ARMSOC_BO_NON_SCANOUT)\n");
 
 	return new_buf;
 }
