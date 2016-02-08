@@ -366,13 +366,22 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 {
 	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
 	struct armsoc_bo *bo;
+//	struct ARMSOCPixmapPrivRec *priv;
+	struct ARMSOCRec *pARMSOC;
+	ScrnInfoPtr pScrn;
+	PixmapPtr pPixmap;
 	Bool flippable;
 	int fb_id;
 
 	if (buffer->attachment == DRI2BufferFrontLeft)
 		return;
 
-	bo = ARMSOCPixmapBo(buf->pPixmaps[0]);
+	pPixmap = buf->pPixmaps[0];
+//	priv = exaGetPixmapDriverPrivate(pPixmap);
+	pScrn = pix2scrn(pPixmap);
+	pARMSOC = ARMSOCPTR(pScrn);
+
+	bo = ARMSOCPixmapBo(pPixmap);
 	fb_id = armsoc_bo_get_fb(bo);
 	flippable = canflip(pDraw);
 
@@ -382,6 +391,16 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 * This can happen when CreateBuffer was called before the window
 	 * was mapped, and we have now been mapped. */
 	if (flippable && !buf->attempted_fb_alloc && fb_id == 0) {
+		armsoc_bo_unreference(bo);
+		bo = armsoc_bo_new_with_dim(pARMSOC->dev,
+				pPixmap->drawable.width,
+				pPixmap->drawable.height,
+				pPixmap->drawable.bitsPerPixel,
+				pPixmap->drawable.bitsPerPixel,
+				ARMSOC_BO_SCANOUT);
+		armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
+		buf->bo = bo;
+		armsoc_bo_reference(bo);
 		armsoc_bo_add_fb(bo);
 	        buf->attempted_fb_alloc = TRUE;
 	}
