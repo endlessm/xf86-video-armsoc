@@ -503,9 +503,11 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 		gsd.handle = armsoc_bo_handle(priv->bo);
 		gsd.write_domain |= ARMSOC_GEM_DOMAIN_CPU;
 		ret = di->gem_set_domain(pARMSOC->drmFD, gsd);
-		if (ret < 0)
-			DEBUG_MSG("gem_set_domain() failed: GEM handle %u: %s",
+		if (ret < 0) {
+			ErrorF("gem_set_domain() failed: GEM handle %u: %s\n",
 			       gsd.handle, strerror(errno));
+			return FALSE;
+		}
 	}
 
 	return TRUE;
