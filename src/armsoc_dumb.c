@@ -370,7 +370,7 @@ int armsoc_bo_add_fb(struct armsoc_bo *bo)
 	assert(bo->refcnt > 0);
 	assert(bo->fb_id == 0);
 
-	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->bpp,
+	ret = drmModeAddFB(bo->dev->fd, bo->width, bo->height, bo->depth,
 			bo->bpp, bo->pitch, bo->handle, &bo->fb_id);
 	if (ret < 0) {
 		bo->fb_id = 0;
