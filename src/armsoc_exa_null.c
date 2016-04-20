@@ -152,13 +152,12 @@ InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 	exa->CheckComposite = CheckCompositeFail;
 	exa->PrepareComposite = PrepareCompositeFail;
 
-	/* This needs to happen before EXA is initialized */
-	InstallAlphaHack(pScreen);
-
 	if (!exaDriverInit(pScreen, exa)) {
 		ERROR_MSG("exaDriverInit failed");
 		goto fail;
 	}
+
+	InstallAlphaHack(pScreen);
 
 	armsoc_exa->CloseScreen = CloseScreen;
 	armsoc_exa->FreeScreen = FreeScreen;
