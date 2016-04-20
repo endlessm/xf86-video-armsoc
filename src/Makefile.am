@@ -48,7 +48,6 @@ armsoc_drv_la_SOURCES = \
          drmmode_display.c \
          armsoc_exa.c \
          armsoc_exa_null.c \
-         armsoc_gc.c \
          armsoc_dri2.c \
          armsoc_driver.c \
          armsoc_dumb.c \
