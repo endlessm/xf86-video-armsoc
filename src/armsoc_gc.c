@@ -73,7 +73,7 @@ AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
     AlphaHackGCRec *gcrec = dixLookupPrivate(&pGC->devPrivates, alphaHackGCPrivateKey);
     unsigned int depth = pDrawable->depth;
 
-    gcrec->funcs.ValidateGC = gcrec->ValidateGC;
+    pGC->funcs->ValidateGC = gcrec->ValidateGC;
 
     /* If we're drawing to a scanout bo, make sure that
      * we don't overwrite the alpha mask. */
@@ -89,7 +89,7 @@ AlphaHackValidateGC(GCPtr pGC, unsigned long changes, DrawablePtr pDrawable)
     pGC->funcs->ValidateGC(pGC, changes, pDrawable);
     pDrawable->depth = depth;
 
-    gcrec->funcs.ValidateGC = AlphaHackValidateGC;
+    pGC->funcs->ValidateGC = AlphaHackValidateGC;
 }
 
 static Bool
