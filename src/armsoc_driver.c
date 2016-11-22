@@ -27,6 +27,10 @@
  *    Rob Clark <rob@ti.com>
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -36,10 +40,6 @@
 #include <sys/mman.h>
 
 #include <pixman.h>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 #include "armsoc_driver.h"
 
