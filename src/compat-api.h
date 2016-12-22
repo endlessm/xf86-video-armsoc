@@ -28,6 +28,8 @@
 #ifndef COMPAT_API_H
 #define COMPAT_API_H
 
+#include <xf86Module.h>
+
 #ifndef GLYPH_HAS_GLYPH_PICTURE_ACCESSOR
 #define GetGlyphPicture(g, s) GlyphPicture((g))[(s)->myNum]
 #define SetGlyphPicture(g, s, p) GlyphPicture((g))[(s)->myNum] = p
@@ -36,6 +38,10 @@
 #ifndef XF86_HAS_SCRN_CONV
 #define xf86ScreenToScrn(s) xf86Screens[(s)->myNum]
 #define xf86ScrnToScreen(s) screenInfo.screens[(s)->scrnIndex]
+#endif
+
+#if GET_ABI_MAJOR(ABI_VIDEODRV_VERSION) >= 22
+#define HAVE_NOTIFY_FD 1
 #endif
 
 #ifndef XF86_SCRN_INTERFACE
@@ -77,9 +83,15 @@
 
 #define SCREEN_INIT_ARGS_DECL ScreenPtr pScreen, int argc, char **argv
 
+#if ABI_VIDEODRV_VERSION >= SET_ABI_VERSION(23, 0)
+#define RELOAD_CURSORS_DEPRECATED 1
+#define BLOCKHANDLER_ARGS_DECL ScreenPtr arg, pointer pTimeout
+#define BLOCKHANDLER_ARGS arg, pTimeout
+#else
 #define BLOCKHANDLER_ARGS_DECL \
 	ScreenPtr arg, pointer pTimeout, pointer pReadmask
 #define BLOCKHANDLER_ARGS arg, pTimeout, pReadmask
+#endif
 
 #define CLOSE_SCREEN_ARGS_DECL ScreenPtr pScreen
 #define CLOSE_SCREEN_ARGS pScreen
@@ -98,6 +110,11 @@
 
 #define XF86_ENABLEDISABLEFB_ARG(x) (x)
 
+#endif
+
+#if !HAVE_NOTIFY_FD
+#define SetNotifyFd(fd, cb, mode, data) AddGeneralSocket(fd);
+#define RemoveNotifyFd(fd) RemoveGeneralSocket(fd)
 #endif
 
 #endif
