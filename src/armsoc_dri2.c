@@ -218,114 +218,6 @@ canexchange(DrawablePtr pDraw, struct armsoc_bo *src_bo, struct armsoc_bo *dst_b
 	return ret;
 }
 
-static Bool CreateBufferResources(DrawablePtr pDraw, DRI2BufferPtr buffer)
-{
-	ScreenPtr pScreen = pDraw->pScreen;
-	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
-	PixmapPtr pPixmap = NULL;
-	struct armsoc_bo *bo;
-	int ret;
-
-	if (buffer->attachment == DRI2BufferFrontLeft) {
-		pPixmap = draw2pix(pDraw);
-		pPixmap->refcnt++;
-	} else {
-		pPixmap = createpix(pDraw);
-	}
-
-	if (!pPixmap) {
-		assert(buffer->attachment != DRI2BufferFrontLeft);
-		ERROR_MSG("Failed to create back buffer for window");
-		return FALSE;
-	}
-
-	buf->pPixmaps[0] = pPixmap;
-	assert(buf->currentPixmap == 0);
-
-	bo = ARMSOCPixmapBo(pPixmap);
-	if (!bo) {
-		ERROR_MSG(
-				"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
-		goto fail;
-	}
-
-	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
-	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
-	DRIBUF(buf)->flags = 0;
-
-	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
-	if (ret) {
-		ERROR_MSG("could not get buffer name: %d", ret);
-		goto fail;
-	}
-
-	if (canflip(pDraw) && buffer->attachment != DRI2BufferFrontLeft) {
-		/* Create an fb around this buffer. This will fail and we will
-		 * fall back to blitting if the display controller hardware
-		 * cannot scan out this buffer (for example, if it doesn't
-		 * support the format or there was insufficient scanout memory
-		 * at buffer creation time).
-		 *
-		 * If the window is not mapped at this time, we will not hit
-		 * this codepath, but ARMSOCDRI2ReuseBufferNotify will create
-		 * a framebuffer if it gets mapped later on. */
-		int ret = armsoc_bo_add_fb(bo);
-	        buf->attempted_fb_alloc = TRUE;
-		if (ret) {
-			WARNING_MSG(
-					"Falling back to blitting a flippable window");
-		}
-	}
-
-	/* Register Pixmap as having a buffer that can be accessed externally,
-	 * so needs synchronised access */
-	ARMSOCRegisterExternalAccess(pPixmap);
-
-	/* At this point we would expect the texture to be used by the GPU.
-	 * However there is no need to make the corresponding call into UMP,
-	 * because libMali will do that before using it. */
-
-	/* Take a direct reference from DRI2Buffer to the corresponding bo. It
-	 * is not enough to do this through the pixmap, because for the scanout
-	 * pixmap, we can change it's backing bo to something else. */
-	buf->bo = bo;
-	armsoc_bo_reference(bo);
-	return TRUE;
-
-fail:
-	if (buffer->attachment != DRI2BufferFrontLeft)
-		pScreen->DestroyPixmap(pPixmap);
-	else
-		pPixmap->refcnt--;
-	return FALSE;
-}
-
-static void DestroyBufferResources(DrawablePtr pDraw, DRI2BufferPtr buffer)
-{
-	struct ARMSOCDRI2BufferRec *buf = ARMSOCBUF(buffer);
-	/* Note: pDraw may already be deleted, so use the pPixmap here
-	 * instead (since it is at least refcntd)
-	 */
-	ScreenPtr pScreen = buf->pPixmaps[0]->drawable.pScreen;
-	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
-	int numBuffers, i;
-
-	if (buffer->attachment == DRI2BufferBackLeft) {
-		assert(pARMSOC->driNumBufs > 1);
-		numBuffers = pARMSOC->driNumBufs-1;
-	} else
-		numBuffers = 1;
-
-	for (i = 0; i < numBuffers && buf->pPixmaps[i] != NULL; i++) {
-		ARMSOCDeregisterExternalAccess(buf->pPixmaps[i]);
-		pScreen->DestroyPixmap(buf->pPixmaps[i]);
-	}
-
-	armsoc_bo_unreference(buf->bo);
-}
-
 /**
  * Create Buffer.
  *
@@ -344,6 +236,9 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 	struct ARMSOCDRI2BufferRec *buf = calloc(1, sizeof(*buf));
 	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	PixmapPtr pPixmap = NULL;
+	struct armsoc_bo *bo;
+	int ret;
 
 	DEBUG_MSG("pDraw=%p, attachment=%d, format=%08x",
 			pDraw, attachment, format);
@@ -351,6 +246,19 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 	if (!buf) {
 		ERROR_MSG("Couldn't allocate internal buffer structure");
 		return NULL;
+	}
+
+	if (attachment == DRI2BufferFrontLeft) {
+		pPixmap = draw2pix(pDraw);
+		pPixmap->refcnt++;
+	} else {
+		pPixmap = createpix(pDraw);
+	}
+
+	if (!pPixmap) {
+		assert(attachment != DRI2BufferFrontLeft);
+		ERROR_MSG("Failed to create back buffer for window");
+		goto fail;
 	}
 
 	if (attachment == DRI2BufferBackLeft && pARMSOC->driNumBufs > 2) {
@@ -367,15 +275,71 @@ ARMSOCDRI2CreateBuffer(DrawablePtr pDraw, unsigned int attachment,
 		goto fail;
 	}
 
-	DRIBUF(buf)->attachment = attachment;
-	DRIBUF(buf)->format = format;
-	buf->refcnt = 1;
-	if (!CreateBufferResources(pDraw, DRIBUF(buf)))
+	buf->pPixmaps[0] = pPixmap;
+	assert(buf->currentPixmap == 0);
+
+	bo = ARMSOCPixmapBo(pPixmap);
+	if (!bo) {
+		ERROR_MSG(
+				"Attempting to DRI2 wrap a pixmap with no DRM buffer object backing");
 		goto fail;
+	}
+
+	DRIBUF(buf)->attachment = attachment;
+	DRIBUF(buf)->pitch = exaGetPixmapPitch(pPixmap);
+	DRIBUF(buf)->cpp = pPixmap->drawable.bitsPerPixel / 8;
+	DRIBUF(buf)->format = format;
+	DRIBUF(buf)->flags = 0;
+	buf->refcnt = 1;
+
+	ret = armsoc_bo_get_name(bo, &DRIBUF(buf)->name);
+	if (ret) {
+		ERROR_MSG("could not get buffer name: %d", ret);
+		goto fail;
+	}
+
+	if (canflip(pDraw) && attachment != DRI2BufferFrontLeft) {
+		/* Create an fb around this buffer. This will fail and we will
+		 * fall back to blitting if the display controller hardware
+		 * cannot scan out this buffer (for example, if it doesn't
+		 * support the format or there was insufficient scanout memory
+		 * at buffer creation time).
+		 *
+		 * If the window is not mapped at this time, we will not hit
+		 * this codepath, but ARMSOCDRI2ReuseBufferNotify will create
+		 * a framebuffer if it gets mapped later on. */
+		int ret = armsoc_bo_add_fb(bo);
+	        buf->attempted_fb_alloc = TRUE;
+		if (ret) {
+			WARNING_MSG(
+					"Falling back to blitting a flippable window");
+		}
+	} else {
+	}
+
+	/* Register Pixmap as having a buffer that can be accessed externally,
+	 * so needs synchronised access */
+	ARMSOCRegisterExternalAccess(pPixmap);
+
+	/* At this point we would expect the texture to be used by the GPU.
+	 * However there is no need to make the corresponding call into UMP,
+	 * because libMali will do that before using it. */
+
+	/* Take a direct reference from DRI2Buffer to the corresponding bo. It
+	 * is not enough to do this through the pixmap, because for the scanout
+	 * pixmap, we can change it's backing bo to something else. */
+	buf->bo = bo;
+	armsoc_bo_reference(bo);
 
 	return DRIBUF(buf);
 
 fail:
+	if (pPixmap != NULL) {
+		if (attachment != DRI2BufferFrontLeft)
+			pScreen->DestroyPixmap(pPixmap);
+		else
+			pPixmap->refcnt--;
+	}
 	free(buf->pPixmaps);
 	free(buf);
 
@@ -415,24 +379,20 @@ ARMSOCDRI2ReuseBufferNotify(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	/* Detect unflippable-to-flippable transition:
 	 * Window is flippable, but we haven't yet tried to allocate a
 	 * framebuffer for it, and it doesn't already have a framebuffer.
-         * Also it was allocated as a pixmap, but now we need it as scanout.
 	 * This can happen when CreateBuffer was called before the window
 	 * was mapped, and we have now been mapped. */
 	if (flippable && !buf->attempted_fb_alloc && fb_id == 0) {
-		DestroyBufferResources(pDraw, buffer);
-		CreateBufferResources(pDraw, buffer);
+		armsoc_bo_add_fb(bo);
+	        buf->attempted_fb_alloc = TRUE;
 	}
 
 	/* Detect flippable-to-unflippable transition:
 	 * Window is now unflippable, but we have a framebuffer allocated for
-	 * it, and it is using scanout memory. We can now free the framebuffer
-	 * and switch it back to a backing pixmap allocation to save on
-	 * scanout memory. */
+	 * it. Now we can free the framebuffer to save on scanout memory, and
+	 * reset state in case it gets mapped again later. */
 	if (!flippable && fb_id != 0) {
 	        buf->attempted_fb_alloc = FALSE;
 		armsoc_bo_rm_fb(bo);
-		DestroyBufferResources(pDraw, buffer);
-		CreateBufferResources(pDraw, buffer);
 	}
 }
 
@@ -448,13 +408,26 @@ ARMSOCDRI2DestroyBuffer(DrawablePtr pDraw, DRI2BufferPtr buffer)
 	 */
 	ScreenPtr pScreen = buf->pPixmaps[0]->drawable.pScreen;
 	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+	struct ARMSOCRec *pARMSOC = ARMSOCPTR(pScrn);
+	int numBuffers, i;
 
 	if (--buf->refcnt > 0)
 		return;
 
 	DEBUG_MSG("pDraw=%p, buffer=%p", pDraw, buffer);
 
-	DestroyBufferResources(pDraw, buffer);
+	if (buffer->attachment == DRI2BufferBackLeft) {
+		assert(pARMSOC->driNumBufs > 1);
+		numBuffers = pARMSOC->driNumBufs-1;
+	} else
+		numBuffers = 1;
+
+	for (i = 0; i < numBuffers && buf->pPixmaps[i] != NULL; i++) {
+		ARMSOCDeregisterExternalAccess(buf->pPixmaps[i]);
+		pScreen->DestroyPixmap(buf->pPixmaps[i]);
+	}
+
+	armsoc_bo_unreference(buf->bo);
 	free(buf->pPixmaps);
 	free(buf);
 }
