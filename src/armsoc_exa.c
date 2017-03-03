@@ -40,14 +40,17 @@
 #include "drmmode_driver.h"
 #include "umplock_ioctl.h"
 
-static Bool is_accel_pixmap(struct ARMSOCPixmapPrivRec *priv)
+static inline Bool
+is_accel_pixmap(struct ARMSOCPixmapPrivRec *priv, int size)
 {
-	/* For pixmaps that are scanout or backing for windows, we
-	 * "accelerate" them by allocating them via GEM. For all other
-	 * pixmaps (where we never expect DRI2 CreateBuffer to be called), we
-	 * just malloc them, which turns out to be much faster.
+	/* For pixmaps that are scanout, backing for windows or bigger than,
+	 * 256Kb we "accelerate" them by allocating them via GEM.
+	 * For all other pixmaps (where we never expect DRI2 CreateBuffer to be
+	 * called), we just malloc them, which turns out to be much faster.
 	 */
-	return priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT || priv->usage_hint == CREATE_PIXMAP_USAGE_BACKING_PIXMAP;
+	return size > (256*1024) ||
+	       priv->usage_hint == ARMSOC_CREATE_PIXMAP_SCANOUT ||
+	       priv->usage_hint == CREATE_PIXMAP_USAGE_BACKING_PIXMAP;
 }
 
 /* keep this here, instead of static-inline so submodule doesn't
@@ -178,7 +181,7 @@ ARMSOCCreatePixmap2(ScreenPtr pScreen, int width, int height,
 	}
 	priv->usage_hint = usage_hint;
 
-	if (is_accel_pixmap(priv))
+	if (is_accel_pixmap(priv, width * height * (bitsPerPixel/8)))
 		return CreateAccelPixmap(priv, pScreen, width, height, depth, bitsPerPixel, new_fb_pitch);
 	else
 		return CreateNoAccelPixmap(priv, pScreen, width, height, depth, bitsPerPixel, new_fb_pitch);
@@ -379,7 +382,7 @@ ARMSOCModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 		pointer pPixData)
 {
 	struct ARMSOCPixmapPrivRec *priv = exaGetPixmapDriverPrivate(pPixmap);
-	if (is_accel_pixmap(priv))
+	if (is_accel_pixmap(priv, width * height * (bitsPerPixel/8)))
 		return ModifyAccelPixmapHeader(priv, pPixmap, width, height, depth, bitsPerPixel, devKind, pPixData);
 	else
 		return ModifyUnAccelPixmapHeader(priv, pPixmap, width, height, depth, bitsPerPixel, devKind, pPixData);
@@ -455,7 +458,7 @@ ARMSOCPrepareAccess(PixmapPtr pPixmap, int index)
 	struct armsoc_gem_set_domain gsd;
 	int ret;
 
-	if (!is_accel_pixmap(priv)) {
+	if (!is_accel_pixmap(priv, pPixmap->drawable.width * pPixmap->drawable.height * (pPixmap->drawable.bitsPerPixel/8))) {
 		pPixmap->devPrivate.ptr = priv->unaccel;
 		return TRUE;
 	}
