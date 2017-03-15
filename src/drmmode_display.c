@@ -450,9 +450,11 @@ done_setting:
 		drmmode_output_dpms(output, DPMSModeOn);
 	}
 
+	#ifndef RELOAD_CURSORS_DEPRECATED
 	/* if hw cursor is initialized, reload it */
 	if (drmmode->cursor)
 		xf86_reload_cursors(pScrn->pScreen);
+	#endif
 
 cleanup:
 	if (newcrtc)
@@ -2038,6 +2040,16 @@ drmmode_uevent_fini(ScrnInfoPtr pScrn)
 	TRACE_EXIT();
 }
 
+#if HAVE_NOTIFY_FD
+static void
+drmmode_notify_fd(int fd, int notify, void *data)
+{
+	ScrnInfoPtr pScrn = data;
+	struct drmmode_rec *drmmode;
+	drmmode = drmmode_from_scrn(pScrn);
+	drmHandleEvent(drmmode->fd, &event_context);
+}
+#else
 static void
 drmmode_wakeup_handler(pointer data, int err, pointer p)
 {
@@ -2053,6 +2065,7 @@ drmmode_wakeup_handler(pointer data, int err, pointer p)
 	if (FD_ISSET(drmmode->fd, read_mask))
 		drmHandleEvent(drmmode->fd, &event_context);
 }
+#endif
 
 void
 drmmode_wait_for_event(ScrnInfoPtr pScrn)
@@ -2068,15 +2081,24 @@ drmmode_screen_init(ScrnInfoPtr pScrn)
 
 	drmmode_uevent_init(pScrn);
 
-	AddGeneralSocket(drmmode->fd);
+	SetNotifyFd(drmmode->fd, drmmode_notify_fd, X_NOTIFY_READ, pScrn);
 
+	#ifndef HAVE_NOTIFY_FD
 	/* Register a wakeup handler to get informed on DRM events */
 	RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
 			drmmode_wakeup_handler, pScrn);
+	#endif
 }
 
 void
 drmmode_screen_fini(ScrnInfoPtr pScrn)
 {
+	struct drmmode_rec *drmmode = drmmode_from_scrn(pScrn);
+	#ifndef HAVE_NOTIFY_FD
+	/* Unregister wakeup handler */
+	RemoveBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
+	                             drmmode_wakeup_handler, pScrn);
+	#endif
+	RemoveNotifyFd(drmmode->fd);
 	drmmode_uevent_fini(pScrn);
 }
