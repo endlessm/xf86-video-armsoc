@@ -182,6 +182,7 @@ drmmode_ConvertFromKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 	mode->VSyncEnd = kmode->vsync_end;
 	mode->VTotal = kmode->vtotal;
 	mode->VScan = kmode->vscan;
+	mode->VRefresh = kmode->vrefresh;
 
 	mode->Flags = kmode->flags;
 	mode->name = strdup(kmode->name);
@@ -223,6 +224,7 @@ drmmode_ConvertToKMode(ScrnInfoPtr pScrn, drmModeModeInfo *kmode,
 	kmode->vsync_end = mode->VSyncEnd;
 	kmode->vtotal = mode->VTotal;
 	kmode->vscan = mode->VScan;
+	kmode->vrefresh = xf86ModeVRefresh(mode);
 
 	kmode->flags = mode->Flags;
 	if (mode->name)
