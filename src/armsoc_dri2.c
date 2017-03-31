@@ -112,6 +112,30 @@ dri2draw(DrawablePtr pDraw, DRI2BufferPtr buf)
 	}
 }
 
+/*
+ * If the drawable is the same size as the screen assume that we are going
+ * to flip it soon or later
+ */
+
+static Bool
+ARMSOCDRI2CanFlip(DrawablePtr pDraw)
+{
+	ScreenPtr pScreen = pDraw->pScreen;
+	WindowPtr pWin;
+	PixmapPtr pWinPixmap;
+
+	pWin = (WindowPtr) pDraw;
+	pWinPixmap = pScreen->GetWindowPixmap(pWin);
+
+	if (pDraw->x == 0 && pDraw->y == 0 &&
+	    pDraw->x == pWinPixmap->screen_x && pDraw->y == pWinPixmap->screen_y &&
+	    pDraw->width == pWinPixmap->drawable.width &&
+	    pDraw->height == pWinPixmap->drawable.height)
+		return TRUE;
+
+	return DRI2CanFlip(pDraw);
+}
+
 static Bool
 canflip(DrawablePtr pDraw)
 {
@@ -124,7 +148,7 @@ canflip(DrawablePtr pDraw)
 		return FALSE;
 	} else {
 		return (pDraw->type == DRAWABLE_WINDOW) &&
-				DRI2CanFlip(pDraw);
+				ARMSOCDRI2CanFlip(pDraw);
 	}
 }
 
