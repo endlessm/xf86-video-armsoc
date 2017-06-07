@@ -77,9 +77,20 @@
 
 #define SCREEN_INIT_ARGS_DECL ScreenPtr pScreen, int argc, char **argv
 
+#if ABI_VIDEODRV_VERSION >= SET_ABI_VERSION(22,0)
+#define HAVE_NOTIFY_FD	1
+#endif
+
+#if ABI_VIDEODRV_VERSION >= SET_ABI_VERSION(23, 0)
+#define RELOAD_CURSORS_DEPRECATED 1
+#define BLOCKHANDLER_ARGS_DECL \
+	ScreenPtr arg, pointer pTimeout
+#define BLOCKHANDLER_ARGS arg, pTimeout
+#else
 #define BLOCKHANDLER_ARGS_DECL \
 	ScreenPtr arg, pointer pTimeout, pointer pReadmask
 #define BLOCKHANDLER_ARGS arg, pTimeout, pReadmask
+#endif
 
 #define CLOSE_SCREEN_ARGS_DECL ScreenPtr pScreen
 #define CLOSE_SCREEN_ARGS pScreen
