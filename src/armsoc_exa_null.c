@@ -109,7 +109,7 @@ Bool InstallAlphaHack(ScreenPtr pScreen);
 struct ARMSOCEXARec *
 InitNullEXA(ScreenPtr pScreen, ScrnInfoPtr pScrn, int fd)
 {
-	struct ARMSOCNullEXARec *null_exa = calloc(sizeof(*null_exa), 1);
+	struct ARMSOCNullEXARec *null_exa = calloc(1, sizeof(*null_exa));
 	struct ARMSOCEXARec *armsoc_exa;
 	ExaDriverPtr exa;
 
